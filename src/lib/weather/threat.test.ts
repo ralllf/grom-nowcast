@@ -1,7 +1,14 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { bearingDeg, haversineKm } from "./geo.ts";
-import { computeThreat, TRACK_MAX_KM } from "./threat.ts";
+import {
+  computeField,
+  computePinNarrative,
+  computeThreat,
+  estimatePairMotion,
+  leadingEdgeOf,
+  TRACK_MAX_KM,
+} from "./threat.ts";
 import type { Place, RadarLevel, RadarMemoryFrame, RadarSample } from "./types.ts";
 
 function angleDiffDeg(a: number, b: number) {
@@ -572,3 +579,110 @@ test("bright core jumping SE must not beat bulk echo moving west", () => {
     );
   }
 });
+
+test("computeField is identical for two pins; narrative is not", () => {
+  const frames = [
+    frame(0, blob(50.0, 20.4, 3), 43),
+    frame(600, blob(50.0, 20.55, 3), 32),
+    frame(1_200, blob(50.0, 20.7, 3), 21),
+    frame(1_800, blob(50.0, 20.85, 3), 11),
+  ];
+  const origin = { lat: 52.1, lon: 19.35 };
+  const pinA: Place = { lat: 50.0, lon: 21.0, label: "A", terc: "1" };
+  const pinB: Place = { lat: 51.1, lon: 17.0, label: "B", terc: "2" };
+  const fieldA = computeField(frames, origin);
+  const fieldB = computeField(frames, origin);
+  assert.equal(fieldA.tracks.length, fieldB.tracks.length);
+  assert.ok(fieldA.tracks.length >= 1);
+  assert.equal(fieldA.tracks[0]!.now.lon, fieldB.tracks[0]!.now.lon);
+  const na = computePinNarrative(pinA, fieldA, frames, [], 40);
+  const nb = computePinNarrative(pinB, fieldB, frames, [], 40);
+  assert.notEqual(na.nearestKm, nb.nearestKm);
+});
+
+test("computeThreat is field + pin narrative", () => {
+  const frames = [
+    frame(0, blob(50.0, 20.4, 3), 43),
+    frame(600, blob(50.0, 20.55, 3), 32),
+    frame(1_200, blob(50.0, 20.7, 3), 21),
+    frame(1_800, blob(50.0, 20.85, 3), 11),
+  ];
+  const origin = { lat: 50.0, lon: 20.0 };
+  const via = computeThreat(city, frames, [], 40, origin);
+  const split = computePinNarrative(city, computeField(frames, origin), frames, [], 40);
+  assert.equal(via.comingFrom, split.comingFrom);
+  assert.equal(via.tracks.length, split.tracks.length);
+  assert.equal(via.maxLevel, split.maxLevel);
+});
+
+test("maxLevel is measured inside radiusKm, not a fixed 25 km", () => {
+  const far: RadarSample[] = [];
+  for (let i = -2; i <= 2; i++) {
+    for (let j = -2; j <= 2; j++) {
+      far.push({ lat: 50.0 + i * 0.03, lon: 21.45 + j * 0.03, level: 4 });
+    }
+  }
+  const frames = [frame(0, far, 40), frame(600, far, 40)];
+  const tight = computeThreat(city, frames, [], 15);
+  const wide = computeThreat(city, frames, [], 50);
+  assert.equal(tight.maxLevel, 0);
+  assert.equal(wide.maxLevel, 4);
+});
+
+test("stationary echo (zero NCC shift) does not invent an arrow", () => {
+  const rain = blob(50.2, 20.2, 3);
+  const frames = [0, 1, 2, 3].map((t) => frame(t * 600, rain, 20));
+  const threat = computeThreat(city, frames, [], 40, { lat: 50.2, lon: 20.2 });
+  assert.equal(threat.tracks.length, 0);
+});
+
+test("leading edge of a west→east band is the eastern samples", () => {
+  const samples: RadarSample[] = [];
+  for (let j = -8; j <= 2; j++) {
+    samples.push({ lat: 50.0, lon: 20.5 + j * 0.05, level: 3 });
+  }
+  const edge = leadingEdgeOf(samples, 90, 50.0, 20.5);
+  assert.ok(edge.lon > 20.55, `leading edge should sit east, got ${edge.lon}`);
+});
+
+test("ETA from a long band uses the leading edge, not the centroid", () => {
+  const frames = [
+    frame(0, contiguousFront(-0.24), 24),
+    frame(600, contiguousFront(-0.16), 16),
+    frame(1_200, contiguousFront(-0.08), 10),
+    frame(1_800, contiguousFront(0), 7),
+  ];
+  const threat = computeThreat(city, frames, [], 40);
+  assert.ok(threat.nearestKm !== null && threat.nearestKm < 15);
+  assert.ok(threat.etaMin !== null && threat.etaMin <= 20);
+});
+
+test("sub-cell NCC reports a fractional eastward shift", () => {
+  const prev = blob(52.0, 19.0, 3);
+  const next = blob(52.0, 19.0 + 2.5 / 71, 3);
+  const m = estimatePairMotion(prev, next, 52.0, 19.0, 0.16);
+  assert.ok(m);
+  assert.ok(!m.stationary);
+  assert.ok(m.speed > 0);
+  assert.ok(m.bearing > 60 && m.bearing < 120, `expected ~east, got ${m.bearing}`);
+});
+
+test("exact overlay of two frames is stationary with a usable score", () => {
+  const rain = blob(52.0, 19.0, 3);
+  const m = estimatePairMotion(rain, rain, 52.0, 19.0, 0.16);
+  assert.ok(m);
+  assert.equal(m.stationary, true);
+  assert.ok(m.score >= 0.4);
+});
+
+test("degraded frames still produce a threat object", () => {
+  const frames = [
+    { ...frame(0, blob(50.0, 20.4, 3), 43), degraded: true },
+    { ...frame(600, blob(50.0, 20.55, 3), 32), degraded: true },
+    frame(1_200, blob(50.0, 20.7, 3), 21),
+    frame(1_800, blob(50.0, 20.85, 3), 11),
+  ];
+  const threat = computeThreat(city, frames, [], 40);
+  assert.ok(threat.tracks.length >= 1);
+});
+

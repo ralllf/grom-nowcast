@@ -2,21 +2,34 @@ import { createServerFn } from "@tanstack/react-start";
 import { PNG } from "pngjs";
 import { z } from "zod";
 import { lonLatToTile, tilePixelToLonLat } from "./geo";
+import { ANALYSIS_COLOR_OPTIONS, rgbaToLevel } from "./palette";
+import {
+  LruCache,
+  NOMINATIM_CACHE_MAX,
+  NOMINATIM_CACHE_TTL_MS,
+  NOMINATIM_MIN_GAP_MS,
+  NOMINATIM_UA,
+  RequestThrottle,
+} from "./nominatim";
+import { capSamplesFairly } from "./sample-cap";
+import { applyTerytFallback } from "./teryt";
 import type {
   OfficialWarning,
   Place,
   RadarFrameMeta,
   RadarLevel,
+  RadarMemoryFrame,
   RadarSample,
   RadarScan,
   Snapshot,
 } from "./types";
 
-const UA = "GROM/0.1 (storm nowcast mvp)";
+const UA = NOMINATIM_UA;
 
 const mapsCache: { at: number; data: RainViewerMaps | null } = { at: 0, data: null };
 const warningCache: { at: number; data: OfficialWarning[] | null } = { at: 0, data: null };
-const placeCache = new Map<string, { at: number; place: Place }>();
+const placeCache = new LruCache<Place>(NOMINATIM_CACHE_MAX);
+const nominatimGate = new RequestThrottle(NOMINATIM_MIN_GAP_MS);
 
 type RainViewerMaps = {
   version: string;
@@ -50,21 +63,6 @@ async function fetchBuf(url: string, timeoutMs = 10_000): Promise<Buffer> {
   } finally {
     clearTimeout(t);
   }
-}
-
-function rgbaToLevel(r: number, g: number, b: number, a: number): RadarLevel {
-  if (a < 40) return 0;
-  const max = Math.max(r, g, b);
-  const min = Math.min(r, g, b);
-  const sat = max === 0 ? 0 : (max - min) / max;
-  if (max < 30 && sat < 0.15) return 0;
-  if (r > 170 && b > 150 && g < 120) return 4;
-  if (r > 190 && g < 110) return 4;
-  if (r > 180 && g > 140 && b < 90) return 3;
-  if (g > 150 && r < 160 && b < 140) return 3;
-  if (g > 120 && b < 180) return 2;
-  if (b > 90) return 1;
-  return 1;
 }
 
 async function getMaps(): Promise<RainViewerMaps> {
@@ -149,9 +147,10 @@ type NominatimReverse = {
 
 export async function reversePlace(lat: number, lon: number): Promise<Place> {
   const key = `${lat.toFixed(2)},${lon.toFixed(2)}`;
-  const hit = placeCache.get(key);
-  if (hit && Date.now() - hit.at < 60 * 60_000) return { ...hit.place, lat, lon };
+  const hit = placeCache.get(key, Date.now(), NOMINATIM_CACHE_TTL_MS);
+  if (hit) return applyTerytFallback({ ...hit, lat, lon });
 
+  await nominatimGate.wait();
   const url =
     `https://nominatim.openstreetmap.org/reverse?format=jsonv2` +
     `&lat=${lat}&lon=${lon}&zoom=10&addressdetails=1&extratags=1&accept-language=pl`;
@@ -162,8 +161,8 @@ export async function reversePlace(lat: number, lon: number): Promise<Place> {
   const state = json.address?.state;
   const terc = normalizeTerc(json.extratags?.["teryt:terc"]);
   const label = city || county || json.display_name?.split(",")[0] || "Wybrany punkt";
-  const place: Place = { lat, lon, label, city, county, state, terc };
-  placeCache.set(key, { at: Date.now(), place });
+  const place = applyTerytFallback({ lat, lon, label, city, county, state, terc });
+  placeCache.set(key, place);
   return place;
 }
 
@@ -179,6 +178,7 @@ type NominatimSearch = {
 export async function searchNominatim(query: string): Promise<Place[]> {
   const q = query.trim();
   if (q.length < 2) return [];
+  await nominatimGate.wait();
   const url =
     `https://nominatim.openstreetmap.org/search?format=jsonv2&q=${encodeURIComponent(q)}` +
     `&countrycodes=pl&addressdetails=1&extratags=1&limit=6&accept-language=pl`;
@@ -191,7 +191,7 @@ export async function searchNominatim(query: string): Promise<Place[]> {
     const county = item.address?.county;
     const state = item.address?.state;
     const terc = normalizeTerc(item.extratags?.["teryt:terc"]);
-    return {
+    return applyTerytFallback({
       lat,
       lon,
       label: city || item.display_name.split(",")[0] || q,
@@ -199,7 +199,7 @@ export async function searchNominatim(query: string): Promise<Place[]> {
       county,
       state,
       terc,
-    };
+    });
   });
 }
 
@@ -247,13 +247,19 @@ function tilesForPoland(z: number) {
 async function sampleFrame(
   host: string,
   frame: RadarFrameMeta,
-): Promise<{ samples: RadarSample[]; maxLevel: RadarLevel; nearestKm: number | null }> {
+): Promise<{
+  samples: RadarSample[];
+  maxLevel: RadarLevel;
+  nearestKm: number | null;
+  degraded: boolean;
+}> {
   const z = 5;
   const tiles = tilesForPoland(z);
   const samples: RadarSample[] = [];
+  let tilesFailed = 0;
   await Promise.all(
     tiles.map(async (tile) => {
-      const url = `${host}${frame.path}/256/${z}/${tile.x}/${tile.y}/2/1_1.png`;
+      const url = `${host}${frame.path}/256/${z}/${tile.x}/${tile.y}/${ANALYSIS_COLOR_OPTIONS}.png`;
       try {
         const buf = await fetchBuf(url);
         const png = PNG.sync.read(buf);
@@ -274,17 +280,17 @@ async function sampleFrame(
           }
         }
       } catch {
-        // missing tile is fine
+        tilesFailed += 1;
       }
     }),
   );
-  samples.sort((s, t) => t.level - s.level || s.lat - t.lat || s.lon - t.lon);
+  const kept = capSamplesFairly(samples, MAX_RADAR_SAMPLES);
 
   let maxLevel: RadarLevel = 0;
-  for (const s of samples) {
+  for (const s of kept) {
     if (s.level > maxLevel) maxLevel = s.level;
   }
-  return { samples: samples.slice(0, MAX_RADAR_SAMPLES), maxLevel, nearestKm: null };
+  return { samples: kept, maxLevel, nearestKm: null, degraded: tilesFailed > 0 };
 }
 
 async function sampleRadar(): Promise<RadarScan> {
@@ -320,12 +326,14 @@ async function sampleRadar(): Promise<RadarScan> {
   const sampled = await Promise.all(
     take.map(async (frame) => {
       const part = await sampleFrame(maps.host, frame);
-      return {
+      const memory: RadarMemoryFrame = {
         time: frame.time,
         samples: part.samples,
         maxLevel: part.maxLevel,
         nearestKm: part.nearestKm,
+        degraded: part.degraded,
       };
+      return memory;
     }),
   );
   const now = sampled.at(-1);
@@ -377,20 +385,23 @@ export const getSnapshot = createServerFn({ method: "POST" })
       getImgwWarnings(),
       userPlace?.terc
         ? Promise.resolve({ ...userPlace })
-        : reversePlace(userPlace?.lat ?? data.lat, userPlace?.lon ?? data.lon).catch(() => ({
-            lat: userPlace?.lat ?? data.lat,
-            lon: userPlace?.lon ?? data.lon,
-            label: userPlace?.label ?? "Wybrany punkt",
-            terc: userPlace?.terc,
-            city: userPlace?.city,
-            county: userPlace?.county,
-            state: userPlace?.state,
-          })),
+        : reversePlace(userPlace?.lat ?? data.lat, userPlace?.lon ?? data.lon).catch(() =>
+            applyTerytFallback({
+              lat: userPlace?.lat ?? data.lat,
+              lon: userPlace?.lon ?? data.lon,
+              label: userPlace?.label ?? "Wybrany punkt",
+              terc: userPlace?.terc,
+              city: userPlace?.city,
+              county: userPlace?.county,
+              state: userPlace?.state,
+            }),
+          ),
     ]);
 
+    const placed = applyTerytFallback(place);
     const tagged = warnings.map((w) => ({
       ...w,
-      matchesPlace: warningMatches(w, place),
+      matchesPlace: warningMatches(w, placed),
     }));
 
     const matched = tagged.filter((w) => w.matchesPlace);
@@ -398,7 +409,7 @@ export const getSnapshot = createServerFn({ method: "POST" })
 
     return {
       fetchedAt: Date.now(),
-      place,
+      place: placed,
       radar,
       // Enough national storms for the client to re-tag when the pin moves (radar is shared).
       warnings:

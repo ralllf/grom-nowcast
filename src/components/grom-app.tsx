@@ -8,9 +8,11 @@ import { ThreatSheet } from "@/components/threat-sheet";
 import { cn } from "@/lib/utils";
 import { CITIES } from "@/lib/weather/cities";
 import { haversineKm } from "@/lib/weather/geo";
+import { formatImgwWhen } from "@/lib/weather/imgw-time";
+import { historyIsDegraded, radarHistoryFromScan } from "@/lib/weather/radar-history";
 import { getSnapshot, searchPlaces, PL_RADAR_ORIGIN } from "@/lib/weather/server";
 import { computeThreat } from "@/lib/weather/threat";
-import type { Place, RadarLevel } from "@/lib/weather/types";
+import type { Place } from "@/lib/weather/types";
 import { useGrom } from "@/lib/store";
 
 function formatClock(ts: number | null) {
@@ -22,15 +24,7 @@ function formatClock(ts: number | null) {
 }
 
 function formatWhen(iso: string) {
-  const d = new Date(iso.replace(" ", "T"));
-  if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleString("pl-PL", {
-    weekday: "short",
-    hour: "2-digit",
-    minute: "2-digit",
-    day: "numeric",
-    month: "short",
-  });
+  return formatImgwWhen(iso);
 }
 
 function isEmbeddedPreview() {
@@ -50,7 +44,6 @@ export function GromApp() {
   const updatePlaceMeta = useGrom((s) => s.updatePlaceMeta);
   const setRadiusKm = useGrom((s) => s.setRadiusKm);
   const setNotify = useGrom((s) => s.setNotify);
-  const pushFrame = useGrom((s) => s.pushFrame);
   const markNotified = useGrom((s) => s.markNotified);
 
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -101,75 +94,27 @@ export function GromApp() {
   }, [place.lat, place.lon, place.terc, refetchSnapshot]);
 
   useEffect(() => {
-    if (!snapshot?.radar.latestTime) return;
-    const hist = snapshot.radar.history?.length
-      ? snapshot.radar.history
-      : [
-          ...(snapshot.radar.prevTime && snapshot.radar.prevSamples.length > 0
-            ? [
-                {
-                  time: snapshot.radar.prevTime,
-                  samples: snapshot.radar.prevSamples,
-                  maxLevel: snapshot.radar.prevSamples.reduce(
-                    (m, s) => (s.level > m ? s.level : m),
-                    0 as RadarLevel,
-                  ),
-                  nearestKm: null,
-                },
-              ]
-            : []),
-          {
-            time: snapshot.radar.latestTime,
-            samples: snapshot.radar.samples,
-            maxLevel: snapshot.radar.maxLevel,
-            nearestKm: snapshot.radar.nearestKm,
-          },
-        ];
-    for (const frame of hist) pushFrame(frame);
-  }, [snapshot, pushFrame]);
-
-  useEffect(() => {
     if (!snapshot?.place.terc || place.terc) return;
     if (haversineKm(snapshot.place.lat, snapshot.place.lon, place.lat, place.lon) < 3) {
       updatePlaceMeta(snapshot.place);
     }
   }, [snapshot, place, updatePlaceMeta]);
 
+  const radarHistory = useMemo(
+    () => (snapshot ? radarHistoryFromScan(snapshot.radar) : []),
+    [snapshot],
+  );
+
   const threat = useMemo(() => {
     if (!snapshot) return null;
-    const hist = snapshot.radar.history?.length
-      ? snapshot.radar.history
-      : [
-          ...(snapshot.radar.prevTime != null
-            ? [
-                {
-                  time: snapshot.radar.prevTime,
-                  samples: snapshot.radar.prevSamples,
-                  maxLevel: snapshot.radar.prevSamples.reduce(
-                    (m, s) => (s.level > m ? s.level : m),
-                    0 as RadarLevel,
-                  ),
-                  nearestKm: null,
-                },
-              ]
-            : []),
-          ...(snapshot.radar.latestTime != null
-            ? [
-                {
-                  time: snapshot.radar.latestTime,
-                  samples: snapshot.radar.samples,
-                  maxLevel: snapshot.radar.maxLevel,
-                  nearestKm: snapshot.radar.nearestKm,
-                },
-              ]
-            : []),
-        ];
     const warnings = snapshot.warnings.map((w) => ({
       ...w,
       matchesPlace: place.terc ? w.teryt.includes(place.terc) : w.matchesPlace,
     }));
-    return computeThreat(place, hist, warnings, radiusKm, PL_RADAR_ORIGIN);
-  }, [snapshot, radiusKm, place]);
+    return computeThreat(place, radarHistory, warnings, radiusKm, PL_RADAR_ORIGIN);
+  }, [snapshot, radarHistory, radiusKm, place]);
+
+  const radarDegraded = historyIsDegraded(radarHistory);
 
   useEffect(() => {
     if (!threat || !notify) return;
@@ -336,6 +281,11 @@ export function GromApp() {
             <span className="w-12 text-right font-mono text-xs tabular-nums text-muted">
               {formatClock(past[frameIndex ?? past.length - 1]?.time ?? null)}
             </span>
+            {radarDegraded ? (
+              <span className="text-[10px] text-faint" title="Brakowało kafelka radaru">
+                niepełne
+              </span>
+            ) : null}
           </div>
         </div>
       ) : null}

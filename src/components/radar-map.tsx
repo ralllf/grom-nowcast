@@ -3,6 +3,7 @@ import type { StyleSpecification } from "maplibre-gl";
 import { shouldFallbackBasemap } from "@/components/map-boot";
 import type { CellTrack } from "@/lib/weather/types";
 import { circlePolygon } from "@/lib/weather/geo";
+import { OVERLAY_COLOR_OPTIONS } from "@/lib/weather/palette";
 import { cn } from "@/lib/utils";
 
 type Focus = {
@@ -354,7 +355,7 @@ function syncRadar(map: import("maplibre-gl").Map, live: Live) {
   const id = "radar";
   const tiles =
     live.radarHost && live.radarPath
-      ? [`${live.radarHost}${live.radarPath}/256/{z}/{x}/{y}/2/1_1.png`]
+      ? [`${live.radarHost}${live.radarPath}/256/{z}/{x}/{y}/${OVERLAY_COLOR_OPTIONS}.png`]
       : [];
   if (map.getLayer(id)) map.removeLayer(id);
   if (map.getSource(id)) map.removeSource(id);
