@@ -315,13 +315,13 @@ export function computeThreat(
 
   const formNote = "Komórka może też urosnąć na miejscu — tego radar nie zapowie.";
   const dist =
-    nearestKm !== null ? `оk. ${nearestKm.toFixed(0)} km od ${who}` : `w okolicy ${who}`;
+    nearestKm !== null ? `ok. ${nearestKm.toFixed(0)} km od ${who}` : `w okolicy ${who}`;
 
   let detail: string;
   if (etaMin === 0 && maxLevel >= 1) {
-    detail = `Оpad jest nad ${who} teraz.${expect ? ` Spodziewaj się: ${expect}.` : ""} ${formNote}`;
+    detail = `Opad jest nad ${who} teraz.${expect ? ` Spodziewaj się: ${expect}.` : ""} ${formNote}`;
   } else if (level === "clear") {
-    detail = `Оad ${who} radar nie widzi groźnej komórki. Szansa ~${chance}% na ok. 45 min. ${formNote}`;
+    detail = `Nad ${who} radar nie widzi groźnej komórki. Szansa ~${chance}% na ok. 45 min. ${formNote}`;
   } else if (level === "watch" && nearestKm === null) {
     const body =
       activeMatch[0]?.body ??
@@ -329,15 +329,15 @@ export function computeThreat(
       "Instytut wydał ostrzeżenie dla powiatu.";
     detail = `${body} Dla ${who} szansa z radaru ~${chance}% na ~45 min.`;
   } else if (receding && aboutPin) {
-    detail = `${comingFrom ? `Оdzie od ${comingFrom}` : "Komórka"} (${dist}) i odchodzi na ${toward ?? "bok"}.${expect ? ` Spodziewaj się: ${expect}.` : ""} Szansa ~${chance}%. ${formNote}`;
+    detail = `${comingFrom ? `Idzie od ${comingFrom}` : "Komórka"} (${dist}) i odchodzi na ${toward ?? "bok"}.${expect ? ` Spodziewaj się: ${expect}.` : ""} Szansa ~${chance}%. ${formNote}`;
   } else if (willHit && comingFrom) {
     const etaBit =
       etaMin && etaMin > 0 ? ` Dojście nad ${who}: ok. ${etaMin} min.` : "";
-    detail = `Оdzie od ${comingFrom}${speedKmh ? ` (~${Math.round(speedKmh)} km/h)` : ""}, echo ${dist}.${etaBit}${expect ? ` Spodziewaj się: ${expect}.` : ""} Szansa ~${chance}%. To ruch echa, nie pewność. ${formNote}`;
+    detail = `Idzie od ${comingFrom}${speedKmh ? ` (~${Math.round(speedKmh)} km/h)` : ""}, echo ${dist}.${etaBit}${expect ? ` Spodziewaj się: ${expect}.` : ""} Szansa ~${chance}%. To ruch echa, nie pewność. ${formNote}`;
   } else if (comingFrom && missKm !== null && missKm > PIN_KM) {
-    detail = `Оdzie od ${comingFrom}, echo ${dist}. Tor minie ${who} ok. ${missKm.toFixed(0)} km obok${etaMin ? ` za ~${etaMin} min` : ""}.${expect ? ` Spodziewaj się w okolicy: ${expect}.` : ""} Nad samym punktem szansa ~${chance}%. ${formNote}`;
+    detail = `Idzie od ${comingFrom}, echo ${dist}. Tor minie ${who} ok. ${missKm.toFixed(0)} km obok${etaMin ? ` za ~${etaMin} min` : ""}.${expect ? ` Spodziewaj się w okolicy: ${expect}.` : ""} Nad samym punktem szansa ~${chance}%. ${formNote}`;
   } else if (nearestKm !== null) {
-    detail = `Оcho ${dist}${comingFrom ? `, od ${comingFrom}` : ""}.${expect ? ` Spodziewaj się: ${expect}.` : ""} Szansa ~${chance}%. ${formNote}`;
+    detail = `Echo ${dist}${comingFrom ? `, od ${comingFrom}` : ""}.${expect ? ` Spodziewaj się: ${expect}.` : ""} Szansa ~${chance}%. ${formNote}`;
   } else {
     detail = `Szansa ~${chance}% dla ${who}. ${formNote}`;
   }
