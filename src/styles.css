@@ -1,0 +1,48 @@
+@import "tailwindcss";
+@import "maplibre-gl/dist/maplibre-gl.css";
+
+@theme {
+  --color-bg: #07090c;
+  --color-map: #e8edf2;
+  --color-surface: #12171f;
+  --color-surface-2: #1a212c;
+  --color-fg: #e8edf2;
+  --color-muted: #8b95a3;
+  --color-faint: #5c6570;
+  --color-border: #2a3340;
+  --color-accent: #6ec8d4;
+  --color-accent-fg: #071114;
+  --color-danger: #e25c4a;
+  --color-warn: #c9a36a;
+  --color-ok: #5ea88a;
+  --color-vector: #e4572e;
+
+  --font-sans: "Sora", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Sora", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
+  --radius-3xl: 28px;
+}
+
+@layer base {
+  html {
+    background: var(--color-bg);
+    color: var(--color-fg);
+    -webkit-font-smoothing: antialiased;
+  }
+  body {
+    margin: 0;
+    min-height: 100dvh;
+    background: var(--color-bg);
+    color: var(--color-fg);
+    font-family: var(--font-sans);
+  }
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
+}
