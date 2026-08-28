@@ -1,41 +1,17 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
-import {
-  Bell,
-  BellOff,
-  Crosshair,
-  MapPin,
-  Radar,
-  Search,
-  Settings2,
-  X,
-} from "lucide-react";
+import { Bell, BellOff, Crosshair, Radar, Search, Settings2, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { RadarMap } from "@/components/radar-map";
+import { ThreatSheet } from "@/components/threat-sheet";
 import { cn } from "@/lib/utils";
 import { CITIES } from "@/lib/weather/cities";
 import { haversineKm } from "@/lib/weather/geo";
 import { getSnapshot, searchPlaces, PL_RADAR_ORIGIN } from "@/lib/weather/server";
 import { computeThreat } from "@/lib/weather/threat";
-import type { Place, RadarLevel, ThreatLevel } from "@/lib/weather/types";
+import type { Place, RadarLevel } from "@/lib/weather/types";
 import { useGrom } from "@/lib/store";
-
-const TONE: Record<ThreatLevel, "ok" | "warn" | "danger" | "accent" | "mute"> = {
-  clear: "ok",
-  watch: "warn",
-  nearby: "accent",
-  imminent: "danger",
-  now: "danger",
-};
-
-const PANEL: Record<ThreatLevel, string> = {
-  clear: "border-ok/30",
-  watch: "border-warn/40",
-  nearby: "border-accent/40",
-  imminent: "border-danger/50",
-  now: "border-danger",
-};
 
 function formatClock(ts: number | null) {
   if (!ts) return "—";
@@ -126,30 +102,29 @@ export function GromApp() {
 
   useEffect(() => {
     if (!snapshot?.radar.latestTime) return;
-    const hist =
-      snapshot.radar.history?.length
-        ? snapshot.radar.history
-        : [
-            ...(snapshot.radar.prevTime && snapshot.radar.prevSamples.length > 0
-              ? [
-                  {
-                    time: snapshot.radar.prevTime,
-                    samples: snapshot.radar.prevSamples,
-                    maxLevel: snapshot.radar.prevSamples.reduce(
-                      (m, s) => (s.level > m ? s.level : m),
-                      0 as RadarLevel,
-                    ),
-                    nearestKm: null,
-                  },
-                ]
-              : []),
-            {
-              time: snapshot.radar.latestTime,
-              samples: snapshot.radar.samples,
-              maxLevel: snapshot.radar.maxLevel,
-              nearestKm: snapshot.radar.nearestKm,
-            },
-          ];
+    const hist = snapshot.radar.history?.length
+      ? snapshot.radar.history
+      : [
+          ...(snapshot.radar.prevTime && snapshot.radar.prevSamples.length > 0
+            ? [
+                {
+                  time: snapshot.radar.prevTime,
+                  samples: snapshot.radar.prevSamples,
+                  maxLevel: snapshot.radar.prevSamples.reduce(
+                    (m, s) => (s.level > m ? s.level : m),
+                    0 as RadarLevel,
+                  ),
+                  nearestKm: null,
+                },
+              ]
+            : []),
+          {
+            time: snapshot.radar.latestTime,
+            samples: snapshot.radar.samples,
+            maxLevel: snapshot.radar.maxLevel,
+            nearestKm: snapshot.radar.nearestKm,
+          },
+        ];
     for (const frame of hist) pushFrame(frame);
   }, [snapshot, pushFrame]);
 
@@ -162,34 +137,33 @@ export function GromApp() {
 
   const threat = useMemo(() => {
     if (!snapshot) return null;
-    const hist =
-      snapshot.radar.history?.length
-        ? snapshot.radar.history
-        : [
-            ...(snapshot.radar.prevTime != null
-              ? [
-                  {
-                    time: snapshot.radar.prevTime,
-                    samples: snapshot.radar.prevSamples,
-                    maxLevel: snapshot.radar.prevSamples.reduce(
-                      (m, s) => (s.level > m ? s.level : m),
-                      0 as RadarLevel,
-                    ),
-                    nearestKm: null,
-                  },
-                ]
-              : []),
-            ...(snapshot.radar.latestTime != null
-              ? [
-                  {
-                    time: snapshot.radar.latestTime,
-                    samples: snapshot.radar.samples,
-                    maxLevel: snapshot.radar.maxLevel,
-                    nearestKm: snapshot.radar.nearestKm,
-                  },
-                ]
-              : []),
-          ];
+    const hist = snapshot.radar.history?.length
+      ? snapshot.radar.history
+      : [
+          ...(snapshot.radar.prevTime != null
+            ? [
+                {
+                  time: snapshot.radar.prevTime,
+                  samples: snapshot.radar.prevSamples,
+                  maxLevel: snapshot.radar.prevSamples.reduce(
+                    (m, s) => (s.level > m ? s.level : m),
+                    0 as RadarLevel,
+                  ),
+                  nearestKm: null,
+                },
+              ]
+            : []),
+          ...(snapshot.radar.latestTime != null
+            ? [
+                {
+                  time: snapshot.radar.latestTime,
+                  samples: snapshot.radar.samples,
+                  maxLevel: snapshot.radar.maxLevel,
+                  nearestKm: snapshot.radar.nearestKm,
+                },
+              ]
+            : []),
+        ];
     const warnings = snapshot.warnings.map((w) => ({
       ...w,
       matchesPlace: place.terc ? w.teryt.includes(place.terc) : w.matchesPlace,
@@ -214,9 +188,7 @@ export function GromApp() {
 
   const past = snapshot?.radar.past ?? [];
   const activePath =
-    frameIndex !== null && past[frameIndex]
-      ? past[frameIndex].path
-      : (past.at(-1)?.path ?? null);
+    frameIndex !== null && past[frameIndex] ? past[frameIndex].path : (past.at(-1)?.path ?? null);
 
   function locate() {
     if (isEmbeddedPreview() || !navigator.geolocation) {
@@ -294,20 +266,6 @@ export function GromApp() {
   const localWarnings = warnings.filter((w) => w.matchesPlace);
   const shownWarnings = localWarnings.length > 0 ? localWarnings : warnings;
   const tracks = threat?.tracks ?? [];
-  const etaValue =
-    threat?.etaMin === 0
-      ? "teraz"
-      : threat?.etaMin != null
-        ? `${threat.etaMin} min`
-        : threat &&
-            !threat.willHit &&
-            threat.missKm != null &&
-            threat.missKm > 8 &&
-            threat.nearestKm != null &&
-            threat.nearestKm > 20 &&
-            threat.nearestKm <= 80
-          ? "minie"
-          : "—";
 
   return (
     <div className="relative isolate h-dvh overflow-hidden bg-bg text-fg">
@@ -397,120 +355,19 @@ export function GromApp() {
         </div>
       ) : null}
 
-      <section className="pointer-events-none absolute inset-x-0 bottom-0 z-10 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:p-5">
+      <section className="pointer-events-none absolute inset-x-0 bottom-0 z-10 sm:p-5">
         <div className="mx-auto grid max-w-6xl gap-3 lg:grid-cols-[minmax(0,26rem)_1fr] lg:items-end">
-          <article
-            className={cn(
-              "pointer-events-auto rounded-3xl bg-surface/90 p-4 shadow-[0_0_0_1px_rgba(255,255,255,0.08)] backdrop-blur-md sm:p-5",
-              threat ? PANEL[threat.level] : "border-transparent",
-              "border",
-            )}
-          >
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <MapPin className="size-4 text-accent" />
-                  <p className="text-sm font-medium">{place.label}</p>
-                  {place.terc ? (
-                    <span className="font-mono text-xs text-faint">TERYT {place.terc}</span>
-                  ) : null}
-                </div>
-                <h2 className="mt-2 font-display text-3xl font-semibold leading-none tracking-tight text-balance">
-                  {snapshotQuery.isPending && !threat ? "Skanuję radar…" : threat?.title ?? "Brak danych"}
-                </h2>
-              </div>
-              {threat ? <Badge tone={TONE[threat.level]}>{threat.level}</Badge> : null}
-            </div>
-
-            {threat?.comingFrom || threat?.expect ? (
-              <div className="mt-3 space-y-1.5 rounded-2xl bg-surface-2 px-3 py-3 text-sm leading-relaxed">
-                {threat.comingFrom ? (
-                  <p>
-                    <span className="text-faint">Idzie od </span>
-                    <span className="font-medium">{threat.comingFrom}</span>
-                    {threat.toward ? (
-                      <span className="text-muted"> → na {threat.toward}</span>
-                    ) : null}
-                    {threat.speedKmh ? (
-                      <span className="font-mono text-xs text-muted">
-                        {" "}
-                        · {Math.round(threat.speedKmh)} km/h
-                      </span>
-                    ) : null}
-                  </p>
-                ) : null}
-                {threat.expect ? (
-                  <p>
-                    <span className="text-faint">Spodziewaj się: </span>
-                    <span className="font-medium">{threat.expect}</span>
-                  </p>
-                ) : null}
-              </div>
-            ) : null}
-
-            <p className="mt-3 max-w-prose text-sm leading-relaxed text-muted text-pretty">
-              {snapshotQuery.isError
-                ? "Nie udało się pobrać radaru albo ostrzeżeń. Spróbuj za chwilę."
-                : threat?.detail}
-            </p>
-
-            <dl className="mt-4 grid grid-cols-3 gap-2 text-center">
-              <Stat label="Szansa" value={threat ? `${threat.chancePct}%` : "—"} />
-              <Stat label="ETA" value={etaValue} />
-              <Stat
-                label="Echo"
-                value={threat?.nearestKm != null ? `${threat.nearestKm.toFixed(0)} km` : "brak"}
-              />
-            </dl>
-
-            {tracks.length > 0 && (threat?.nearestKm == null || threat.nearestKm > 25) ? (
-              <button
-                type="button"
-                onClick={showRainMotion}
-                className="mt-3 w-full rounded-xl bg-surface-2 px-3 py-2 text-xs font-medium text-accent hover:text-fg"
-              >
-                Pokaż ruch opadu na mapie
-                {threat?.nearestKm != null ? ` · ${threat.nearestKm.toFixed(0)} km` : ""}
-              </button>
-            ) : null}
-
-            <p className="mt-3 text-xs leading-relaxed text-faint">
-              Szansa i ETA są dla pinezki ({place.label}) — miasta albo punktu GPS —
-              nie dla całego promienia. Na mapie jedna albo dwie strzałki — te,
-              które dotyczą pinezki, nie cały front. Promień w ustawieniach mówi
-              tylko, jak daleko wołamy alert.
-            </p>
-
-            {shownWarnings[0] ? (
-              <p className="mt-3 text-xs text-muted lg:hidden">
-                IMGW: {shownWarnings[0].event}
-                {shownWarnings[0].degree ? ` · stopień ${shownWarnings[0].degree}` : ""}
-                {!shownWarnings[0].matchesPlace ? " · inny powiat" : ""}
-              </p>
-            ) : null}
-
-            {geoError ? (
-              <p className="mt-3 flex items-start justify-between gap-2 text-xs text-warn">
-                <span>{geoError}</span>
-                <button
-                  type="button"
-                  className="shrink-0 text-faint hover:text-fg"
-                  onClick={() => setGeoError(null)}
-                  aria-label="Zamknij komunikat"
-                >
-                  <X className="size-3.5" />
-                </button>
-              </p>
-            ) : null}
-
-            <p className="mt-4 text-xs leading-relaxed text-faint">
-              Źródłem danych ostrzeżeń i sieci POLRAD jest Instytut Meteorologii i
-              Gospodarki Wodnej – Państwowy Instytut Badawczy. Dane radarowe zostały
-              przetworzone. Radar: RainViewer. Mapa: OpenFreeMap / OSM. To nie jest
-              oficjalny alert RCB. Komórka burzowa może powstać lokalnie nawet przy
-              czystym radarze.
-            </p>
-          </article>
+          <ThreatSheet
+            place={place}
+            threat={threat}
+            pending={snapshotQuery.isPending}
+            error={snapshotQuery.isError}
+            tracks={tracks}
+            shownWarnings={shownWarnings}
+            geoError={geoError}
+            onClearGeoError={() => setGeoError(null)}
+            onShowRainMotion={showRainMotion}
+          />
 
           <aside className="pointer-events-auto hidden max-h-72 overflow-y-auto rounded-3xl bg-surface/85 p-4 shadow-[0_0_0_1px_rgba(255,255,255,0.08)] backdrop-blur-md sm:block">
             <div className="mb-3 flex items-center justify-between gap-2">
@@ -529,9 +386,7 @@ export function GromApp() {
                   <li key={w.id} className="rounded-xl bg-surface-2 p-3">
                     <div className="flex items-center justify-between gap-2">
                       <p className="text-sm font-medium">{w.event}</p>
-                      <Badge tone={w.degree >= 2 ? "danger" : "warn"}>
-                        stopień {w.degree}
-                      </Badge>
+                      <Badge tone={w.degree >= 2 ? "danger" : "warn"}>stopień {w.degree}</Badge>
                     </div>
                     <p className="mt-1 text-xs text-muted">
                       {formatWhen(w.from)} — {formatWhen(w.to)}
@@ -559,7 +414,12 @@ export function GromApp() {
               <h2 id="settings-title" className="font-display text-xl font-semibold">
                 Lokalizacja i alerty
               </h2>
-              <Button variant="ghost" size="iconSm" onClick={() => setSettingsOpen(false)} aria-label="Zamknij">
+              <Button
+                variant="ghost"
+                size="iconSm"
+                onClick={() => setSettingsOpen(false)}
+                aria-label="Zamknij"
+              >
                 <X className="size-4" />
               </Button>
             </div>
@@ -636,8 +496,8 @@ export function GromApp() {
               />
             </label>
             <p className="mt-2 text-xs leading-relaxed text-muted">
-              Promień to zasięg alertu. Szansa, ETA i strzałka są liczone dla
-              pinezki — teraz miasta, później dokładnego GPS.
+              Promień to zasięg alertu. Szansa, ETA i strzałka są liczone dla pinezki — teraz
+              miasta, później dokładnego GPS.
             </p>
 
             <div className="mt-5 flex items-center justify-between gap-3 rounded-xl bg-surface-2 px-3 py-3">
@@ -661,22 +521,13 @@ export function GromApp() {
             </div>
 
             <p className="mt-4 text-xs leading-relaxed text-faint">
-              Klatki radaru trzymamy chwilowo w pamięci urządzenia (ostatnie kilka
-              skanów), żeby policzyć ruch komórki. Nie zapisujemy ich w repozytorium
-              ani w bazie. Ustawienia zostają w przeglądarce.
+              Klatki radaru trzymamy chwilowo w pamięci urządzenia (ostatnie kilka skanów), żeby
+              policzyć ruch komórki. Nie zapisujemy ich w repozytorium ani w bazie. Ustawienia
+              zostają w przeglądarce.
             </p>
           </div>
         </div>
       ) : null}
-    </div>
-  );
-}
-
-function Stat({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-xl bg-surface-2 px-2 py-3">
-      <dt className="text-xs uppercase tracking-wider text-faint">{label}</dt>
-      <dd className="mt-1 font-mono text-sm tabular-nums">{value}</dd>
     </div>
   );
 }
