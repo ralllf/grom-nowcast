@@ -38,6 +38,7 @@ export function destPoint(
   return { lat: (p2 * 180) / Math.PI, lon: (l2 * 180) / Math.PI };
 }
 
+/** Direction of travel, 0 = north, clockwise. */
 export function bearingDeg(
   lat1: number,
   lon1: number,
@@ -53,6 +54,7 @@ export function bearingDeg(
   return ((Math.atan2(y, x) * 180) / Math.PI + 360) % 360;
 }
 
+/** "od zachodu" — where the cell is coming from, given travel bearing. */
 export function comingFromPl(travelBearing: number): string {
   const from = (travelBearing + 180) % 360;
   const labels = [
@@ -68,6 +70,7 @@ export function comingFromPl(travelBearing: number): string {
   return labels[Math.round(from / 45) % 8] ?? "nieznanego kierunku";
 }
 
+/** "na wschód" — where the cell is heading. */
 export function towardPl(travelBearing: number): string {
   const labels = [
     "północ",
@@ -82,6 +85,27 @@ export function towardPl(travelBearing: number): string {
   return labels[Math.round((travelBearing % 360) / 45) % 8] ?? "nieznany kierunek";
 }
 
+export function arrowPolygon(
+  lat1: number,
+  lon1: number,
+  lat2: number,
+  lon2: number,
+  sizeKm = 8,
+): { type: "Polygon"; coordinates: number[][][] } {
+  const br = bearingDeg(lat1, lon1, lat2, lon2);
+  const left = destPoint(lat2, lon2, br + 155, sizeKm);
+  const right = destPoint(lat2, lon2, br - 155, sizeKm);
+  return {
+    type: "Polygon",
+    coordinates: [[
+      [lon2, lat2],
+      [left.lon, left.lat],
+      [right.lon, right.lat],
+      [lon2, lat2],
+    ]],
+  };
+}
+
 export function lonLatToTile(
   lon: number,
   lat: number,
@@ -91,7 +115,10 @@ export function lonLatToTile(
   const xf = ((lon + 180) / 360) * n;
   const latRad = (lat * Math.PI) / 180;
   const yf =
-    ((1 - Math.log(Math.tan(latRad) + 1 / Math.cos(latRad)) / Math.PI) / 2) * n;
+    ((1 -
+      Math.log(Math.tan(latRad) + 1 / Math.cos(latRad)) / Math.PI) /
+      2) *
+    n;
   return { x: Math.floor(xf), y: Math.floor(yf), xf, yf };
 }
 

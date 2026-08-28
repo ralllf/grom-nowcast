@@ -13,6 +13,13 @@ export type RadarFrameMeta = {
   path: string;
 };
 
+export type RadarMemoryFrame = {
+  time: number;
+  samples: RadarSample[];
+  maxLevel: RadarLevel;
+  nearestKm: number | null;
+};
+
 export type RadarScan = {
   host: string;
   generated: number;
@@ -22,6 +29,8 @@ export type RadarScan = {
   samples: RadarSample[];
   prevSamples: RadarSample[];
   prevTime: number | null;
+  /** Oldest → newest sampled frames (up to 4) used for motion. */
+  history: RadarMemoryFrame[];
   maxLevel: RadarLevel;
   nearestKm: number | null;
   echoCount: number;
@@ -58,13 +67,6 @@ export type Snapshot = {
   radar: RadarScan;
   warnings: OfficialWarning[];
   stormWarningCount: number;
-};
-
-export type RadarMemoryFrame = {
-  time: number;
-  samples: RadarSample[];
-  maxLevel: RadarLevel;
-  nearestKm: number | null;
 };
 
 export type CellTrack = {
