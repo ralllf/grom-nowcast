@@ -208,27 +208,13 @@ function warningMatches(w: OfficialWarning, place: Place): boolean {
   return false;
 }
 
-/** z=5 tiles covering Poland (and a bit of the western border). */
-const PL_TILES: { x: number; y: number }[] = [
-  { x: 17, y: 9 },
-  { x: 17, y: 10 },
-  { x: 17, y: 11 },
-  { x: 18, y: 9 },
-  { x: 18, y: 10 },
-  { x: 18, y: 11 },
-];
-
-const PIN_KEEP_KM = 90;
+/** Neighborhood of the pin — including across the German/Czech border (Zgorzelec). */
+const SAMPLE_KM = 110;
 const LOCAL_MAX_KM = 25;
-
-function inPolandish(lat: number, lon: number) {
-  return lat >= 48.9 && lat <= 54.9 && lon >= 14.07 && lon <= 24.2;
-}
 
 function tilesFor(lat: number, lon: number, z: number) {
   const set = new Map<string, { x: number; y: number }>();
-  for (const t of PL_TILES) set.set(`${t.x},${t.y}`, t);
-  const box = bboxForRadius(lat, lon, PIN_KEEP_KM);
+  const box = bboxForRadius(lat, lon, SAMPLE_KM);
   const a = lonLatToTile(box.minLon, box.maxLat, z);
   const b = lonLatToTile(box.maxLon, box.minLat, z);
   for (let x = Math.min(a.x, b.x); x <= Math.max(a.x, b.x); x++) {
@@ -254,7 +240,7 @@ async function sampleFrame(
       try {
         const buf = await fetchBuf(url);
         const png = PNG.sync.read(buf);
-        const stride = 6;
+        const stride = 4;
         for (let py = 0; py < png.height; py += stride) {
           for (let px = 0; px < png.width; px += stride) {
             const idx = (png.width * py + px) << 2;
@@ -266,8 +252,7 @@ async function sampleFrame(
             );
             if (level === 0) continue;
             const ll = tilePixelToLonLat(z, tile.x, tile.y, px, py, png.width);
-            const nearPin = haversineKm(lat, lon, ll.lat, ll.lon) <= PIN_KEEP_KM;
-            if (!nearPin && !inPolandish(ll.lat, ll.lon)) continue;
+            if (haversineKm(lat, lon, ll.lat, ll.lon) > SAMPLE_KM) continue;
             samples.push({ lat: ll.lat, lon: ll.lon, level });
           }
         }
@@ -279,9 +264,7 @@ async function sampleFrame(
   samples.sort((s, t) => {
     const ds = haversineKm(lat, lon, s.lat, s.lon);
     const dt = haversineKm(lat, lon, t.lat, t.lon);
-    const nearS = ds <= PIN_KEEP_KM ? 0 : 1;
-    const nearT = dt <= PIN_KEEP_KM ? 0 : 1;
-    return nearS - nearT || t.level - s.level || ds - dt;
+    return t.level - s.level || ds - dt;
   });
 
   let nearestKm: number | null = null;
@@ -291,15 +274,15 @@ async function sampleFrame(
     if (nearestKm === null || d < nearestKm) nearestKm = d;
     if (d <= LOCAL_MAX_KM && s.level > maxLevel) maxLevel = s.level;
   }
-  return { samples: samples.slice(0, 280), maxLevel, nearestKm };
+  return { samples: samples.slice(0, 400), maxLevel, nearestKm };
 }
 
 async function sampleRadar(lat: number, lon: number): Promise<RadarScan> {
   const maps = await getMaps();
   const past = maps.radar.past ?? [];
   const nowcast = maps.radar.nowcast ?? [];
-  const latest = past.at(-1);
-  const prev = past.at(-2);
+  const take = past.slice(-4);
+  const latest = take.at(-1);
   const empty: RadarScan = {
     host: maps.host,
     generated: maps.generated,
@@ -309,22 +292,27 @@ async function sampleRadar(lat: number, lon: number): Promise<RadarScan> {
     samples: [],
     prevSamples: [],
     prevTime: null,
+    history: [],
     maxLevel: 0,
     nearestKm: null,
     echoCount: 0,
   };
   if (!latest) return empty;
 
-  const [now, before] = await Promise.all([
-    sampleFrame(lat, lon, maps.host, latest),
-    prev
-      ? sampleFrame(lat, lon, maps.host, prev)
-      : Promise.resolve({
-          samples: [] as RadarSample[],
-          maxLevel: 0 as RadarLevel,
-          nearestKm: null,
-        }),
-  ]);
+  const sampled = await Promise.all(
+    take.map(async (frame) => {
+      const part = await sampleFrame(lat, lon, maps.host, frame);
+      return {
+        time: frame.time,
+        samples: part.samples,
+        maxLevel: part.maxLevel,
+        nearestKm: part.nearestKm,
+      };
+    }),
+  );
+  const now = sampled.at(-1);
+  const before = sampled.length >= 2 ? sampled.at(-2) : undefined;
+  if (!now) return empty;
 
   return {
     host: maps.host,
@@ -333,8 +321,9 @@ async function sampleRadar(lat: number, lon: number): Promise<RadarScan> {
     past,
     nowcast,
     samples: now.samples,
-    prevSamples: before.samples,
-    prevTime: prev?.time ?? null,
+    prevSamples: before?.samples ?? [],
+    prevTime: before?.time ?? null,
+    history: sampled,
     maxLevel: now.maxLevel,
     nearestKm: now.nearestKm,
     echoCount: now.samples.length,
