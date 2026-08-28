@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import type { StyleSpecification } from "maplibre-gl";
+import { shouldFallbackBasemap } from "@/components/map-boot";
 import type { CellTrack } from "@/lib/weather/types";
 import { circlePolygon } from "@/lib/weather/geo";
 import { cn } from "@/lib/utils";
@@ -97,6 +98,7 @@ export function RadarMap({
     let map: import("maplibre-gl").Map | undefined;
     let onClick: ((e: import("maplibre-gl").MapMouseEvent) => void) | undefined;
     let usedFallback = false;
+    let styleTimer = 0;
 
     const draw = () => {
       const canvas = canvasRef.current;
@@ -105,29 +107,47 @@ export function RadarMap({
       drawTracks(canvas, instance, liveRef.current.tracks);
     };
 
+    const fitMap = (instance: import("maplibre-gl").Map | null | undefined) => {
+      if (!instance || cancelled) return;
+      const box = wrapRef.current;
+      if (!box || box.clientWidth === 0 || box.clientHeight === 0) return;
+      instance.resize();
+      sizeCanvas(canvasRef.current, wrapRef.current);
+      if (readyRef.current) draw();
+    };
+
     void (async () => {
       const maplibregl = await import("maplibre-gl");
       if (cancelled || !rootRef.current) return;
 
-      const instance = new maplibregl.Map({
-        container: rootRef.current,
-        style: OFM_LIGHT,
-        center: [liveRef.current.lon, liveRef.current.lat],
-        zoom: 8.2,
-        minZoom: 5,
-        maxZoom: 12,
-        attributionControl: false,
-        fadeDuration: 0,
-        dragRotate: false,
-        pitchWithRotate: false,
-        maxPitch: 0,
-      });
+      let instance: import("maplibre-gl").Map;
+      try {
+        instance = new maplibregl.Map({
+          container: rootRef.current,
+          style: OFM_LIGHT,
+          center: [liveRef.current.lon, liveRef.current.lat],
+          zoom: 8.2,
+          minZoom: 5,
+          maxZoom: 12,
+          attributionControl: false,
+          fadeDuration: 0,
+          dragRotate: false,
+          pitchWithRotate: false,
+          maxPitch: 0,
+          canvasContextAttributes: { powerPreference: "default" },
+        });
+      } catch {
+        return;
+      }
       map = instance;
+      mapRef.current = instance;
 
       onClick = (e) => {
         onPickRef.current(e.lngLat.lat, e.lngLat.lng);
       };
       instance.on("click", onClick);
+      fitMap(instance);
+      requestAnimationFrame(() => fitMap(instance));
 
       const paintOverlays = () => {
         if (cancelled) return;
@@ -207,7 +227,7 @@ export function RadarMap({
         }
         readyRef.current = true;
         mapRef.current = instance;
-        sizeCanvas(canvasRef.current, wrapRef.current);
+        fitMap(instance);
         draw();
       };
 
@@ -218,35 +238,29 @@ export function RadarMap({
         draw();
       });
       instance.on("error", (ev) => {
-        if (usedFallback || readyRef.current) return;
-        const msg = String(
-          (ev as { error?: { message?: string } }).error?.message ?? "",
-        );
-        if (
-          !/api key|401|403|not authorized|forbidden/i.test(msg) &&
-          !/failed to (fetch|load)/i.test(msg)
-        ) {
-          return;
-        }
+        const msg = String((ev as { error?: { message?: string } }).error?.message ?? "");
+        if (!shouldFallbackBasemap(msg, readyRef.current) || usedFallback) return;
         usedFallback = true;
         instance.setStyle(ESRI_FALLBACK);
       });
+      styleTimer = window.setTimeout(() => {
+        if (cancelled || usedFallback || readyRef.current) return;
+        usedFallback = true;
+        instance.setStyle(ESRI_FALLBACK);
+      }, 5000);
     })();
 
-    const ro = new ResizeObserver(() => {
-      sizeCanvas(canvasRef.current, wrapRef.current);
-      const instance = mapRef.current;
-      if (instance && readyRef.current) {
-        instance.resize();
-        drawTracks(canvasRef.current, instance, liveRef.current.tracks);
-      }
-    });
+    const ro = new ResizeObserver(() => fitMap(mapRef.current));
     if (wrapRef.current) ro.observe(wrapRef.current);
+    const onViewport = () => fitMap(mapRef.current);
+    window.visualViewport?.addEventListener("resize", onViewport);
 
     return () => {
       cancelled = true;
       readyRef.current = false;
+      window.clearTimeout(styleTimer);
       ro.disconnect();
+      window.visualViewport?.removeEventListener("resize", onViewport);
       if (map && onClick) map.off("click", onClick);
       map?.remove();
       mapRef.current = null;
@@ -408,14 +422,8 @@ function drawTracks(
     const size = hot ? 18 : 14;
     ctx.beginPath();
     ctx.moveTo(soon.x, soon.y);
-    ctx.lineTo(
-      soon.x - size * Math.cos(ang - 0.42),
-      soon.y - size * Math.sin(ang - 0.42),
-    );
-    ctx.lineTo(
-      soon.x - size * Math.cos(ang + 0.42),
-      soon.y - size * Math.sin(ang + 0.42),
-    );
+    ctx.lineTo(soon.x - size * Math.cos(ang - 0.42), soon.y - size * Math.sin(ang - 0.42));
+    ctx.lineTo(soon.x - size * Math.cos(ang + 0.42), soon.y - size * Math.sin(ang + 0.42));
     ctx.closePath();
     ctx.fillStyle = core;
     ctx.fill();
