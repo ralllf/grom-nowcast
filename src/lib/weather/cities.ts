@@ -15,6 +15,7 @@ export const CITIES: Place[] = [
   DEFAULT_PLACE,
   { lat: 50.0647, lon: 19.945, label: "Kraków", city: "Kraków", terc: "1261" },
   { lat: 51.1079, lon: 17.0385, label: "Wrocław", city: "Wrocław", terc: "0264" },
+  { lat: 51.1492, lon: 15.0084, label: "Zgorzelec", city: "Zgorzelec", terc: "0225" },
   { lat: 52.4064, lon: 16.9252, label: "Poznań", city: "Poznań", terc: "3064" },
   { lat: 54.352, lon: 18.6466, label: "Gdańsk", city: "Gdańsk", terc: "2261" },
   { lat: 51.7592, lon: 19.456, label: "Łódź", city: "Łódź", terc: "1061" },
