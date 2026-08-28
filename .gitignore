@@ -17,3 +17,4 @@ Thumbs.db
 coverage/
 *.tsbuildinfo
 public/__grok/
+.superpowers/

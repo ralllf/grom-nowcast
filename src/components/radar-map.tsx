@@ -364,19 +364,6 @@ function syncRadar(map: import("maplibre-gl").Map, live: Live) {
   );
 }
 
-function extendMinPx(
-  from: { x: number; y: number },
-  to: { x: number; y: number },
-  minPx: number,
-) {
-  const dx = to.x - from.x;
-  const dy = to.y - from.y;
-  const len = Math.hypot(dx, dy);
-  if (len >= minPx) return to;
-  const s = minPx / Math.max(len, 0.01);
-  return { x: from.x + dx * s, y: from.y + dy * s };
-}
-
 function drawTracks(
   canvas: HTMLCanvasElement | null,
   map: import("maplibre-gl").Map,
@@ -397,7 +384,8 @@ function drawTracks(
     const soonP = map.project([track.soon.lon, track.soon.lat]);
     const now = { x: nowP.x, y: nowP.y };
     const from = { x: fromP.x, y: fromP.y };
-    const soon = extendMinPx(now, { x: soonP.x, y: soonP.y }, track.threatening ? 72 : 56);
+    // Length is geographic (speed × ~30 min) — do not inflate with a pixel floor.
+    const soon = { x: soonP.x, y: soonP.y };
     const hot = track.threatening;
     const core = hot ? AMBER : AMBER_SOFT;
     const outline = hot ? 13 : 10;

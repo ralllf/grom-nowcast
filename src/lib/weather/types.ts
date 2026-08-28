@@ -76,6 +76,8 @@ export type CellTrack = {
   speedKmh: number;
   bearing: number;
   threatening: boolean;
+  /** 0–100 motion confidence; glyphs only drawn when high enough. */
+  confidence: number;
 };
 
 export type Threat = {

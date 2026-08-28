@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { PNG } from "pngjs";
 import { z } from "zod";
-import { bboxForRadius, haversineKm, lonLatToTile, tilePixelToLonLat } from "./geo";
+import { lonLatToTile, tilePixelToLonLat } from "./geo";
 import type {
   OfficialWarning,
   Place,
@@ -208,31 +208,48 @@ function warningMatches(w: OfficialWarning, place: Place): boolean {
   return false;
 }
 
-/** Neighborhood of the pin — including across the German/Czech border (Zgorzelec). */
-const SAMPLE_KM = 110;
-const LOCAL_MAX_KM = 25;
+/** Poland + border strip — fixed radar domain (not pin-centered). */
+export const PL_RADAR_BBOX = {
+  minLat: 48.8,
+  maxLat: 55.15,
+  minLon: 13.8,
+  maxLon: 24.6,
+} as const;
 
-function tilesFor(lat: number, lon: number, z: number) {
+export const PL_RADAR_ORIGIN = { lat: 52.1, lon: 19.35 };
+
+const MAX_RADAR_TILES = 48;
+const MAX_RADAR_SAMPLES = 5_000;
+
+let radarScanCache: { key: number; at: number; scan: RadarScan } | null = null;
+
+function inPolandRadar(lat: number, lon: number) {
+  return (
+    lat >= PL_RADAR_BBOX.minLat &&
+    lat <= PL_RADAR_BBOX.maxLat &&
+    lon >= PL_RADAR_BBOX.minLon &&
+    lon <= PL_RADAR_BBOX.maxLon
+  );
+}
+
+function tilesForPoland(z: number) {
   const set = new Map<string, { x: number; y: number }>();
-  const box = bboxForRadius(lat, lon, SAMPLE_KM);
-  const a = lonLatToTile(box.minLon, box.maxLat, z);
-  const b = lonLatToTile(box.maxLon, box.minLat, z);
+  const a = lonLatToTile(PL_RADAR_BBOX.minLon, PL_RADAR_BBOX.maxLat, z);
+  const b = lonLatToTile(PL_RADAR_BBOX.maxLon, PL_RADAR_BBOX.minLat, z);
   for (let x = Math.min(a.x, b.x); x <= Math.max(a.x, b.x); x++) {
     for (let y = Math.min(a.y, b.y); y <= Math.max(a.y, b.y); y++) {
       set.set(`${x},${y}`, { x, y });
     }
   }
-  return [...set.values()].slice(0, 9);
+  return [...set.values()].slice(0, MAX_RADAR_TILES);
 }
 
 async function sampleFrame(
-  lat: number,
-  lon: number,
   host: string,
   frame: RadarFrameMeta,
 ): Promise<{ samples: RadarSample[]; maxLevel: RadarLevel; nearestKm: number | null }> {
   const z = 5;
-  const tiles = tilesFor(lat, lon, z);
+  const tiles = tilesForPoland(z);
   const samples: RadarSample[] = [];
   await Promise.all(
     tiles.map(async (tile) => {
@@ -240,7 +257,7 @@ async function sampleFrame(
       try {
         const buf = await fetchBuf(url);
         const png = PNG.sync.read(buf);
-        const stride = 4;
+        const stride = 2;
         for (let py = 0; py < png.height; py += stride) {
           for (let px = 0; px < png.width; px += stride) {
             const idx = (png.width * py + px) << 2;
@@ -252,7 +269,7 @@ async function sampleFrame(
             );
             if (level === 0) continue;
             const ll = tilePixelToLonLat(z, tile.x, tile.y, px, py, png.width);
-            if (haversineKm(lat, lon, ll.lat, ll.lon) > SAMPLE_KM) continue;
+            if (!inPolandRadar(ll.lat, ll.lon)) continue;
             samples.push({ lat: ll.lat, lon: ll.lon, level });
           }
         }
@@ -261,23 +278,16 @@ async function sampleFrame(
       }
     }),
   );
-  samples.sort((s, t) => {
-    const ds = haversineKm(lat, lon, s.lat, s.lon);
-    const dt = haversineKm(lat, lon, t.lat, t.lon);
-    return t.level - s.level || ds - dt;
-  });
+  samples.sort((s, t) => t.level - s.level || s.lat - t.lat || s.lon - t.lon);
 
-  let nearestKm: number | null = null;
   let maxLevel: RadarLevel = 0;
   for (const s of samples) {
-    const d = haversineKm(lat, lon, s.lat, s.lon);
-    if (nearestKm === null || d < nearestKm) nearestKm = d;
-    if (d <= LOCAL_MAX_KM && s.level > maxLevel) maxLevel = s.level;
+    if (s.level > maxLevel) maxLevel = s.level;
   }
-  return { samples: samples.slice(0, 400), maxLevel, nearestKm };
+  return { samples: samples.slice(0, MAX_RADAR_SAMPLES), maxLevel, nearestKm: null };
 }
 
-async function sampleRadar(lat: number, lon: number): Promise<RadarScan> {
+async function sampleRadar(): Promise<RadarScan> {
   const maps = await getMaps();
   const past = maps.radar.past ?? [];
   const nowcast = maps.radar.nowcast ?? [];
@@ -299,9 +309,17 @@ async function sampleRadar(lat: number, lon: number): Promise<RadarScan> {
   };
   if (!latest) return empty;
 
+  if (
+    radarScanCache &&
+    radarScanCache.key === latest.time &&
+    Date.now() - radarScanCache.at < 90_000
+  ) {
+    return radarScanCache.scan;
+  }
+
   const sampled = await Promise.all(
     take.map(async (frame) => {
-      const part = await sampleFrame(lat, lon, maps.host, frame);
+      const part = await sampleFrame(maps.host, frame);
       return {
         time: frame.time,
         samples: part.samples,
@@ -314,7 +332,7 @@ async function sampleRadar(lat: number, lon: number): Promise<RadarScan> {
   const before = sampled.length >= 2 ? sampled.at(-2) : undefined;
   if (!now) return empty;
 
-  return {
+  const scan: RadarScan = {
     host: maps.host,
     generated: maps.generated,
     latestTime: latest.time,
@@ -328,6 +346,8 @@ async function sampleRadar(lat: number, lon: number): Promise<RadarScan> {
     nearestKm: now.nearestKm,
     echoCount: now.samples.length,
   };
+  radarScanCache = { key: latest.time, at: Date.now(), scan };
+  return scan;
 }
 
 const snapshotInput = z.object({
@@ -350,19 +370,21 @@ const snapshotInput = z.object({
 export const getSnapshot = createServerFn({ method: "POST" })
   .validator(snapshotInput)
   .handler(async ({ data }): Promise<Snapshot> => {
+    // Radar is always the Poland domain (pin-independent). data.place = user pin for TERYT.
+    const userPlace = data.place;
     const [radar, warnings, place] = await Promise.all([
-      sampleRadar(data.lat, data.lon),
+      sampleRadar(),
       getImgwWarnings(),
-      data.place && data.place.terc
-        ? Promise.resolve({ ...data.place, lat: data.lat, lon: data.lon })
-        : reversePlace(data.lat, data.lon).catch(() => ({
-            lat: data.lat,
-            lon: data.lon,
-            label: data.place?.label ?? "Wybrany punkt",
-            terc: data.place?.terc,
-            city: data.place?.city,
-            county: data.place?.county,
-            state: data.place?.state,
+      userPlace?.terc
+        ? Promise.resolve({ ...userPlace })
+        : reversePlace(userPlace?.lat ?? data.lat, userPlace?.lon ?? data.lon).catch(() => ({
+            lat: userPlace?.lat ?? data.lat,
+            lon: userPlace?.lon ?? data.lon,
+            label: userPlace?.label ?? "Wybrany punkt",
+            terc: userPlace?.terc,
+            city: userPlace?.city,
+            county: userPlace?.county,
+            state: userPlace?.state,
           })),
     ]);
 
@@ -372,14 +394,18 @@ export const getSnapshot = createServerFn({ method: "POST" })
     }));
 
     const matched = tagged.filter((w) => w.matchesPlace);
-    const nationalStorms = tagged.filter((w) => w.stormRelated && !w.matchesPlace);
+    const storms = tagged.filter((w) => w.stormRelated);
 
     return {
       fetchedAt: Date.now(),
       place,
       radar,
-      warnings: matched.length > 0 ? matched : nationalStorms.slice(0, 6),
-      stormWarningCount: tagged.filter((w) => w.stormRelated).length,
+      // Enough national storms for the client to re-tag when the pin moves (radar is shared).
+      warnings:
+        matched.length > 0
+          ? [...matched, ...storms.filter((w) => !matched.includes(w))].slice(0, 40)
+          : storms.slice(0, 40),
+      stormWarningCount: storms.length,
     };
   });
 

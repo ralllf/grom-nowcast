@@ -16,7 +16,7 @@ import { RadarMap } from "@/components/radar-map";
 import { cn } from "@/lib/utils";
 import { CITIES } from "@/lib/weather/cities";
 import { haversineKm } from "@/lib/weather/geo";
-import { getSnapshot, searchPlaces } from "@/lib/weather/server";
+import { getSnapshot, searchPlaces, PL_RADAR_ORIGIN } from "@/lib/weather/server";
 import { computeThreat } from "@/lib/weather/threat";
 import type { Place, RadarLevel, ThreatLevel } from "@/lib/weather/types";
 import { useGrom } from "@/lib/store";
@@ -97,20 +97,32 @@ export function GromApp() {
   }, []);
 
   const snapshotQuery = useQuery({
-    queryKey: ["snapshot", place.lat, place.lon, radiusKm, place.terc],
-    queryFn: () =>
-      getSnapshot({
+    // National radar field — pin must not change the query key / motion arrows.
+    queryKey: ["snapshot"],
+    queryFn: () => {
+      const p = useGrom.getState().place;
+      const r = useGrom.getState().radiusKm;
+      return getSnapshot({
         data: {
-          lat: place.lat,
-          lon: place.lon,
-          radiusKm,
-          place,
+          lat: p.lat,
+          lon: p.lon,
+          radiusKm: r,
+          place: p,
         },
-      }),
+      });
+    },
     refetchInterval: 90_000,
   });
 
   const snapshot = snapshotQuery.data;
+
+  const { refetch: refetchSnapshot } = snapshotQuery;
+
+  // Resolve TERYT / label for a bare map pin without changing the radar query key.
+  useEffect(() => {
+    if (place.terc) return;
+    void refetchSnapshot();
+  }, [place.lat, place.lon, place.terc, refetchSnapshot]);
 
   useEffect(() => {
     if (!snapshot?.radar.latestTime) return;
@@ -139,10 +151,14 @@ export function GromApp() {
             },
           ];
     for (const frame of hist) pushFrame(frame);
-    if (snapshot.place.terc && snapshot.place.terc !== place.terc) {
+  }, [snapshot, pushFrame]);
+
+  useEffect(() => {
+    if (!snapshot?.place.terc || place.terc) return;
+    if (haversineKm(snapshot.place.lat, snapshot.place.lon, place.lat, place.lon) < 3) {
       updatePlaceMeta(snapshot.place);
     }
-  }, [snapshot, pushFrame, place.terc, updatePlaceMeta]);
+  }, [snapshot, place, updatePlaceMeta]);
 
   const threat = useMemo(() => {
     if (!snapshot) return null;
@@ -174,8 +190,12 @@ export function GromApp() {
                 ]
               : []),
           ];
-    return computeThreat(snapshot.place, hist, snapshot.warnings, radiusKm);
-  }, [snapshot, radiusKm]);
+    const warnings = snapshot.warnings.map((w) => ({
+      ...w,
+      matchesPlace: place.terc ? w.teryt.includes(place.terc) : w.matchesPlace,
+    }));
+    return computeThreat(place, hist, warnings, radiusKm, PL_RADAR_ORIGIN);
+  }, [snapshot, radiusKm, place]);
 
   useEffect(() => {
     if (!threat || !notify) return;
@@ -263,7 +283,14 @@ export function GromApp() {
     });
   }
 
-  const warnings = snapshot?.warnings ?? [];
+  const warnings = useMemo(
+    () =>
+      (snapshot?.warnings ?? []).map((w) => ({
+        ...w,
+        matchesPlace: place.terc ? w.teryt.includes(place.terc) : false,
+      })),
+    [snapshot?.warnings, place.terc],
+  );
   const localWarnings = warnings.filter((w) => w.matchesPlace);
   const shownWarnings = localWarnings.length > 0 ? localWarnings : warnings;
   const tracks = threat?.tracks ?? [];

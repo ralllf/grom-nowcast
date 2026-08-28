@@ -18,15 +18,24 @@ const LOCAL_MAX_KM = 25;
 /** Radar z=5 sample spacing is ~12 km — this close is already "here". */
 const OVER_KM = 12;
 const CLOSE_KM = 20;
-/** Draw the arrow on rain near the pin; motion itself comes from the whole field. */
-const PIN_DRAW_KM = 50;
-const FIELD_KM = 80;
-const CELL_RADIUS_KM = 48;
+/** Friends-of-friends link for connected echo (z=5 spacing ~12 km; allow one gap). */
+const LINK_KM = 16;
 const MATCH_KM = 45;
 const MAX_SPEED = 95;
 const MIN_MOVE_SPEED = 4;
 const HORIZON_MIN = 90;
-const MAX_TRACKS = 2;
+const MAX_TRACKS = 3;
+const CORE_RADIUS_KM = 18;
+/** Arrow forward shaft = this many minutes of travel at estimated speed. */
+const ARROW_AHEAD_MIN = 30;
+/** Reject single masses larger than this — they get split into local tiles instead. */
+const MAX_MASS_SPAN_KM = 140;
+/** Spatial tile size when splitting an oversized connected component. */
+const SPLIT_TILE_KM = 55;
+/** Ignore tiny chips — they jitter and invent fake bearings. */
+const MIN_MASS_SAMPLES = 12;
+/** Hide arrows below this motion confidence (0–100). */
+export const MOTION_CONFIDENCE_MIN = 72;
 
 function centroid(samples: RadarSample[]): { lat: number; lon: number } | null {
   if (samples.length === 0) return null;
@@ -38,89 +47,175 @@ function centroid(samples: RadarSample[]): { lat: number; lon: number } | null {
   };
 }
 
-/** Closer echo — used only to place the arrow, not to compute direction. */
-function pinWeightedCentroid(
-  samples: RadarSample[],
-  lat: number,
-  lon: number,
-): { lat: number; lon: number } | null {
-  let wsum = 0;
-  let slat = 0;
-  let slon = 0;
-  for (const s of samples) {
-    const d = haversineKm(lat, lon, s.lat, s.lon);
-    if (d > PIN_DRAW_KM) continue;
-    const w = s.level / Math.max(d, 8);
-    wsum += w;
-    slat += s.lat * w;
-    slon += s.lon * w;
+function massCoreSamples(samples: RadarSample[]): RadarSample[] {
+  const strong = samples.filter((s) => s.level >= 2);
+  const pool = strong.length >= 3 ? strong : samples.filter((s) => s.level >= 1);
+  if (pool.length === 0) return [];
+  let seed = pool[0]!;
+  for (const s of pool) {
+    if (s.level > seed.level) seed = s;
   }
-  if (wsum <= 0) return null;
-  return { lat: slat / wsum, lon: slon / wsum };
+  const local = pool.filter(
+    (s) => haversineKm(seed.lat, seed.lon, s.lat, s.lon) <= CORE_RADIUS_KM,
+  );
+  return local.length >= 3 ? local : pool;
 }
 
-const GRID_STEP = 0.1;
-const GRID_HALF = 8;
-const GRID_N = GRID_HALF * 2;
+function massAnchor(mass: { samples: RadarSample[]; lat: number; lon: number }): {
+  lat: number;
+  lon: number;
+} {
+  const c = centroid(massCoreSamples(mass.samples));
+  return c ?? { lat: mass.lat, lon: mass.lon };
+}
 
-function rainGrid(samples: RadarSample[], lat0: number, lon0: number): Float64Array {
-  const n = GRID_N;
-  const g = new Float64Array(n * n);
+/**
+ * Operational-style echo motion (TREC family):
+ * 1) intensity grid in km
+ * 2) large-scale box smooth (track envelope, not fringe — Wolfson/GDST idea)
+ * 3) normalized cross-correlation (Pearson) for displacement
+ * 4) QC: min NCC + agreement across frame pairs
+ */
+const CELL_KM = 5;
+const GRID_HALF_CELLS = 12; // ±60 km
+const GRID_N = GRID_HALF_CELLS * 2;
+const SMOOTH_RADIUS = 2; // ~25 km box — large-scale envelope
+const NCC_MIN = 0.4;
+const PAIR_AGREE_DEG = 40;
+const MAX_SHIFT_KM = 70;
+
+type MotionEst = {
+  speed: number;
+  bearing: number;
+  from: { lat: number; lon: number };
+  confidence: number;
+};
+
+function kmToLatDeg(km: number) {
+  return km / 111;
+}
+function kmToLonDeg(km: number, lat: number) {
+  return km / (111 * Math.max(Math.cos((lat * Math.PI) / 180), 0.25));
+}
+
+function samplesToGrid(
+  samples: RadarSample[],
+  lat0: number,
+  lon0: number,
+): Float64Array {
+  const g = new Float64Array(GRID_N * GRID_N);
+  const dLat = kmToLatDeg(CELL_KM);
+  const dLon = kmToLonDeg(CELL_KM, lat0);
   for (const s of samples) {
     if (s.level < 1) continue;
-    if (haversineKm(lat0, lon0, s.lat, s.lon) > FIELD_KM) continue;
-    const ix = Math.round((s.lon - lon0) / GRID_STEP) + GRID_HALF;
-    const iy = Math.round((s.lat - lat0) / GRID_STEP) + GRID_HALF;
-    if (ix < 0 || iy < 0 || ix >= n || iy >= n) continue;
-    const i = iy * n + ix;
-    if (s.level > g[i]) g[i] = s.level;
+    const ix = Math.round((s.lon - lon0) / dLon) + GRID_HALF_CELLS;
+    const iy = Math.round((s.lat - lat0) / dLat) + GRID_HALF_CELLS;
+    if (ix < 0 || iy < 0 || ix >= GRID_N || iy >= GRID_N) continue;
+    const i = iy * GRID_N + ix;
+    if (s.level > g[i]!) g[i] = s.level;
   }
   return g;
 }
 
-function shiftScore(a: Float64Array, b: Float64Array, dix: number, diy: number): number {
-  const n = GRID_N;
-  let num = 0;
-  let rain = 0;
-  for (let iy = 0; iy < n; iy++) {
-    const jy = iy + diy;
-    if (jy < 0 || jy >= n) continue;
-    for (let ix = 0; ix < n; ix++) {
-      const jx = ix + dix;
-      if (jx < 0 || jx >= n) continue;
-      const av = a[iy * n + ix] ?? 0;
-      const bv = b[jy * n + jx] ?? 0;
-      if (av <= 0 && bv <= 0) continue;
-      num += av * bv;
-      rain += av + bv;
+function boxSmooth(src: Float64Array, radius: number): Float64Array {
+  const out = new Float64Array(GRID_N * GRID_N);
+  for (let iy = 0; iy < GRID_N; iy++) {
+    for (let ix = 0; ix < GRID_N; ix++) {
+      let sum = 0;
+      let n = 0;
+      for (let dy = -radius; dy <= radius; dy++) {
+        for (let dx = -radius; dx <= radius; dx++) {
+          const jy = iy + dy;
+          const jx = ix + dx;
+          if (jy < 0 || jx < 0 || jy >= GRID_N || jx >= GRID_N) continue;
+          sum += src[jy * GRID_N + jx]!;
+          n++;
+        }
+      }
+      out[iy * GRID_N + ix] = n > 0 ? sum / n : 0;
     }
   }
-  return rain > 6 ? num : 0;
+  return out;
 }
 
-function fieldShift(
+function gridRainCells(g: Float64Array): number {
+  let n = 0;
+  for (let i = 0; i < g.length; i++) if (g[i]! > 0) n++;
+  return n;
+}
+
+/** Pearson NCC of grid `a` vs `b` shifted by (dix, diy). */
+function nccAtShift(a: Float64Array, b: Float64Array, dix: number, diy: number): number {
+  let n = 0;
+  let sumA = 0;
+  let sumB = 0;
+  let sumAA = 0;
+  let sumBB = 0;
+  let sumAB = 0;
+  for (let iy = 0; iy < GRID_N; iy++) {
+    const jy = iy + diy;
+    if (jy < 0 || jy >= GRID_N) continue;
+    for (let ix = 0; ix < GRID_N; ix++) {
+      const jx = ix + dix;
+      if (jx < 0 || jx >= GRID_N) continue;
+      const av = a[iy * GRID_N + ix]!;
+      const bv = b[jy * GRID_N + jx]!;
+      if (av <= 0 && bv <= 0) continue;
+      n++;
+      sumA += av;
+      sumB += bv;
+      sumAA += av * av;
+      sumBB += bv * bv;
+      sumAB += av * bv;
+    }
+  }
+  if (n < 10) return -1;
+  const meanA = sumA / n;
+  const meanB = sumB / n;
+  const varA = sumAA - n * meanA * meanA;
+  const varB = sumBB - n * meanB * meanB;
+  if (varA <= 1e-6 || varB <= 1e-6) return -1;
+  return (sumAB - n * meanA * meanB) / Math.sqrt(varA * varB);
+}
+
+function bestNccShift(
+  a: Float64Array,
+  b: Float64Array,
+  maxC: number,
+): { dix: number; diy: number; score: number } | null {
+  let best: { dix: number; diy: number; score: number } | null = null;
+  for (let diy = -maxC; diy <= maxC; diy++) {
+    for (let dix = -maxC; dix <= maxC; dix++) {
+      const score = nccAtShift(a, b, dix, diy);
+      if (score < NCC_MIN) continue;
+      if (!best || score > best.score) best = { dix, diy, score };
+    }
+  }
+  return best;
+}
+
+function pairMotionNcc(
   prev: RadarSample[],
-  now: RadarSample[],
+  next: RadarSample[],
   lat0: number,
   lon0: number,
   hours: number,
-): { speed: number; bearing: number; moved: number } | null {
+): { speed: number; bearing: number; moved: number; score: number } | null {
   if (hours <= 0) return null;
-  const a = rainGrid(prev, lat0, lon0);
-  const b = rainGrid(now, lat0, lon0);
-  const maxKm = Math.min(MAX_SPEED * hours, 70);
-  const maxC = Math.max(1, Math.min(6, Math.ceil(maxKm / (GRID_STEP * 111))));
-  let best = { score: 0, dix: 0, diy: 0 };
-  for (let diy = -maxC; diy <= maxC; diy++) {
-    for (let dix = -maxC; dix <= maxC; dix++) {
-      const score = shiftScore(a, b, dix, diy);
-      if (score > best.score) best = { score, dix, diy };
-    }
+  const rawA = samplesToGrid(prev, lat0, lon0);
+  const rawB = samplesToGrid(next, lat0, lon0);
+  if (gridRainCells(rawA) < 4 || gridRainCells(rawB) < 4) return null;
+  const a = boxSmooth(rawA, SMOOTH_RADIUS);
+  const b = boxSmooth(rawB, SMOOTH_RADIUS);
+  const maxKm = Math.min(MAX_SPEED * hours, MAX_SHIFT_KM);
+  const maxC = Math.max(1, Math.min(12, Math.ceil(maxKm / CELL_KM)));
+  const best = bestNccShift(a, b, maxC);
+  if (!best) return null;
+  if (best.dix === 0 && best.diy === 0) {
+    return { speed: 0, bearing: 0, moved: 0, score: best.score };
   }
-  if (best.score < 2) return null;
-  if (best.dix === 0 && best.diy === 0) return { speed: 0, bearing: 0, moved: 0 };
-  const dLat = best.diy * GRID_STEP;
-  const dLon = best.dix * GRID_STEP;
+  const dLat = best.diy * kmToLatDeg(CELL_KM);
+  const dLon = best.dix * kmToLonDeg(CELL_KM, lat0);
   const moved = haversineKm(lat0, lon0, lat0 + dLat, lon0 + dLon);
   const speed = moved / hours;
   if (speed > MAX_SPEED) return null;
@@ -128,6 +223,7 @@ function fieldShift(
     speed,
     bearing: bearingDeg(lat0, lon0, lat0 + dLat, lon0 + dLon),
     moved,
+    score: best.score,
   };
 }
 
@@ -135,54 +231,71 @@ function systemMotion(
   frames: RadarMemoryFrame[],
   lat0: number,
   lon0: number,
-): { speed: number; bearing: number; from: { lat: number; lon: number } } | null {
+): MotionEst | null {
   if (frames.length < 2) return null;
-  const parts: { deg: number; w: number; speed: number }[] = [];
+  type Part = { deg: number; w: number; speed: number; score: number };
+  const parts: Part[] = [];
+
   for (let i = 1; i < frames.length; i++) {
     const prev = frames[i - 1];
     const next = frames[i];
     if (!prev || !next) continue;
     const hours = (next.time - prev.time) / 3600;
-    const m = fieldShift(prev.samples, next.samples, lat0, lon0, hours);
+    const m = pairMotionNcc(prev.samples, next.samples, lat0, lon0, hours);
     if (!m || m.speed < 1) continue;
-    parts.push({ deg: m.bearing, w: Math.max(m.moved, 1), speed: m.speed });
+    parts.push({
+      deg: m.bearing,
+      w: Math.max(m.moved, 1) * Math.max(m.score, 0.4),
+      speed: m.speed,
+      score: m.score,
+    });
   }
   const first = frames[0];
   const last = frames.at(-1);
   if (first && last && last.time > first.time) {
     const hoursAll = (last.time - first.time) / 3600;
-    const mAll = fieldShift(first.samples, last.samples, lat0, lon0, hoursAll);
+    const mAll = pairMotionNcc(first.samples, last.samples, lat0, lon0, hoursAll);
     if (mAll && mAll.speed >= 1) {
       parts.push({
         deg: mAll.bearing,
-        w: Math.max(mAll.moved, 1) * 2.5,
+        w: Math.max(mAll.moved, 1) * 2.5 * Math.max(mAll.score, 0.4),
         speed: mAll.speed,
+        score: mAll.score,
       });
     }
   }
-  if (parts.length === 0) {
-    const trail: TrailPoint[] = [];
-    for (const f of frames) {
-      const c = centroid(nearPin(f.samples, lat0, lon0, FIELD_KM).filter((s) => s.level >= 1));
-      if (c) trail.push({ ...c, time: f.time });
-    }
-    return motionFromTrail(trail);
-  }
-  const bearing = circularMeanDeg(parts);
+  if (parts.length === 0) return null;
+
+  // QC: drop pair vectors that disagree with the weighted circular mean
+  let bearing = circularMeanDeg(parts);
   if (bearing == null) return null;
-  const wsum = parts.reduce((s, p) => s + p.w, 0);
-  const speed = parts.reduce((s, p) => s + p.speed * p.w, 0) / wsum;
-  if (speed > MAX_SPEED) return null;
+  const kept = parts.filter((p) => angleDiffDeg(p.deg, bearing!) <= PAIR_AGREE_DEG);
+  const use = kept.length > 0 ? kept : parts;
+  bearing = circularMeanDeg(use);
+  if (bearing == null) return null;
+  // Need at least one solid correlation
+  if (Math.max(...use.map((p) => p.score)) < NCC_MIN) return null;
+
+  const wsum = use.reduce((s, p) => s + p.w, 0);
+  const speed = use.reduce((s, p) => s + p.speed * p.w, 0) / wsum;
+  if (speed > MAX_SPEED || speed < 1) return null;
   const hoursAll =
     first && last && last.time > first.time ? (last.time - first.time) / 3600 : 0.5;
   const from = destPoint(lat0, lon0, (bearing + 180) % 360, Math.max(speed * hoursAll, 8));
-  return { speed, bearing, from };
+  const bestScore = Math.max(...use.map((p) => p.score));
+  const confidence = Math.round(
+    Math.min(
+      95,
+      40 + bestScore * 40 + Math.min(use.length, 3) * 8 + (kept.length === parts.length ? 5 : 0),
+    ),
+  );
+  return { speed, bearing, from, confidence };
 }
 
-type Cell = {
+type Mass = {
   lat: number;
   lon: number;
-  maxLevel: number;
+  maxLevel: RadarLevel;
   samples: RadarSample[];
 };
 
@@ -219,47 +332,130 @@ function maxLevelWithin(
   return max;
 }
 
-function clusterCells(samples: RadarSample[]): Cell[] {
-  const pool = samples
-    .filter((s) => s.level >= 1)
-    .sort((a, b) => b.level - a.level || b.lat - a.lat);
-  const used = new Uint8Array(pool.length);
-  const cells: Cell[] = [];
-  for (let i = 0; i < pool.length; i++) {
-    if (used[i]) continue;
-    const seed = pool[i];
-    if (!seed) continue;
-    const members: RadarSample[] = [];
-    for (let j = 0; j < pool.length; j++) {
-      if (used[j]) continue;
-      const s = pool[j];
-      if (!s) continue;
-      if (haversineKm(seed.lat, seed.lon, s.lat, s.lon) <= CELL_RADIUS_KM) {
-        used[j] = 1;
-        members.push(s);
-      }
-    }
-    if (members.length < 3) continue;
-    const c = centroid(members);
-    if (!c) continue;
-    cells.push({
-      lat: c.lat,
-      lon: c.lon,
-      maxLevel: members.reduce((m, s) => Math.max(m, s.level), 0),
-      samples: members,
-    });
-  }
-  return cells.slice(0, 10);
+function massFromMembers(members: RadarSample[]): Mass | null {
+  if (members.length < MIN_MASS_SAMPLES) return null;
+  const c = centroid(members);
+  if (!c) return null;
+  return {
+    lat: c.lat,
+    lon: c.lon,
+    maxLevel: members.reduce<RadarLevel>((m, s) => (s.level > m ? s.level : m), 0),
+    samples: members,
+  };
 }
 
-function nearestCell(cell: Cell, pool: Cell[]): Cell | null {
-  let best: Cell | null = null;
-  let bestD = MATCH_KM;
+/** Cut a domain-spanning blob into ~SPLIT_TILE_KM tiles so local motion survives. */
+function splitOversizedMass(members: RadarSample[]): Mass[] {
+  const lat0 = members.reduce((s, p) => s + p.lat, 0) / members.length;
+  const dLat = SPLIT_TILE_KM / 111;
+  const dLon = SPLIT_TILE_KM / (111 * Math.max(Math.cos((lat0 * Math.PI) / 180), 0.25));
+  const buckets = new Map<string, RadarSample[]>();
+  for (const s of members) {
+    const ix = Math.round(s.lon / dLon);
+    const iy = Math.round(s.lat / dLat);
+    const key = `${ix},${iy}`;
+    const g = buckets.get(key);
+    if (g) g.push(s);
+    else buckets.set(key, [s]);
+  }
+  const out: Mass[] = [];
+  for (const part of buckets.values()) {
+    const m = massFromMembers(part);
+    if (m) out.push(m);
+  }
+  return out;
+}
+
+/** Connected components of echo — one contiguous front is one mass (or split if huge). */
+function segmentMasses(samples: RadarSample[], linkKm: number): Mass[] {
+  const pool = samples.filter((s) => s.level >= 1);
+  const n = pool.length;
+  if (n === 0) return [];
+  const parent = new Int32Array(n);
+  for (let i = 0; i < n; i++) parent[i] = i;
+  const find = (i: number): number => {
+    let r = i;
+    while (parent[r] !== r) r = parent[r]!;
+    let c = i;
+    while (parent[c] !== c) {
+      const next = parent[c]!;
+      parent[c] = r;
+      c = next;
+    }
+    return r;
+  };
+  for (let i = 0; i < n; i++) {
+    const a = pool[i];
+    if (!a) continue;
+    for (let j = i + 1; j < n; j++) {
+      const b = pool[j];
+      if (!b) continue;
+      if (haversineKm(a.lat, a.lon, b.lat, b.lon) <= linkKm) {
+        const ra = find(i);
+        const rb = find(j);
+        if (ra !== rb) parent[rb] = ra;
+      }
+    }
+  }
+  const groups = new Map<number, RadarSample[]>();
+  for (let i = 0; i < n; i++) {
+    const s = pool[i];
+    if (!s) continue;
+    const r = find(i);
+    const g = groups.get(r);
+    if (g) g.push(s);
+    else groups.set(r, [s]);
+  }
+  const masses: Mass[] = [];
+  for (const members of groups.values()) {
+    if (members.length < 3) continue;
+    let minLat = 90;
+    let maxLat = -90;
+    let minLon = 180;
+    let maxLon = -180;
+    for (const s of members) {
+      if (s.lat < minLat) minLat = s.lat;
+      if (s.lat > maxLat) maxLat = s.lat;
+      if (s.lon < minLon) minLon = s.lon;
+      if (s.lon > maxLon) maxLon = s.lon;
+    }
+    const span = haversineKm(minLat, minLon, maxLat, maxLon);
+    if (span > MAX_MASS_SPAN_KM) {
+      masses.push(...splitOversizedMass(members));
+      continue;
+    }
+    const m = massFromMembers(members);
+    if (m) masses.push(m);
+  }
+  return masses;
+}
+
+function massOverlap(a: Mass, b: Mass, linkKm: number): number {
+  let hits = 0;
+  for (const s of a.samples) {
+    for (const p of b.samples) {
+      if (haversineKm(s.lat, s.lon, p.lat, p.lon) <= linkKm) {
+        hits++;
+        break;
+      }
+    }
+  }
+  return hits;
+}
+
+function matchMass(mass: Mass, pool: Mass[]): Mass | null {
+  let best: Mass | null = null;
+  let bestScore = -1;
   for (const prev of pool) {
-    const d = haversineKm(prev.lat, prev.lon, cell.lat, cell.lon);
-    if (d < bestD) {
-      bestD = d;
+    const d = haversineKm(mass.lat, mass.lon, prev.lat, prev.lon);
+    // Centroid gate is mandatory. Overlap with a nationwide mega-mass must not
+    // link a local fragment to a centroid hundreds of km away (fake advection).
+    if (d > MATCH_KM) continue;
+    const hits = massOverlap(mass, prev, LINK_KM);
+    const score = hits * 10 + (MATCH_KM - d);
+    if (score > bestScore) {
       best = prev;
+      bestScore = score;
     }
   }
   return best;
@@ -286,25 +482,106 @@ function circularMeanDeg(parts: { deg: number; w: number }[]): number | null {
 }
 
 type TrailPoint = { lat: number; lon: number; time: number };
+type MassLayer = { time: number; masses: Mass[] };
 
-function buildTrail(cell: Cell, layers: { time: number; cells: Cell[] }[]): TrailPoint[] {
+function buildMassTrail(mass: Mass, layers: MassLayer[]): { time: number; mass: Mass }[] {
   const newest = layers.at(-1);
   if (!newest) return [];
-  const trail: TrailPoint[] = [{ lat: cell.lat, lon: cell.lon, time: newest.time }];
-  let cursor = cell;
+  const trail: { time: number; mass: Mass }[] = [{ time: newest.time, mass }];
+  let cursor = mass;
   for (let i = layers.length - 2; i >= 0; i--) {
     const layer = layers[i];
     if (!layer) break;
-    const prev = nearestCell(cursor, layer.cells);
+    const prev = matchMass(cursor, layer.masses);
     if (!prev) break;
     const hours = (trail[0]!.time - layer.time) / 3600;
     if (hours <= 0) break;
     const moved = haversineKm(prev.lat, prev.lon, cursor.lat, cursor.lon);
     if (moved / hours > MAX_SPEED) break;
-    trail.unshift({ lat: prev.lat, lon: prev.lon, time: layer.time });
+    trail.unshift({ time: layer.time, mass: prev });
     cursor = prev;
   }
   return trail;
+}
+
+function motionForMass(trail: { time: number; mass: Mass }[]): MotionEst | null {
+  if (trail.length < 2) return null;
+  const last = trail.at(-1);
+  if (!last) return null;
+
+  // Full-mass centroid trail (not the bright-core seed) — core jumps invent fake bearings.
+  const centroids = trail.map((t) => ({
+    lat: t.mass.lat,
+    lon: t.mass.lon,
+    time: t.time,
+  }));
+  const trailMot = motionFromTrail(centroids);
+  const moved =
+    centroids.length >= 2
+      ? haversineKm(
+          centroids[0]!.lat,
+          centroids[0]!.lon,
+          centroids.at(-1)!.lat,
+          centroids.at(-1)!.lon,
+        )
+      : 0;
+
+  // NCC on level≥2 envelope around the centroid — not a tiny max-reflectivity patch.
+  const coreFrames: RadarMemoryFrame[] = trail.map((t) => {
+    const strong = t.mass.samples.filter((s) => s.level >= 2);
+    const pool = strong.length >= MIN_MASS_SAMPLES ? strong : t.mass.samples;
+    const near = pool.filter(
+      (s) => haversineKm(t.mass.lat, t.mass.lon, s.lat, s.lon) <= 40,
+    );
+    return {
+      time: t.time,
+      samples: near.length >= 5 ? near : pool,
+      maxLevel: t.mass.maxLevel,
+      nearestKm: null,
+    };
+  });
+  const field = systemMotion(coreFrames, last.mass.lat, last.mass.lon);
+
+  const trailOk = trailMot && trailMot.speed >= MIN_MOVE_SPEED && moved >= 10;
+  const fieldOk = field && field.speed >= MIN_MOVE_SPEED;
+
+  if (trailOk && fieldOk) {
+    const agree = angleDiffDeg(trailMot.bearing, field.bearing) <= PAIR_AGREE_DEG;
+    if (!agree) return null;
+    const confidence = Math.min(
+      98,
+      Math.round(
+        58 +
+          Math.min(trail.length, 4) * 8 +
+          Math.min(moved, 40) * 0.4 +
+          (field.confidence - 40) * 0.35,
+      ),
+    );
+    return {
+      speed: (trailMot.speed + field.speed) / 2,
+      bearing:
+        circularMeanDeg([
+          { deg: trailMot.bearing, w: 1.4 },
+          { deg: field.bearing, w: 1 },
+        ]) ?? trailMot.bearing,
+      from: trailMot.from,
+      confidence,
+    };
+  }
+
+  if (trailOk && trail.length >= 3 && moved >= 14) {
+    const confidence = Math.min(
+      78,
+      Math.round(50 + Math.min(trail.length, 4) * 6 + Math.min(moved, 35) * 0.45),
+    );
+    return { ...trailMot, confidence };
+  }
+
+  if (fieldOk && trail.length >= 3 && (field.confidence ?? 0) >= MOTION_CONFIDENCE_MIN) {
+    return field;
+  }
+
+  return null;
 }
 
 function motionFromTrail(
@@ -346,11 +623,12 @@ function motionFromTrail(
 
 function makeTrack(
   now: { lat: number; lon: number },
-  motion: { speed: number; bearing: number; from: { lat: number; lon: number } },
+  motion: MotionEst,
 ): CellTrack {
   const moving = motion.speed >= MIN_MOVE_SPEED;
-  const lookKm = moving ? Math.max(motion.speed * 0.55, 28) : 0;
-  const back = destPoint(now.lat, now.lon, (motion.bearing + 180) % 360, 10);
+  const lookKm = moving ? motion.speed * (ARROW_AHEAD_MIN / 60) : 0;
+  const backKm = moving ? Math.min(motion.speed * (10 / 60), lookKm * 0.35) : 8;
+  const back = destPoint(now.lat, now.lon, (motion.bearing + 180) % 360, Math.max(backKm, 4));
   const soon = moving
     ? destPoint(now.lat, now.lon, motion.bearing, lookKm)
     : { lat: now.lat, lon: now.lon };
@@ -361,6 +639,7 @@ function makeTrack(
     speedKmh: motion.speed,
     bearing: motion.bearing,
     threatening: false,
+    confidence: motion.confidence,
   };
 }
 
@@ -401,15 +680,22 @@ function expectPl(maxLevel: number): string | null {
   return null;
 }
 
+/**
+ * @param sampleOrigin — radar crop center. Tracks/arrows are built only from this window
+ *   (and from frame updates). The user pin must NOT change which arrows are drawn.
+ *   Pin drives ETA / hit-miss / chance / copy / IMGW warning match.
+ */
 export function computeThreat(
   place: Place,
   frames: RadarMemoryFrame[],
   warnings: OfficialWarning[],
   radiusKm: number,
+  sampleOrigin: { lat: number; lon: number } = place,
 ): Threat {
   const matched = warnings.filter((w) => w.matchesPlace && w.stormRelated);
+  // Frames are already cropped to the radar domain (Poland). Do not re-crop around the pin.
   const usable = frames
-    .filter((f) => nearPin(f.samples, place.lat, place.lon, TRACK_MAX_KM).some((s) => s.level >= 1))
+    .filter((f) => f.samples.some((s) => s.level >= 1))
     .sort((a, b) => a.time - b.time);
   const last = usable.at(-1);
 
@@ -431,12 +717,21 @@ export function computeThreat(
   let threatCellLevel = 0;
 
   if (usable.length >= 2 && last) {
-    const clusterKm = TRACK_MAX_KM + CELL_RADIUS_KM;
-    const layers = usable.map((f) => ({
+    const layers: MassLayer[] = usable.map((f) => ({
       time: f.time,
-      cells: clusterCells(nearPin(f.samples, place.lat, place.lon, clusterKm)),
+      masses: segmentMasses(
+        f.samples.filter((s) => s.level >= 1),
+        LINK_KM,
+      ),
     }));
-    const nowCells = layers.at(-1)?.cells ?? [];
+    // Rank by storm strength in the radar domain — never by distance to the user pin.
+    const nowMasses = [...(layers.at(-1)?.masses ?? [])].sort((a, b) => {
+      if (b.maxLevel !== a.maxLevel) return b.maxLevel - a.maxLevel;
+      if (b.samples.length !== a.samples.length) return b.samples.length - a.samples.length;
+      const da = haversineKm(a.lat, a.lon, sampleOrigin.lat, sampleOrigin.lon);
+      const db = haversineKm(b.lat, b.lon, sampleOrigin.lat, sampleOrigin.lon);
+      return da - db;
+    });
 
     type Hit = {
       miss: number;
@@ -448,113 +743,75 @@ export function computeThreat(
       track: CellTrack;
       level: number;
       dNow: number;
-      pinLocal: boolean;
+      pinRelevant: boolean;
     };
     const hits: Hit[] = [];
 
-    const pinNow = pinWeightedCentroid(last.samples, place.lat, place.lon);
-    const pinMotion = systemMotion(usable, place.lat, place.lon);
-    if (pinMotion && pinNow) {
-      const dNow = haversineKm(place.lat, place.lon, pinNow.lat, pinNow.lon);
-      const approach = closestApproach(
-        pinNow.lat,
-        pinNow.lon,
-        pinMotion.bearing,
-        pinMotion.speed,
-        place.lat,
-        place.lon,
-      );
-      const ahead = destPoint(pinNow.lat, pinNow.lon, pinMotion.bearing, 15);
-      const dAhead = haversineKm(place.lat, place.lon, ahead.lat, ahead.lon);
-      const moving = pinMotion.speed >= MIN_MOVE_SPEED;
-      const track = makeTrack(pinNow, pinMotion);
-      hits.push({
-        miss: approach.d,
-        eta: approach.t,
-        approaching: dAhead < dNow - 0.4,
-        receding: dAhead > dNow + 0.4,
-        speed: pinMotion.speed,
-        bearing: pinMotion.bearing,
-        track,
-        level: maxLevelWithin(lastSamples, place.lat, place.lon, PIN_DRAW_KM),
-        dNow,
-        pinLocal: true,
-      });
-      if (moving) tracks.push(track);
-    }
+    for (const mass of nowMasses) {
+      const trail = buildMassTrail(mass, layers);
+      const motion = motionForMass(trail);
+      if (!motion || motion.speed < MIN_MOVE_SPEED) continue;
+      if (motion.confidence < MOTION_CONFIDENCE_MIN) continue;
 
-    for (const cell of nowCells) {
-      const dNow = haversineKm(place.lat, place.lon, cell.lat, cell.lon);
-      if (dNow > TRACK_MAX_KM) continue;
-      if (pinNow && haversineKm(cell.lat, cell.lon, pinNow.lat, pinNow.lon) < 40) continue;
-      const motion = motionFromTrail(buildTrail(cell, layers));
-      if (!motion) continue;
-      const moving = motion.speed >= MIN_MOVE_SPEED;
+      const anchor = { lat: mass.lat, lon: mass.lon };
+      const dNow =
+        nearestWithin(mass.samples, place.lat, place.lon, TRACK_MAX_KM) ??
+        haversineKm(place.lat, place.lon, anchor.lat, anchor.lon);
+
       const approach = closestApproach(
-        cell.lat,
-        cell.lon,
+        anchor.lat,
+        anchor.lon,
         motion.bearing,
         motion.speed,
         place.lat,
         place.lon,
       );
+      const ahead = destPoint(anchor.lat, anchor.lon, motion.bearing, 15);
+      const dAhead = haversineKm(place.lat, place.lon, ahead.lat, ahead.lon);
       const dThen = haversineKm(place.lat, place.lon, motion.from.lat, motion.from.lon);
+      const closing = dAhead < dNow - 0.4;
       const cellApproaching = dNow < dThen - 0.6;
-      const hitsPin = approach.d <= PIN_KM && moving;
-      const track = makeTrack({ lat: cell.lat, lon: cell.lon }, motion);
-      const hit: Hit = {
+      const approachingHit = closing || cellApproaching;
+      const track = makeTrack(anchor, motion);
+
+      hits.push({
         miss: approach.d,
         eta: approach.t,
-        approaching: cellApproaching,
-        receding: dNow > dThen + 0.6,
+        approaching: approachingHit,
+        receding: dAhead > dNow + 0.4 && dNow > dThen + 0.6,
         speed: motion.speed,
         bearing: motion.bearing,
         track,
-        level: cell.maxLevel,
+        level: mass.maxLevel,
         dNow,
-        pinLocal: false,
-      };
-      if (moving && (hitsPin || cellApproaching)) hits.push(hit);
+        pinRelevant: dNow <= TRACK_MAX_KM,
+      });
     }
 
-    hits.sort((a, b) => {
-      const rank = (h: Hit) =>
-        (h.pinLocal ? 0 : 1) * 1000 +
-        h.dNow -
-        (h.miss <= PIN_KM ? 25 : 0) -
-        (h.approaching ? 8 : 0);
-      return rank(a) - rank(b);
-    });
-    const bestHit = hits[0] ?? null;
+    // Glyphs: highest-confidence masses (pin-independent).
+    hits.sort((a, b) => b.track.confidence - a.track.confidence || b.level - a.level);
+    for (const hit of hits) {
+      if (tracks.length >= MAX_TRACKS) break;
+      hit.track.threatening = tracks.length === 0;
+      tracks.push(hit.track);
+    }
 
-    if (bestHit) {
-      missKm = bestHit.miss;
-      approaching = bestHit.approaching;
-      receding = bestHit.receding;
-      comingFrom = comingFromPl(bestHit.bearing);
-      toward = towardPl(bestHit.bearing);
-      threatCellLevel = bestHit.level;
-      if (bestHit.speed >= MIN_MOVE_SPEED) speedKmh = bestHit.speed;
-      willHit = bestHit.miss <= PIN_KM;
-      bestHit.track.threatening = true;
-      threatTrack = bestHit.track;
-      if (!tracks.includes(bestHit.track) && bestHit.speed >= MIN_MOVE_SPEED) {
-        tracks.unshift(bestHit.track);
+    // Pin narrative only: closest mass to the pin owns ETA / copy — does not reshape arrows.
+    const forPin = [...hits].sort((a, b) => a.dNow - b.dNow);
+    const primary = forPin.find((h) => h.pinRelevant) ?? null;
+    if (primary) {
+      missKm = primary.miss;
+      approaching = primary.approaching;
+      receding = primary.receding;
+      if (primary.speed >= MIN_MOVE_SPEED) {
+        speedKmh = primary.speed;
+        comingFrom = comingFromPl(primary.bearing);
+        toward = towardPl(primary.bearing);
       }
+      threatCellLevel = primary.level;
+      willHit = primary.miss <= PIN_KM;
+      threatTrack = primary.track;
     }
-
-    const extras = hits.filter((h) => h.track !== threatTrack && (h.track.threatening || h.approaching));
-    for (const extra of extras) {
-      extra.track.threatening = extra.miss <= PIN_KM || (extra.approaching && extra.miss <= 12);
-      if (!tracks.includes(extra.track)) tracks.push(extra.track);
-    }
-    tracks.sort(
-      (a, b) =>
-        Number(b.threatening) - Number(a.threatening) ||
-        haversineKm(place.lat, place.lon, a.now.lat, a.now.lon) -
-          haversineKm(place.lat, place.lon, b.now.lat, b.now.lon),
-    );
-    if (tracks.length > MAX_TRACKS) tracks.length = MAX_TRACKS;
   }
 
   if (nearestKm !== null && nearestKm <= OVER_KM && maxLevel >= 1) {

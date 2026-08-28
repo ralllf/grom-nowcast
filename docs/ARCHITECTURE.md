@@ -3,20 +3,17 @@
 Nowcast w GROM-ie to trzy warstwy: **pobranie radaru**, **zrozumienie komórek**, **zdanie na pinezkę**.
 
 ```text
-RainViewer kafelki PNG (z=5, okolica pinezki)
-        │  serwer dekoduje pngjs, nie trzyma plików
+RainViewer kafelki PNG (z=5, bbox Polski + pas graniczny)
+        │  serwer dekoduje pngjs, cache krajowy na timestamp klatki
         ▼
   próbki (lat, lon, level 1–4)  ×  4 skany (~30 min)
         │
         ▼
-  klastry → adwekcja pola (siatka ~10 km) + trop komórki
-        │  kierunek = przesunięcie całej masy, nie krawędzi przy pinezce
+  masy (flood-fill) → siatka km → smooth dużej skali → NCC (TREC)
+        │  QC korelacji; strzałki = pole ruchu (bez pinezki)
         │
-        ▼
-  projekcja 90 min względem pinezki (5 km)
-        │
-        ├── ETA / szansa % / „idzie od… spodziewaj się…”
-        └── canvas na mapie: strzałka ze środka komórki
+        ├── canvas: strzałki z rdzeni mas, długość ∝ prędkość (~30 min)
+        └── pinezka: ETA / szansa / ostrzeżenia IMGW z tego samego pola
 ```
 
 ## Pinezka vs promień
@@ -26,8 +23,8 @@ RainViewer kafelki PNG (z=5, okolica pinezki)
 | **Pinezka** | 5 km (`PIN_KM`) | miasto z listy, punkt z mapy, później dokładny GPS |
 | **Lokalny max** | 25 km | „czy nad Tobą jest już echo” |
 | **Promień alertu** | 15–80 km, suwak | jak daleko wołamy „opad w okolicy” |
-| **Horyzont tropu** | 100 km (`TRACK_MAX_KM`) | komórki dalej nie są zagrożeniem na 90 min i nie dostają strzałki |
-| **Próbkowanie** | 110 km od pinezki | w tym za granicą (Zgorzelec ← Saksonia). Nie skanujemy całej Polski. |
+| **Horyzont ETA** | 100 km (`TRACK_MAX_KM`) | dalej niż to nie budujemy narracji „nad Tobą” |
+| **Domena radaru** | bbox PL + granica | stałe próbkowanie; nie od pinu, nie cały świat |
 
 Szansa i ETA **nigdy** nie są średnią z całego koła. Koło na mapie to tylko zasięg czujności.
 
@@ -35,20 +32,22 @@ Szansa i ETA **nigdy** nie są średnią z całego koła. Koło na mapie to tylk
 
 - Źródło kafelków: `https://api.rainviewer.com/public/weather-maps.json` → host + `past[]`.
 - Analiza: z=5 (wyższe zoomy RainViewera często wracają puste ~334 B). Mapa **overzoomuje** ostatni dobry poziom — stąd brak „Zoom level not supported”.
-- Serwer ściąga kafelki wokół pinezki (z=5, do 9 szt. × **4 klatki** ~30 min), dekoduje PNG, próbuje piksele co 4 px. Zostawia tylko echo w **110 km** — w tym za granicą. Komórka nad Lublinem nie trafia do nowcastu Zgorzelca.
-- `maxLevel` dla pinezki = maksimum w 25 km, nie maksimum z całych Niemiec na tym samym kafelku.
+- Serwer ściąga kafelki dla **bboxu Polski** (z=5, stride 2 px, do ~5000 próbek × **4 klatki**), dekoduje PNG. Cache ~90 s na `latestTime`. Pinezka nie recentruje radaru.
+- `maxLevel` / `nearestKm` dla copy ETA liczy klient wokół pinezki z krajowych próbek.
 - Overlay na mapie: te same URL-e RainViewer jako raster MapLibre, `maxzoom: 5`.
 
 Klatki **nie idą do gita ani bazy**. Serwer zwraca próbki JSON. Klient trzyma ostatnie skany w Zustand (RAM). `localStorage` ma tylko miasto, promień, zgodę na powiadomienia.
 
 ## Komórki i wektory
 
-1. Greedy clustering próbek `level ≥ 1`, promień klastra 48 km, min. 3 próbki — duże fronty to jedna masa, nie sześć strzałek.
-2. **Kierunek pola (adwekcja):** siatka ~10 km w 80 km od pinezki. Między klatkami szukamy przesunięcia, które najlepiej nakłada echo. 4 skany ~30 min, średnia kołowa; najdłuższa baza ma większą wagę. To tor **całej masy**, nie krawędzi przy pinezce (tam centroid skacze po brzegu frontu).
-3. Fallback: centroid masy w 80 km (waga = poziom echa, bez 1/d) + trop komórki wstecz (max 45 km, odrzut > 95 km/h).
-4. Strzałka **stoi** na deszczu przy pinezce; azymut jest z pola. Max **dwie** strzałki.
-5. Prędkość z przesunięcia siatki / bazy 30 min. Poniżej ~4 km/h = prawie stoi.
+1. **Tożsamość masy:** flood-fill / friends-of-friends po próbkach `level ≥ 1` (link ~20 km). Jedna spójna masa echa = jeden obiekt.
+2. **Ruch echa:** trop centroidu masy + NCC. Mega-masa (>140 km) → **split na kafelki ~55 km** (nie wyrzucamy całego frontu). Strzałka przy pewności ≥ **72**, zgodności trop↔NCC, stabilnej liczbie próbek w tropie. Max **3** strzałki (po pewności).
+3. **Kotwica na mapie:** środek masy. Długość ≈ prędkość × 30 min.
+4. **Pinezka nie przebudowuje kresków.** Snapshot radaru jest wspólny dla kraju; wybór miejsca = ostrzeżenia + ETA/szansa na tych samych klatkach.
+5. Prędkość z przesunięcia siatki / bazy ~30 min. Poniżej ~4 km/h = prawie stoi.
 6. Rysunek na **canvasie nad MapLibre**. Kolor: atramentowy kontur + bursztyn (`#f0a202`).
+7. `threat.track` = narracja pinu; `threat.tracks` = pole ruchu (może zawierać burze daleko od pinu).
+8. Pinezka: ETA / trafi-minie / szansa / copy; ostrzeżenia po TERYT.
 
 Echo ≤ ~12 km (rozdzielczość z=5) = **teraz**, nie „minie”. „Minie” tylko gdy najbliższe echo jest dalej niż 20 km i tor naprawdę omija pinezkę.
 
