@@ -18,6 +18,8 @@ export type RadarMemoryFrame = {
   samples: RadarSample[];
   maxLevel: RadarLevel;
   nearestKm: number | null;
+  /** True when at least one Poland-domain tile failed to fetch. */
+  degraded?: boolean;
 };
 
 export type RadarScan = {

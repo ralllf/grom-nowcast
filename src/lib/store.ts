@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { DEFAULT_PLACE } from "./weather/cities";
-import type { Place, RadarMemoryFrame } from "./weather/types";
+import type { Place } from "./weather/types";
 
 const STORAGE_KEY = "grom-settings-v1";
 
@@ -29,13 +29,11 @@ export function loadSettings(): Persisted {
 }
 
 type GromState = Persisted & {
-  frames: RadarMemoryFrame[];
   lastNotified: string | null;
   setPlace: (place: Place) => void;
   updatePlaceMeta: (place: Place) => void;
   setRadiusKm: (radiusKm: number) => void;
   setNotify: (notify: boolean) => void;
-  pushFrame: (frame: RadarMemoryFrame) => void;
   markNotified: (key: string) => void;
   hydrate: () => void;
 };
@@ -52,14 +50,13 @@ export const useGrom = create<GromState>((set, get) => ({
   place: DEFAULT_PLACE,
   radiusKm: 25,
   notify: false,
-  frames: [],
   lastNotified: null,
   hydrate: () => {
     const saved = loadSettings();
     set({ ...saved });
   },
   setPlace: (place) => {
-    set({ place, frames: [] });
+    set({ place });
     persist(get());
   },
   updatePlaceMeta: (place) => {
@@ -67,18 +64,12 @@ export const useGrom = create<GromState>((set, get) => ({
     persist(get());
   },
   setRadiusKm: (radiusKm) => {
-    set({ radiusKm, frames: [] });
+    set({ radiusKm });
     persist(get());
   },
   setNotify: (notify) => {
     set({ notify });
     persist(get());
   },
-  pushFrame: (frame) =>
-    set((s) => {
-      const without = s.frames.filter((f) => f.time !== frame.time);
-      const frames = [...without, frame].sort((a, b) => a.time - b.time).slice(-6);
-      return { frames };
-    }),
   markNotified: (key) => set({ lastNotified: key }),
 }));
