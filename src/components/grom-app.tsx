@@ -268,8 +268,9 @@ export function GromApp() {
   const tracks = threat?.tracks ?? [];
 
   return (
-    <div className="relative isolate h-dvh overflow-hidden bg-bg text-fg">
+    <div className="relative h-dvh overflow-hidden bg-bg text-fg">
       <RadarMap
+        className="absolute inset-0"
         lat={place.lat}
         lon={place.lon}
         radiusKm={radiusKm}
@@ -285,7 +286,7 @@ export function GromApp() {
         }}
       />
 
-      <div className="pointer-events-none absolute inset-0 bg-linear-to-b from-transparent via-transparent to-bg/45" />
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-2/5 bg-linear-to-t from-bg/50 to-transparent" />
 
       <header className="pointer-events-none absolute inset-x-0 top-0 z-10 p-3 pt-[max(0.75rem,env(safe-area-inset-top))] sm:p-5">
         <div className="mx-auto flex max-w-6xl items-start justify-between gap-3">
