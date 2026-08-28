@@ -18,7 +18,7 @@ import { CITIES } from "@/lib/weather/cities";
 import { haversineKm } from "@/lib/weather/geo";
 import { getSnapshot, searchPlaces } from "@/lib/weather/server";
 import { computeThreat } from "@/lib/weather/threat";
-import type { Place, RadarLevel, RadarMemoryFrame, ThreatLevel } from "@/lib/weather/types";
+import type { Place, RadarLevel, ThreatLevel } from "@/lib/weather/types";
 import { useGrom } from "@/lib/store";
 
 const TONE: Record<ThreatLevel, "ok" | "warn" | "danger" | "accent" | "mute"> = {
@@ -114,24 +114,31 @@ export function GromApp() {
 
   useEffect(() => {
     if (!snapshot?.radar.latestTime) return;
-    if (snapshot.radar.prevTime && snapshot.radar.prevSamples.length > 0) {
-      const prevMax = snapshot.radar.prevSamples.reduce(
-        (m, s) => (s.level > m ? s.level : m),
-        0 as RadarLevel,
-      );
-      pushFrame({
-        time: snapshot.radar.prevTime,
-        samples: snapshot.radar.prevSamples,
-        maxLevel: prevMax,
-        nearestKm: null,
-      });
-    }
-    pushFrame({
-      time: snapshot.radar.latestTime,
-      samples: snapshot.radar.samples,
-      maxLevel: snapshot.radar.maxLevel,
-      nearestKm: snapshot.radar.nearestKm,
-    });
+    const hist =
+      snapshot.radar.history?.length
+        ? snapshot.radar.history
+        : [
+            ...(snapshot.radar.prevTime && snapshot.radar.prevSamples.length > 0
+              ? [
+                  {
+                    time: snapshot.radar.prevTime,
+                    samples: snapshot.radar.prevSamples,
+                    maxLevel: snapshot.radar.prevSamples.reduce(
+                      (m, s) => (s.level > m ? s.level : m),
+                      0 as RadarLevel,
+                    ),
+                    nearestKm: null,
+                  },
+                ]
+              : []),
+            {
+              time: snapshot.radar.latestTime,
+              samples: snapshot.radar.samples,
+              maxLevel: snapshot.radar.maxLevel,
+              nearestKm: snapshot.radar.nearestKm,
+            },
+          ];
+    for (const frame of hist) pushFrame(frame);
     if (snapshot.place.terc && snapshot.place.terc !== place.terc) {
       updatePlaceMeta(snapshot.place);
     }
@@ -139,28 +146,35 @@ export function GromApp() {
 
   const threat = useMemo(() => {
     if (!snapshot) return null;
-    const pair: RadarMemoryFrame[] = [];
-    if (snapshot.radar.prevTime != null) {
-      const prevMax = snapshot.radar.prevSamples.reduce(
-        (m, s) => (s.level > m ? s.level : m),
-        0 as RadarLevel,
-      );
-      pair.push({
-        time: snapshot.radar.prevTime,
-        samples: snapshot.radar.prevSamples,
-        maxLevel: prevMax,
-        nearestKm: null,
-      });
-    }
-    if (snapshot.radar.latestTime != null) {
-      pair.push({
-        time: snapshot.radar.latestTime,
-        samples: snapshot.radar.samples,
-        maxLevel: snapshot.radar.maxLevel,
-        nearestKm: snapshot.radar.nearestKm,
-      });
-    }
-    return computeThreat(snapshot.place, pair, snapshot.warnings, radiusKm);
+    const hist =
+      snapshot.radar.history?.length
+        ? snapshot.radar.history
+        : [
+            ...(snapshot.radar.prevTime != null
+              ? [
+                  {
+                    time: snapshot.radar.prevTime,
+                    samples: snapshot.radar.prevSamples,
+                    maxLevel: snapshot.radar.prevSamples.reduce(
+                      (m, s) => (s.level > m ? s.level : m),
+                      0 as RadarLevel,
+                    ),
+                    nearestKm: null,
+                  },
+                ]
+              : []),
+            ...(snapshot.radar.latestTime != null
+              ? [
+                  {
+                    time: snapshot.radar.latestTime,
+                    samples: snapshot.radar.samples,
+                    maxLevel: snapshot.radar.maxLevel,
+                    nearestKm: snapshot.radar.nearestKm,
+                  },
+                ]
+              : []),
+          ];
+    return computeThreat(snapshot.place, hist, snapshot.warnings, radiusKm);
   }, [snapshot, radiusKm]);
 
   useEffect(() => {
@@ -263,6 +277,7 @@ export function GromApp() {
             threat.missKm != null &&
             threat.missKm > 8 &&
             threat.nearestKm != null &&
+            threat.nearestKm > 20 &&
             threat.nearestKm <= 80
           ? "minie"
           : "—";
@@ -434,9 +449,9 @@ export function GromApp() {
 
             <p className="mt-3 text-xs leading-relaxed text-faint">
               Szansa i ETA są dla pinezki ({place.label}) — miasta albo punktu GPS —
-              nie dla całego promienia. Pomarańczowa strzałka wychodzi ze środka
-              komórki w kierunku, w którym opad się przesuwa. Promień w ustawieniach
-              mówi tylko, jak daleko wołamy alert.
+              nie dla całego promienia. Na mapie jedna albo dwie strzałki — te,
+              które dotyczą pinezki, nie cały front. Promień w ustawieniach mówi
+              tylko, jak daleko wołamy alert.
             </p>
 
             {shownWarnings[0] ? (
