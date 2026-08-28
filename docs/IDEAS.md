@@ -32,8 +32,8 @@ MVP: miasto / klik. Cel: ten sam kod pinezki na `geolocation` w PWA na telefonie
 ## Lepszy nowcast
 
 - **RainViewer nowcast frames** (gdy API je oddaje) zamiast samej ekstrapolacji dwóch skanów past.
-- Trzy–cztery klatki i medianowy wektor, mniej jitteru centroidu.
-- Optyczny flow na siatce zamiast nearest-cell (wolne, rozpadające się echo).
+- ~~Trzy–cztery klatki i medianowy wektor, mniej jitteru centroidu.~~ Jest: 4 skany ~30 min, średnia kołowa azymutu.
+- ~~Optyczny flow na siatce zamiast nearest-cell (wolne, rozpadające się echo).~~ Jest: adwekcja pola ~10 km, kierunek z masy frontu, nie z krawędzi.
 - Osobny wektor dla rdzenia `level ≥ 3` i osobny dla stratiformu.
 - Hail / echo top — dziś zgadujemy z koloru i tekstu IMGW. Surowy POLRAD volume dałby więcej, ale to inna umowa z IMGW.
 

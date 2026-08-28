@@ -3,13 +3,14 @@
 Nowcast w GROM-ie to trzy warstwy: **pobranie radaru**, **zrozumienie komórek**, **zdanie na pinezkę**.
 
 ```text
-RainViewer kafelki PNG (z=5, Polska)
+RainViewer kafelki PNG (z=5, okolica pinezki)
         │  serwer dekoduje pngjs, nie trzyma plików
         ▼
-  próbki (lat, lon, level 1–4)  ×  dwa kolejne skany (~10 min)
+  próbki (lat, lon, level 1–4)  ×  4 skany (~30 min)
         │
         ▼
-  klastry → komórki → dopasowanie prev→now → wektor (bearing, km/h)
+  klastry → adwekcja pola (siatka ~10 km) + trop komórki
+        │  kierunek = przesunięcie całej masy, nie krawędzi przy pinezce
         │
         ▼
   projekcja 90 min względem pinezki (5 km)
@@ -25,7 +26,8 @@ RainViewer kafelki PNG (z=5, Polska)
 | **Pinezka** | 5 km (`PIN_KM`) | miasto z listy, punkt z mapy, później dokładny GPS |
 | **Lokalny max** | 25 km | „czy nad Tobą jest już echo” |
 | **Promień alertu** | 15–80 km, suwak | jak daleko wołamy „opad w okolicy” |
-| **Skan Polski** | bbox ~48.9–54.9 N, 14.1–24.2 E | wektory na komórkach w kraju, nie nad Bałtykiem / Niemcami |
+| **Horyzont tropu** | 100 km (`TRACK_MAX_KM`) | komórki dalej nie są zagrożeniem na 90 min i nie dostają strzałki |
+| **Próbkowanie** | 110 km od pinezki | w tym za granicą (Zgorzelec ← Saksonia). Nie skanujemy całej Polski. |
 
 Szansa i ETA **nigdy** nie są średnią z całego koła. Koło na mapie to tylko zasięg czujności.
 
@@ -33,7 +35,7 @@ Szansa i ETA **nigdy** nie są średnią z całego koła. Koło na mapie to tylk
 
 - Źródło kafelków: `https://api.rainviewer.com/public/weather-maps.json` → host + `past[]`.
 - Analiza: z=5 (wyższe zoomy RainViewera często wracają puste ~334 B). Mapa **overzoomuje** ostatni dobry poziom — stąd brak „Zoom level not supported”.
-- Serwer ściąga do 9 kafelków × 2 klatki (aktualna + poprzednia), dekoduje PNG, próbuje piksele co 6 px, odrzuca tło.
+- Serwer ściąga kafelki wokół pinezki (z=5, do 9 szt. × **4 klatki** ~30 min), dekoduje PNG, próbuje piksele co 4 px. Zostawia tylko echo w **110 km** — w tym za granicą. Komórka nad Lublinem nie trafia do nowcastu Zgorzelca.
 - `maxLevel` dla pinezki = maksimum w 25 km, nie maksimum z całych Niemiec na tym samym kafelku.
 - Overlay na mapie: te same URL-e RainViewer jako raster MapLibre, `maxzoom: 5`.
 
@@ -41,13 +43,14 @@ Klatki **nie idą do gita ani bazy**. Serwer zwraca próbki JSON. Klient trzyma 
 
 ## Komórki i wektory
 
-1. Greedy clustering próbek `level ≥ 1`, promień klastra 32 km, min. 3 próbki.
-2. Każdą komórkę „teraz” łączymy z najbliższą komórką z poprzedniego skanu (max 45 km).
-3. Prędkość ze środka do środka. Powyżej 95 km/h = zły match, odrzucamy. Poniżej ~4 km/h = prawie stoi (kierunek niepewny).
-4. Strzałka: 10 km wstecz przez środek, do przodu `max(0.5 × prędkość, 36 km)` — ma być **czytelna na mapie**, nie mikroskopijna.
-5. Rysunek jest na **canvasie nad MapLibre**, nie w GeoJSON pod kafelkami radaru. Kolor: atramentowy kontur + bursztyn (`#f0a202`), żeby było widać i na jasnym Positronie, i na zielono-czerwonym radarze.
+1. Greedy clustering próbek `level ≥ 1`, promień klastra 48 km, min. 3 próbki — duże fronty to jedna masa, nie sześć strzałek.
+2. **Kierunek pola (adwekcja):** siatka ~10 km w 80 km od pinezki. Między klatkami szukamy przesunięcia, które najlepiej nakłada echo. 4 skany ~30 min, średnia kołowa; najdłuższa baza ma większą wagę. To tor **całej masy**, nie krawędzi przy pinezce (tam centroid skacze po brzegu frontu).
+3. Fallback: centroid masy w 80 km (waga = poziom echa, bez 1/d) + trop komórki wstecz (max 45 km, odrzut > 95 km/h).
+4. Strzałka **stoi** na deszczu przy pinezce; azymut jest z pola. Max **dwie** strzałki.
+5. Prędkość z przesunięcia siatki / bazy 30 min. Poniżej ~4 km/h = prawie stoi.
+6. Rysunek na **canvasie nad MapLibre**. Kolor: atramentowy kontur + bursztyn (`#f0a202`).
 
-Do 6 wektorów, bliższe pinezce i te „grożące” na wierzchu.
+Echo ≤ ~12 km (rozdzielczość z=5) = **teraz**, nie „minie”. „Minie” tylko gdy najbliższe echo jest dalej niż 20 km i tor naprawdę omija pinezkę.
 
 ## ETA
 
