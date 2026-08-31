@@ -36,7 +36,8 @@ To ostrzeżenia **oficjalne, powiatowe**. GROM pokazuje je obok nowcastu, nie za
 
 - Wyszukiwarka i reverse: **Nominatim** (OpenStreetMap), `countrycodes=pl`, language `pl`. Szanujemy usage policy (User-Agent, brak hammerowania).
 - Podkład: **OpenFreeMap** styl Positron (OSM). Fallback Esri World Light Gray.
-- Miasta z listy: ręczne współrzędne + TERYT w [`src/lib/weather/cities.ts`](../src/lib/weather/cities.ts).
+- Miasta z listy: ręczne współrzędne + TERYT w [`src/lib/weather/cities.ts`](../src/lib/weather/cities.ts) — last-resort TERYT w promieniu 30 km.
+- TERYT pinezki: point-in-polygon na uproszczonych granicach powiatów PRG/GUGiK ([`src/lib/weather/powiaty.json`](../src/lib/weather/powiaty.json), ~340 kB, lazy-load). Nominatim `teryt:terc` wygrywa, gdy jest.
 
 ## Czego nie trzymamy
 
