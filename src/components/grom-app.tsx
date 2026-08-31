@@ -25,6 +25,7 @@ import { formatImgwWhen } from "@/lib/weather/imgw-time";
 import { framesFromScan } from "@/lib/weather/pack";
 import { historyIsDegraded } from "@/lib/weather/radar-history";
 import { getSnapshot, searchPlaces, PL_RADAR_ORIGIN } from "@/lib/weather/server";
+import { IMGW_WARNINGS_UNAVAILABLE } from "@/lib/weather/snapshot";
 import { computeThreat } from "@/lib/weather/threat";
 import {
   evaluateAlert,
@@ -444,6 +445,7 @@ export function GromApp() {
             error={snapshotQuery.isError}
             tracks={tracks}
             shownWarnings={shownWarnings}
+            warningsUnavailable={snapshot?.warningsUnavailable ?? false}
             geoError={geoError}
             onClearGeoError={() => setGeoError(null)}
             onShowRainMotion={showRainMotion}
@@ -457,7 +459,9 @@ export function GromApp() {
                 {snapshot?.stormWarningCount ?? 0} burzowych w kraju
               </span>
             </div>
-            {snapshotQuery.isPending && !snapshot ? (
+            {snapshot?.warningsUnavailable ? (
+              <p className="text-sm text-warn">{IMGW_WARNINGS_UNAVAILABLE}</p>
+            ) : snapshotQuery.isPending && !snapshot ? (
               <p className="text-sm text-muted">Pobieram komunikaty…</p>
             ) : shownWarnings.length === 0 ? (
               <p className="text-sm text-muted">Brak aktywnych ostrzeżeń burzowych.</p>

@@ -75,6 +75,8 @@ export type Snapshot = {
   radar: RadarScan;
   warnings: OfficialWarning[];
   stormWarningCount: number;
+  /** True when the IMGW warnings API failed; radar may still be fresh. */
+  warningsUnavailable: boolean;
 };
 
 export type CellTrack = {
