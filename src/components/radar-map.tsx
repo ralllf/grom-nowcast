@@ -119,6 +119,14 @@ export function RadarMap({
 
     void (async () => {
       const maplibregl = await import("maplibre-gl");
+      // MapLibre v6 + Vite: import.meta.url does not find the worker. Without this
+      // the browser requests /assets/maplibre-gl-worker.mjs (404), the worker never
+      // starts, and vector tiles (streets / cities / names) are never fetched.
+      // Raster layers (background, radar) still paint — that is the production bug.
+      const { default: workerUrl } = await import(
+        "maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url"
+      );
+      maplibregl.setWorkerUrl(workerUrl);
       if (cancelled || !rootRef.current) return;
 
       let instance: import("maplibre-gl").Map;
