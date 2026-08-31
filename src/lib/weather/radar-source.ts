@@ -1,4 +1,5 @@
 import { packSamples } from "./pack.ts";
+import { attachSriOverlays } from "./sri-overlay-png.ts";
 import type { RadarFrameMeta, RadarLevel, RadarSample, RadarScan } from "./types.ts";
 
 export type AnalysisSource = "sri" | "rainviewer";
@@ -36,7 +37,7 @@ function framesToScan(
   const past =
     maps?.radar.past ??
     frames.map((f) => ({ time: f.time, path: "" }));
-  return {
+  const scan: RadarScan = {
     host: maps?.host ?? "",
     generated: maps?.generated ?? latest?.time ?? 0,
     latestTime: latest?.time ?? null,
@@ -59,6 +60,7 @@ function framesToScan(
     cellKm: latest?.cellKm ?? 3,
     analysisSource: source,
   };
+  return attachSriOverlays(scan, source);
 }
 
 export async function resolveAnalysis(loaders: AnalysisLoaders): Promise<{

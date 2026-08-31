@@ -23,7 +23,7 @@ GROM jest bliżej **MeteoSwiss / RainViewer nowcast** niż klasycznej prognozy:
 
 ## Co umie MVP
 
-- Mapa radarowa (RainViewer, kompozyt POLRAD) na jasnym podkładzie OpenFreeMap — **bez klucza API**.
+- Mapa radarowa z overlayu SRI (4 klasy legendy = te same liczby; „Pokaż mżawkę” domyślnie wył.) na jasnym podkładzie OpenFreeMap — **bez klucza API**. RainViewer zostaje fallbackiem.
 - Intensywność w **mm/h** z dokładnej tabeli kolorów RainViewera (dBZ → Marshall–Palmer), cztery klasy jak w legendzie MeteoSwiss: słaby / umiarkowany / silny / ulewny. Siatka ~3 km (zoom 6).
 - **Oś czasu opadu nad pinezką** 0–90 min co 5 min (adwekcja wsteczna z ruchu echa) — jak pasek „Niederschlag” w aplikacji MeteoSwiss.
 - Wektory ruchu: pomarańczowa strzałka wychodzi ze **środka komórki** w kierunku przesuwania się opadu.

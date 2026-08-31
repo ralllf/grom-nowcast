@@ -9,6 +9,7 @@ import {
 } from "./weather/alerts";
 import { DEFAULT_PLACE } from "./weather/cities";
 import { IMGW_MAP_DEFAULT, readImgwMapToggle } from "./weather/imgw-lane";
+import { DRIZZLE_MAP_DEFAULT, readDrizzleToggle } from "./weather/sri-overlay";
 import type { Place } from "./weather/types";
 
 const STORAGE_KEY = "grom-settings-v1";
@@ -22,6 +23,8 @@ type Persisted = {
   alerts: AlertSettings;
   /** Choropleth of powiats with an active storm warning. */
   imgwMap: boolean;
+  /** Map drizzle (below klasa 1). Default off — map matches the numbers. */
+  drizzleMap: boolean;
 };
 
 const DEFAULTS: Persisted = {
@@ -29,6 +32,7 @@ const DEFAULTS: Persisted = {
   radiusKm: 25,
   alerts: DEFAULT_ALERT_SETTINGS,
   imgwMap: IMGW_MAP_DEFAULT,
+  drizzleMap: DRIZZLE_MAP_DEFAULT,
 };
 
 function sanitizeAlerts(raw: unknown, legacyNotify: unknown): AlertSettings {
@@ -64,6 +68,7 @@ export function loadSettings(): Persisted {
       radiusKm: parsed.radiusKm ?? 25,
       alerts: sanitizeAlerts(parsed.alerts, parsed.notify),
       imgwMap: readImgwMapToggle(parsed.imgwMap),
+      drizzleMap: readDrizzleToggle(parsed.drizzleMap),
     };
   } catch {
     return DEFAULTS;
@@ -142,6 +147,7 @@ type GromState = Persisted & {
   updatePlaceMeta: (place: Place) => void;
   setRadiusKm: (radiusKm: number) => void;
   setImgwMap: (imgwMap: boolean) => void;
+  setDrizzleMap: (drizzleMap: boolean) => void;
   setAlerts: (patch: Partial<AlertSettings>) => void;
   setAlertMemory: (memory: AlertMemory) => void;
   recordAlert: (event: AlertEvent) => void;
@@ -160,6 +166,7 @@ function persist(s: Persisted) {
         radiusKm: s.radiusKm,
         alerts: s.alerts,
         imgwMap: s.imgwMap,
+        drizzleMap: s.drizzleMap,
       }),
     );
   } catch {
@@ -192,6 +199,10 @@ export const useGrom = create<GromState>((set, get) => ({
   },
   setImgwMap: (imgwMap) => {
     set({ imgwMap });
+    persist(get());
+  },
+  setDrizzleMap: (drizzleMap) => {
+    set({ drizzleMap });
     persist(get());
   },
   setAlerts: (patch) => {

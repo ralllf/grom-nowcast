@@ -23,6 +23,7 @@ import {
   SRI_LIST_URL,
   sriFileUrl,
 } from "./sri";
+import { rememberSriOverlay, sriOverlayMetaFor, sriOverlayPng } from "./sri-overlay-png";
 import { applyTerytFallback } from "./teryt";
 import type { OfficialWarning, Place, RadarFrameMeta, Snapshot } from "./types";
 
@@ -257,7 +258,7 @@ export async function searchNominatim(query: string): Promise<Place[]> {
 
 /**
  * RainViewer fallback tiles: zoom 6 → ~1.5 km/px; stride 2 → ~3 km samples.
- * Overlay still uses these URLs even when analysis is SRI.
+ * Overlay is the own SRI PNG when analysis is SRI; these URLs stay as fallback.
  */
 const RADAR_ZOOM = 6;
 const PIXEL_STRIDE = 2;
@@ -375,6 +376,7 @@ async function decodeSriFile(name: string, time: number): Promise<SampledFrame> 
   const { decodeSriH5 } = await import("./sri-h5");
   const buf = await fetchBuf(sriFileUrl(name), 15_000);
   const decoded = await decodeSriH5(new Uint8Array(buf));
+  rememberSriOverlay(time, decoded.data, decoded.grid);
   const { samples, cellKm } = aggregate(hitsFromSriGrid(decoded.data, decoded.grid));
   return {
     time,
@@ -466,3 +468,28 @@ const searchInput = z.object({ query: z.string().min(2).max(80) });
 export const searchPlaces = createServerFn({ method: "POST" })
   .validator(searchInput)
   .handler(async ({ data }) => searchNominatim(data.query));
+
+const overlayInput = z.object({
+  time: z.number(),
+  drizzle: z.boolean(),
+});
+
+async function ensureSriOverlay(time: number): Promise<void> {
+  if (sriOverlayMetaFor(time)) return;
+  const files = parseSriListing(await listSriHtml());
+  const file = files.find((f) => f.time === time);
+  if (!file) return;
+  // Bypass sampleCached — a hit there is analysis samples only and would skip rememberSriOverlay.
+  await decodeSriFile(file.name, file.time).catch(() => null);
+}
+
+/** One 4-class PNG per SRI frame. RainViewer tiles stay the fallback overlay. */
+export const getSriOverlay = createServerFn({ method: "POST" })
+  .validator(overlayInput)
+  .handler(async ({ data }) => {
+    await ensureSriOverlay(data.time);
+    const png = sriOverlayPng(data.time, data.drizzle);
+    const meta = sriOverlayMetaFor(data.time);
+    if (!png || !meta) return null;
+    return { png: png.toString("base64"), time: meta.time, corners: meta.corners };
+  });

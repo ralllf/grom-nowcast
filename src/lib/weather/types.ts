@@ -42,8 +42,25 @@ export type RadarScan = {
   maxLevel: RadarLevel;
   nearestKm: number | null;
   echoCount: number;
-  /** Analysis decoder. Overlay tiles stay RainViewer either way. */
+  /** Analysis decoder. Overlay is own SRI PNG when source is sri. */
   analysisSource?: "sri" | "rainviewer";
+  /** Latest SRI overlay (MapLibre image source). Absent/null → RainViewer tiles. */
+  overlay?: SriOverlayMeta | null;
+  /** Oldest → newest SRI overlays for the history scrub. */
+  overlays?: SriOverlayMeta[];
+};
+
+/** MapLibre image-source corners: top-left, top-right, bottom-right, bottom-left — [lon, lat]. */
+export type OverlayCorners = [
+  [number, number],
+  [number, number],
+  [number, number],
+  [number, number],
+];
+
+export type SriOverlayMeta = {
+  time: number;
+  corners: OverlayCorners;
 };
 
 export type Place = {

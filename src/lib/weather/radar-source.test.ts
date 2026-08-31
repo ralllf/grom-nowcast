@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { resolveAnalysis } from "./radar-source.ts";
 import type { SampledFrame } from "./radar-source.ts";
+import { POLCOMP_SRI_GRID } from "./sri.ts";
+import { rememberSriOverlay, resetSriOverlayCache } from "./sri-overlay-png.ts";
 
 function frame(time: number): SampledFrame {
   return {
@@ -64,6 +66,23 @@ test("empty SRI listing is an outage and falls back", async () => {
   });
   assert.equal(out.source, "rainviewer");
   assert.equal(out.scan.latestTime, 1_700_000_000);
+});
+
+test("SRI scan carries overlay meta when the field was remembered", async () => {
+  resetSriOverlayCache();
+  const grid = { ...POLCOMP_SRI_GRID, nx: 2, ny: 2 };
+  const data = new Float32Array(4).fill(2);
+  rememberSriOverlay(1_700_000_600, data, grid);
+  const out = await resolveAnalysis({
+    loadSri: async () => [frame(1_700_000_600)],
+    getMaps: async () => maps,
+    loadRainViewerFrames: async () => {
+      throw new Error("should not decode tiles");
+    },
+  });
+  assert.equal(out.scan.overlay?.time, 1_700_000_600);
+  assert.equal(out.scan.overlays?.length, 1);
+  assert.equal(out.scan.overlay?.corners.length, 4);
 });
 
 test("SRI still serves analysis when RainViewer maps fail", async () => {
