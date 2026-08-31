@@ -89,9 +89,9 @@ export const ALL_CLEAR_DEBOUNCE_MIN = 3;
 const CLEAR_KM = 20;
 const OVER_KM = 8;
 
-export function levelNounPl(level: RadarLevel): string {
-  if (level >= 4) return "Gwałtowna burza";
-  if (level >= 3) return "Ulewa i wiatr";
+export function levelNounPl(level: RadarLevel, lightningNearCell = false): string {
+  if (level >= 4) return lightningNearCell ? "Gwałtowna burza" : "Ulewa";
+  if (level >= 3) return lightningNearCell ? "Burza" : "Ulewa i wiatr";
   if (level >= 2) return "Deszcz";
   if (level >= 1) return "Słaby deszcz";
   return "Opad";
@@ -212,6 +212,8 @@ export function evaluateAlert(
   const level = (
     overPin ? threat.pinLevel : Math.max(threat.cellLevel, threat.pinLevel, arriving)
   ) as RadarLevel;
+  const noun = levelNounPl(level, threat.lightningNearCell);
+  const lightningBit = threat.lightningNearCell ? " wyładowania w komórce." : "";
   const base = {
     at: now,
     placeLabel: opts.placeLabel,
@@ -239,8 +241,8 @@ export function evaluateAlert(
           ...base,
           id: `${episode}:now`,
           kind: "now",
-          title: `${levelNounPl(level)} nad ${opts.placeLabel}`,
-          body: `Opad jest nad pinezką teraz.${expect}${radarSuffix(opts.radarTime, now, opts.analysisSource)}`,
+          title: `${noun} nad ${opts.placeLabel}`,
+          body: `Opad jest nad pinezką teraz.${expect}${lightningBit}${radarSuffix(opts.radarTime, now, opts.analysisSource)}`,
         },
       };
     }
@@ -257,11 +259,8 @@ export function evaluateAlert(
           ...base,
           id: `${episode}:incoming`,
           kind: "incoming",
-          title:
-            eta === 0
-              ? `${levelNounPl(level)} teraz`
-              : `${levelNounPl(level)} za ok. ${eta} min`,
-          body: `${from}${speed} na ${opts.placeLabel}. Szansa ~${threat.chancePct}%.${expect}${radarSuffix(opts.radarTime, now, opts.analysisSource)}`,
+          title: eta === 0 ? `${noun} teraz` : `${noun} za ok. ${eta} min`,
+          body: `${from}${speed} na ${opts.placeLabel}. Szansa ~${threat.chancePct}%.${expect}${lightningBit}${radarSuffix(opts.radarTime, now, opts.analysisSource)}`,
         },
       };
     }

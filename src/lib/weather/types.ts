@@ -56,6 +56,12 @@ export type Place = {
   terc?: string;
 };
 
+export type LightningStrike = {
+  lat: number;
+  lon: number;
+  timeMs: number;
+};
+
 export type OfficialWarning = {
   id: string;
   event: string;
@@ -81,6 +87,10 @@ export type Snapshot = {
   warningsUnavailable: boolean;
   /** True when analysis radar failed; do not treat the empty scan as "Czysto". */
   radarUnavailable: boolean;
+  /** Last ~15 min of PERUN strikes. Empty when gated or when the sky is quiet. */
+  lightning: LightningStrike[];
+  /** True when PERUN files bounced or the fetch failed — never invent strikes. */
+  lightningUnavailable: boolean;
 };
 
 export type CellTrack = {
@@ -131,4 +141,6 @@ export type Threat = {
   timeline: TimelinePoint[];
   /** Whether the timeline uses a measured motion vector (else persistence). */
   timelineAdvected: boolean;
+  /** True only when a PERUN strike sits near the cell that owns the headline. */
+  lightningNearCell: boolean;
 };
