@@ -10,7 +10,7 @@ import { loadPowiatBoundaries } from "@/lib/weather/teryt";
 import type { CellTrack, LightningStrike } from "@/lib/weather/types";
 import { strikeOpacity } from "@/lib/weather/perun";
 import { circlePolygon } from "@/lib/weather/geo";
-import { OVERLAY_COLOR_OPTIONS } from "@/lib/weather/palette";
+import { pickRadarLayer, type OverlayCorners } from "@/lib/weather/sri-overlay";
 import { cn } from "@/lib/utils";
 
 type Focus = {
@@ -27,6 +27,8 @@ type Props = {
   radiusKm: number;
   radarHost: string | null;
   radarPath: string | null;
+  overlayUrl?: string | null;
+  overlayCorners?: OverlayCorners | null;
   tracks: CellTrack[];
   imgwOn?: boolean;
   imgwDegrees?: Record<string, number>;
@@ -78,6 +80,8 @@ type Live = {
   radiusKm: number;
   radarHost: string | null;
   radarPath: string | null;
+  overlayUrl: string | null;
+  overlayCorners: OverlayCorners | null;
   tracks: CellTrack[];
   imgwOn: boolean;
   imgwDegrees: Record<string, number>;
@@ -90,6 +94,8 @@ export function RadarMap({
   radiusKm,
   radarHost,
   radarPath,
+  overlayUrl = null,
+  overlayCorners = null,
   tracks,
   imgwOn = true,
   imgwDegrees = {},
@@ -112,12 +118,26 @@ export function RadarMap({
     radiusKm,
     radarHost,
     radarPath,
+    overlayUrl,
+    overlayCorners,
     tracks,
     imgwOn,
     imgwDegrees,
     strikes,
   });
-  liveRef.current = { lat, lon, radiusKm, radarHost, radarPath, tracks, imgwOn, imgwDegrees, strikes };
+  liveRef.current = {
+    lat,
+    lon,
+    radiusKm,
+    radarHost,
+    radarPath,
+    overlayUrl,
+    overlayCorners,
+    tracks,
+    imgwOn,
+    imgwDegrees,
+    strikes,
+  };
   const imgwGenRef = useRef(0);
 
   useEffect(() => {
@@ -329,7 +349,7 @@ export function RadarMap({
     const map = mapRef.current;
     if (!map || !readyRef.current) return;
     syncRadar(map, liveRef.current);
-  }, [radarHost, radarPath]);
+  }, [radarHost, radarPath, overlayUrl, overlayCorners]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -511,21 +531,40 @@ function syncStrikes(map: import("maplibre-gl").Map, strikes: LightningStrike[])
 
 function syncRadar(map: import("maplibre-gl").Map, live: Live) {
   const id = "radar";
-  const tiles =
-    live.radarHost && live.radarPath
-      ? [`${live.radarHost}${live.radarPath}/256/{z}/{x}/{y}/${OVERLAY_COLOR_OPTIONS}.png`]
-      : [];
+  const layer = pickRadarLayer({
+    overlayUrl: live.overlayUrl,
+    overlayCorners: live.overlayCorners,
+    radarHost: live.radarHost,
+    radarPath: live.radarPath,
+  });
+  const existing = map.getSource(id);
+  if (layer.kind === "sri" && existing && existing.type === "image") {
+    (existing as import("maplibre-gl").ImageSource).updateImage({
+      url: layer.url,
+      coordinates: layer.corners,
+    });
+    if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", "visible");
+    return;
+  }
   if (map.getLayer(id)) map.removeLayer(id);
   if (map.getSource(id)) map.removeSource(id);
-  if (tiles.length === 0) return;
-  map.addSource(id, {
-    type: "raster",
-    tiles,
-    tileSize: 256,
-    scheme: "xyz",
-    minzoom: 1,
-    maxzoom: 7,
-  });
+  if (layer.kind === "none") return;
+  if (layer.kind === "sri") {
+    map.addSource(id, {
+      type: "image",
+      url: layer.url,
+      coordinates: layer.corners,
+    });
+  } else {
+    map.addSource(id, {
+      type: "raster",
+      tiles: layer.tiles,
+      tileSize: 256,
+      scheme: "xyz",
+      minzoom: 1,
+      maxzoom: 7,
+    });
+  }
   map.addLayer(
     {
       id,

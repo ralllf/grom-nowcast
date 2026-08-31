@@ -279,7 +279,8 @@ export function ThreatSheet({
           Źródłem danych ostrzeżeń i sieci POLRAD jest Instytut Meteorologii i Gospodarki Wodnej –
           Państwowy Instytut Badawczy. Dane radarowe zostały przetworzone (SRI mm/h IMGW, siatka
           ~3 km; RainViewer dBZ → Marshall–Palmer gdy SRI niedostępne). Analiza: IMGW COMPO_SRI.
-          Mapa: RainViewer / OpenFreeMap / OSM. To nie jest oficjalny alert RCB. Komórka burzowa
+          Mapa: IMGW SRI (4 klasy) / RainViewer fallback / OpenFreeMap / OSM. To nie jest oficjalny
+          alert RCB. Komórka burzowa
           może powstać lokalnie nawet przy czystym radarze.
         </p>
       </div>

@@ -27,7 +27,7 @@ import { framesFromScan } from "@/lib/weather/pack";
 import { historyIsDegraded } from "@/lib/weather/radar-history";
 import { lightningCaption } from "@/lib/weather/perun";
 import { PL_RADAR_ORIGIN } from "@/lib/weather/radar-grid";
-import { getSnapshot, searchPlaces } from "@/lib/weather/server";
+import { getSnapshot, getSriOverlay, searchPlaces } from "@/lib/weather/server";
 import { canTrustRadar, IMGW_WARNINGS_UNAVAILABLE } from "@/lib/weather/snapshot";
 import { computeThreat } from "@/lib/weather/threat";
 import {
@@ -97,6 +97,8 @@ export function GromApp() {
   const setRadiusKm = useGrom((s) => s.setRadiusKm);
   const imgwMap = useGrom((s) => s.imgwMap);
   const setImgwMap = useGrom((s) => s.setImgwMap);
+  const drizzleMap = useGrom((s) => s.drizzleMap);
+  const setDrizzleMap = useGrom((s) => s.setDrizzleMap);
   const setAlerts = useGrom((s) => s.setAlerts);
   const setAlertMemory = useGrom((s) => s.setAlertMemory);
   const recordAlert = useGrom((s) => s.recordAlert);
@@ -222,8 +224,32 @@ export function GromApp() {
   });
 
   const past = snapshot?.radar.past ?? [];
-  const activePath =
-    frameIndex !== null && past[frameIndex] ? past[frameIndex].path : (past.at(-1)?.path ?? null);
+  const overlays = snapshot?.radar.overlays ?? [];
+  const slider = overlays.length > 0 ? overlays : past;
+  const activeIdx = Math.min(frameIndex ?? Math.max(0, slider.length - 1), Math.max(0, slider.length - 1));
+  const activeSlider = slider[activeIdx];
+  const fallbackPath = (() => {
+    if (overlays.length === 0) {
+      return frameIndex !== null && past[frameIndex] ? past[frameIndex]!.path : (past.at(-1)?.path ?? null);
+    }
+    const t = activeSlider?.time;
+    const match = t != null ? past.find((p) => Math.abs(p.time - t) < 6 * 60) : null;
+    return match?.path ?? past.at(-1)?.path ?? null;
+  })();
+
+  const overlayQuery = useQuery({
+    queryKey: ["sri-overlay", activeSlider?.time, drizzleMap],
+    enabled: overlays.length > 0 && activeSlider?.time != null,
+    queryFn: () => getSriOverlay({ data: { time: activeSlider!.time, drizzle: drizzleMap } }),
+    staleTime: 5 * 60_000,
+  });
+  const overlayUrl = overlayQuery.data?.png
+    ? `data:image/png;base64,${overlayQuery.data.png}`
+    : null;
+  const overlayCorners = overlayQuery.data?.corners ?? null;
+  const sriFailed = overlays.length > 0 && overlayQuery.isError;
+  const radarHost = overlayUrl ? null : sriFailed || overlays.length === 0 ? (snapshot?.radar.host ?? null) : null;
+  const radarPath = overlayUrl ? null : sriFailed || overlays.length === 0 ? fallbackPath : null;
 
   function locate() {
     if (isEmbeddedPreview() || !navigator.geolocation) {
@@ -324,8 +350,10 @@ export function GromApp() {
         lat={place.lat}
         lon={place.lon}
         radiusKm={radiusKm}
-        radarHost={snapshot?.radar.host ?? null}
-        radarPath={activePath}
+        radarHost={radarHost}
+        radarPath={radarPath}
+        overlayUrl={overlayUrl}
+        overlayCorners={overlayCorners}
         tracks={tracks}
         imgwOn={imgwMap}
         imgwDegrees={imgwDegrees}
@@ -373,21 +401,21 @@ export function GromApp() {
         </div>
       </header>
 
-      {past.length > 1 ? (
+      {slider.length > 1 ? (
         <div className="pointer-events-none absolute inset-x-0 top-24 z-10 flex justify-center px-3 sm:top-28">
           <div className="pointer-events-auto flex max-w-md items-center gap-3 rounded-full bg-surface/85 px-4 py-2 shadow-[0_0_0_1px_rgba(255,255,255,0.08)] backdrop-blur-md">
             <Radar className="size-4 text-accent" />
             <input
               type="range"
               min={0}
-              max={past.length - 1}
-              value={frameIndex ?? past.length - 1}
+              max={slider.length - 1}
+              value={Math.min(frameIndex ?? slider.length - 1, slider.length - 1)}
               onChange={(e) => setFrameIndex(Number(e.target.value))}
               className="h-1 w-40 accent-accent sm:w-56"
               aria-label="Czas radaru"
             />
             <span className="w-12 text-right font-mono text-xs tabular-nums text-muted">
-              {formatClock(past[frameIndex ?? past.length - 1]?.time ?? null)}
+              {formatClock(slider[frameIndex ?? slider.length - 1]?.time ?? null)}
             </span>
             {radarDegraded ? (
               <span className="text-[10px] text-faint" title="Brakowało kafelka radaru">
@@ -432,7 +460,7 @@ export function GromApp() {
         </div>
       ) : null}
 
-      {tracks.length > 0 || hasImgwTint ? (
+      {tracks.length > 0 || hasImgwTint || overlays.length > 0 ? (
         <div
           className={cn(
             "pointer-events-none absolute left-3 z-10 flex flex-col items-start gap-2 sm:left-5",
@@ -465,6 +493,20 @@ export function GromApp() {
                 style={{ backgroundColor: imgwMap ? "#e4572e" : "#5c6570" }}
               />
               <span className={imgwMap ? "text-fg" : "text-muted"}>IMGW</span>
+            </button>
+          ) : null}
+          {overlays.length > 0 ? (
+            <button
+              type="button"
+              aria-pressed={drizzleMap}
+              onClick={() => setDrizzleMap(!drizzleMap)}
+              className="pointer-events-auto flex items-center gap-2 rounded-full bg-surface/90 px-3 py-1.5 text-xs shadow-[0_0_0_1px_rgba(255,255,255,0.08)] backdrop-blur-md"
+            >
+              <span
+                className="inline-block size-2.5 rounded-full ring-2 ring-fg"
+                style={{ backgroundColor: drizzleMap ? "#36bae5" : "#5c6570" }}
+              />
+              <span className={drizzleMap ? "text-fg" : "text-muted"}>Pokaż mżawkę</span>
             </button>
           ) : null}
         </div>
@@ -632,6 +674,15 @@ export function GromApp() {
                 className="accent-accent"
               />
               Ostrzeżenia IMGW na mapie (powiat, stopień)
+            </label>
+            <label className="mt-3 flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={drizzleMap}
+                onChange={(e) => setDrizzleMap(e.target.checked)}
+                className="accent-accent"
+              />
+              Pokaż mżawkę na mapie (domyślnie wyłączona — jak liczby)
             </label>
 
             <div className="mt-5 rounded-xl bg-surface-2 px-3 py-3">

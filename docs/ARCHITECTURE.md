@@ -4,7 +4,7 @@ Nowcast w GROM-ie to trzy warstwy: **pobranie radaru**, **zrozumienie komórek**
 
 ```text
 IMGW COMPO_SRI .sri.h5 (datastore, 5 min)  ──outage──▶  RainViewer kafelki (fallback)
-        │  h5wasm + odwrotne aeqd; overlay mapy zostaje RainViewer
+        │  h5wasm + odwrotne aeqd; overlay = 1 PNG / klatkę (4 klasy)
         ▼
   próbki (lat, lon, level 1–4)  ×  4 skany (SRI: 15–20 min; fallback: ~30 min)
         │
@@ -30,7 +30,7 @@ Szansa i ETA **nigdy** nie są średnią z całego koła. Koło na mapie to tylk
 
 ## Radar
 
-- **Analiza: IMGW COMPO_SRI** z datastore (listing POST `getFilesList`, plik `.sri.h5`). 800×800, ~1.16 km, aeqd, `quantity=RATE` w mm/h, kadencja 5 min. RainViewer zostaje overlayem mapy i automatycznym fallbackiem, gdy listing/H5 padnie.
+- **Analiza: IMGW COMPO_SRI** z datastore (listing POST `getFilesList`, plik `.sri.h5`). 800×800, ~1.16 km, aeqd, `quantity=RATE` w mm/h, kadencja 5 min. RainViewer zostaje automatycznym fallbackiem analizy i overlayu, gdy listing/H5 padnie.
 - **Fallback kafelków:** `https://api.rainviewer.com/public/weather-maps.json` → host + `past[]` (13 klatek co 10 min). Pole `nowcast[]` RainViewer **wyłączył 1 I 2026** — jest puste; ekstrapolacja jest nasza.
 - **Kolor → dBZ → mm/h (tylko fallback).** Kafelki `…/2/0_0.png` (Universal Blue, `smooth=0`, `snow=0`), więc każdy piksel ma dokładny kolor z tabeli RainViewera ([`palette.ts`](../src/lib/weather/palette.ts)). Kolor → dBZ (tabela), dBZ → mm/h (Marshall–Palmer `Z = 200·R^1.6`), mm/h → klasa. SRI pomija ten krok — IMGW już policzył Z–R.
 
@@ -46,7 +46,7 @@ Szansa i ETA **nigdy** nie są średnią z całego koła. Koło na mapie to tylk
 - **Siatka zamiast obcinania.** Piksele agregujemy do siatki ~3 km (max mm/h w komórce). Gdy próbek > 9000, siatka rośnie ×2 — pokrycie zostaje równomierne. Wcześniej próbki sortowano po poziomie i szerokości i ucinano do 5000, co przy rozległym opadzie **wyrzucało południe kraju**.
 - **Cache per klatka.** Klatka SRI / RainViewera jest niezmienna → dekodujemy ją raz (cache 12 klatek). Snapshot ma dodatkowo cache 90 s. Listing SRI cache 45 s.
 - **Format przesyłu.** TanStack Start opakowuje każdą liczbę w JSON (`{"t":0,"s":51.149}`), więc klatka jedzie jako **jeden string base64, 8 bajtów/próbka** ([`pack.ts`](../src/lib/weather/pack.ts)): u16 lat, u16 lon (tysięczne stopnia od rogu bboxu), u16 klasa, u16 mm/h×10. Deszczowy dzień: ~180 kB za 4 klatki zamiast ~2 MB.
-- Overlay na mapie: te same URL-e RainViewer (`…/2/1_0.png`, wygładzone, bez palety śniegu, żeby legenda się zgadzała), raster MapLibre `maxzoom: 7`.
+- Overlay na mapie: jedno PNG 800×800 z tego samego pola SRI, pokolorowane 4 klasami legendy, źródło `image` MapLibre z narożnikami aeqd. Domyślnie klasa ≥ 1 (jak liczby); „Pokaż mżawkę” jest wyłączona. RainViewer `…/2/1_0.png` zostaje fallbackiem.
 
 Klatki **nie idą do gita ani bazy**. Klient trzyma ostatnie skany w Zustand (RAM). `localStorage` ma tylko miasto, promień, ustawienia alertów.
 
@@ -136,7 +136,7 @@ Ustawienia: `leadMin` 10–60, `minLevel` 1–3 (słaby deszcz / deszcz / ulewa-
 
 ## Świadome ograniczenia
 
-- Analiza SRI to kompozyt IMGW (10 radarów, co 5 min, ~1.16 km, 800×800). Overlay mapy nadal RainViewer (8 z 10, 10 min) — stąd F9 (mapa ≠ liczby) czeka na Slice 7. Opóźnienie SRI rzędu kilku minut. Szczegóły siatki: `docs/DATA.md`.
+- Analiza SRI to kompozyt IMGW (10 radarów, co 5 min, ~1.16 km, 800×800). Overlay mapy to to samo pole w 4 klasach legendy (F9). RainViewer zostaje fallbackiem. Opóźnienie SRI rzędu kilku minut. Szczegóły siatki: `docs/DATA.md`.
 - Siatka ~3 km. Dobra do wektora mezoskali i do „czy pada nad miastem”; pojedyncza komórka < 3 km może zniknąć między próbkami.
 - Marshall–Palmer to jedna relacja Z–R dla wszystkiego: w burzy konwekcyjnej zaniża, w mżawce zawyża. Klasy mm/h są orientacyjne.
 - Cztery skany ~30 min, ekstrapolacja liniowa. Nie optyczny flow, bez wzrostu/zaniku komórek.
