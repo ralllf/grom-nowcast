@@ -52,6 +52,7 @@ TanStack Start + React 19 + Vite, MapLibre GL, Zustand, TanStack Query, `pngjs` 
 - [Źródła danych i licencje](docs/DATA.md) — IMGW, RainViewer, co wolno, czego nie trzymamy
 - [Weryfikacja nowcastu](docs/HINDCAST.md) — `npm run hindcast`: POD / FAR / CSI na prawdziwym radarze vs persystencja
 - [Pomysły i roadmapa](docs/IDEAS.md) — GPS, push, POLRAD, pioruny, tożsamość produktu
+- [Plan dokładności i niezawodności](docs/ACCURACY-PLAN.md) — ranking błędów, źródła danych (SRI, PERUN), warstwy, taksonomia alertów, kolejność małych kroków
 
 ## Uruchomienie
 
