@@ -209,6 +209,7 @@ test("radar-down snapshot is stale for alerts (existing honesty)", async () => {
     timeline: [],
     timelineAdvected: false,
     lightningNearCell: false,
+    cellTrend: null,
   };
 
   const result = evaluateAlert(

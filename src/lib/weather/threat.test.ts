@@ -716,3 +716,74 @@ test("klasa 3 plus lightning near the cell earns Burza (the F4 miss)", () => {
   ]);
   assert.equal(wet.title, "Burza nadciąga");
 });
+
+function blobSized(lat: number, lon: number, level: RadarLevel, half: number): RadarSample[] {
+  const samples: RadarSample[] = [];
+  for (let i = -half; i <= half; i++) {
+    for (let j = -half; j <= half; j++) {
+      samples.push({ lat: lat + i * 0.04, lon: lon + j * 0.04, level });
+    }
+  }
+  return samples;
+}
+
+test("deepening cell on a 4-frame trail says Komórka rośnie", () => {
+  const frames = [
+    frame(0, blobSized(50.0, 20.4, 2, 2), 43),
+    frame(600, blobSized(50.0, 20.55, 2, 2), 32),
+    frame(1_200, blobSized(50.0, 20.7, 3, 3), 21),
+    frame(1_800, blobSized(50.0, 20.85, 4, 3), 11),
+  ];
+  const threat = computeThreat(city, frames, [], 40);
+  assert.equal(threat.cellTrend, "growing");
+  assert.match(threat.detail, /Komórka rośnie/);
+});
+
+test("weakening cell on a 4-frame trail says Komórka słabnie", () => {
+  const frames = [
+    frame(0, blobSized(50.0, 20.4, 4, 3), 43),
+    frame(600, blobSized(50.0, 20.55, 3, 3), 32),
+    frame(1_200, blobSized(50.0, 20.7, 3, 2), 21),
+    frame(1_800, blobSized(50.0, 20.85, 2, 2), 11),
+  ];
+  const threat = computeThreat(city, frames, [], 40);
+  assert.equal(threat.cellTrend, "decaying");
+  assert.match(threat.detail, /Komórka słabnie/);
+});
+
+test("steady translating cell has no growth line", () => {
+  const frames = [
+    frame(0, blob(50.0, 20.4, 3), 43),
+    frame(600, blob(50.0, 20.55, 3), 32),
+    frame(1_200, blob(50.0, 20.7, 3), 21),
+    frame(1_800, blob(50.0, 20.85, 3), 11),
+  ];
+  const threat = computeThreat(city, frames, [], 40);
+  assert.equal(threat.cellTrend, null);
+  assert.doesNotMatch(threat.detail, /Komórka rośnie/);
+  assert.doesNotMatch(threat.detail, /Komórka słabnie/);
+});
+
+test("copy-only: growing cell does not change ETA or timeline vs same latest geometry", () => {
+  const growing = [
+    frame(0, blobSized(50.0, 20.4, 2, 2), 43),
+    frame(600, blobSized(50.0, 20.55, 2, 2), 32),
+    frame(1_200, blobSized(50.0, 20.7, 3, 3), 21),
+    frame(1_800, blobSized(50.0, 20.85, 4, 3), 11),
+  ];
+  const sameNow = [
+    frame(0, blobSized(50.0, 20.4, 4, 3), 43),
+    frame(600, blobSized(50.0, 20.55, 4, 3), 32),
+    frame(1_200, blobSized(50.0, 20.7, 4, 3), 21),
+    frame(1_800, blobSized(50.0, 20.85, 4, 3), 11),
+  ];
+  const g = computeThreat(city, growing, [], 40);
+  const s = computeThreat(city, sameNow, [], 40);
+  assert.equal(g.cellTrend, "growing");
+  assert.equal(s.cellTrend, null);
+  assert.equal(g.etaMin, s.etaMin);
+  assert.deepEqual(
+    g.timeline.map((p) => p.level),
+    s.timeline.map((p) => p.level),
+  );
+});

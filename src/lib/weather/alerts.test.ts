@@ -43,6 +43,7 @@ function threat(over: Partial<Threat> = {}): Threat {
     timeline: [],
     timelineAdvected: false,
     lightningNearCell: false,
+    cellTrend: null,
     ...over,
   };
 }

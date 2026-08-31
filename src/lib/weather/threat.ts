@@ -1,6 +1,7 @@
 import { bearingDeg, comingFromPl, destPoint, haversineKm, towardPl } from "./geo.ts";
 import type {
   CellTrack,
+  CellTrend,
   LightningStrike,
   OfficialWarning,
   Place,
@@ -11,6 +12,7 @@ import type {
   ThreatLevel,
   TimelinePoint,
 } from "./types.ts";
+import { cellTrendCopy, cellTrendFromSnaps, type TrailSnap } from "./trend.ts";
 import { strikeNearCell } from "./perun.ts";
 import { isActiveWarning } from "./imgw-time.ts";
 import { LEVEL_MIN_RATE, levelFromRate } from "./palette.ts";
@@ -576,6 +578,14 @@ function circularMeanDeg(parts: { deg: number; w: number }[]): number | null {
 type TrailPoint = { lat: number; lon: number; time: number };
 type MassLayer = { time: number; masses: Mass[] };
 
+function trailSnaps(trail: { time: number; mass: Mass }[]): TrailSnap[] {
+  return trail.map((t) => {
+    const n = t.mass.samples.length;
+    const meanLevel = n === 0 ? 0 : t.mass.samples.reduce((s, p) => s + p.level, 0) / n;
+    return { time: t.time, maxLevel: t.mass.maxLevel, sampleCount: n, meanLevel };
+  });
+}
+
 function buildMassTrail(mass: Mass, layers: MassLayer[]): { time: number; mass: Mass }[] {
   const newest = layers.at(-1);
   if (!newest) return [];
@@ -810,6 +820,7 @@ export function computeThreat(
   const tracks: CellTrack[] = [];
   let threatTrack: CellTrack | null = null;
   let threatCellLevel = 0;
+  let cellTrend: CellTrend = null;
 
   if (usable.length >= 2 && last) {
     const layers: MassLayer[] = usable.map((f) => ({
@@ -827,6 +838,23 @@ export function computeThreat(
       const db = haversineKm(b.lat, b.lon, sampleOrigin.lat, sampleOrigin.lon);
       return da - db;
     });
+
+    // Pin-relevant identity for the growth/decay line — even when motion is too
+    // weak to draw an arrow (in-situ deepening is F1).
+    let pinMass: Mass | null = null;
+    let pinMassD = Infinity;
+    for (const mass of nowMasses) {
+      const d =
+        nearestWithin(mass.samples, place.lat, place.lon, TRACK_MAX_KM) ??
+        haversineKm(place.lat, place.lon, mass.lat, mass.lon);
+      if (d <= TRACK_MAX_KM && d < pinMassD) {
+        pinMassD = d;
+        pinMass = mass;
+      }
+    }
+    if (pinMass) {
+      cellTrend = cellTrendFromSnaps(trailSnaps(buildMassTrail(pinMass, layers)));
+    }
 
     type Hit = {
       miss: number;
@@ -1042,25 +1070,29 @@ export function computeThreat(
   if (upcoming.length > 0 && level === "clear") level = "watch";
 
   const formNote = "Komórka może też urosnąć na miejscu — tego radar nie zapowie.";
+  const trendNote = (() => {
+    const line = cellTrendCopy(cellTrend);
+    return line ? ` ${line}.` : "";
+  })();
   const dist = nearestKm !== null ? `ok. ${nearestKm.toFixed(0)} km od ${who}` : `w okolicy ${who}`;
 
   let detail: string;
   if (etaMin === 0 && (pinLevel >= 1 || (nearestKm !== null && nearestKm <= PIN_KM))) {
-    detail = `Opad jest nad ${who} teraz.${expect ? ` Spodziewaj się: ${expect}.` : ""} ${formNote}`;
+    detail = `Opad jest nad ${who} teraz.${expect ? ` Spodziewaj się: ${expect}.` : ""}${trendNote} ${formNote}`;
   } else if (receding && aboutPin) {
-    detail = `${comingFrom ? `Idzie od ${comingFrom}` : "Komórka"} (${dist}) i odchodzi na ${toward ?? "bok"}.${expect ? ` Spodziewaj się: ${expect}.` : ""} Szansa ~${chance}%. ${formNote}`;
+    detail = `${comingFrom ? `Idzie od ${comingFrom}` : "Komórka"} (${dist}) i odchodzi na ${toward ?? "bok"}.${expect ? ` Spodziewaj się: ${expect}.` : ""} Szansa ~${chance}%.${trendNote} ${formNote}`;
   } else if (willHit && comingFrom) {
     const etaBit = etaMin && etaMin > 0 ? ` Dojście nad ${who}: ok. ${etaMin} min.` : "";
-    detail = `Idzie od ${comingFrom}${speedKmh ? ` (~${Math.round(speedKmh)} km/h)` : ""}, echo ${dist}.${etaBit}${expect ? ` Spodziewaj się: ${expect}.` : ""} Szansa ~${chance}%. To ruch echa, nie pewność. ${formNote}`;
+    detail = `Idzie od ${comingFrom}${speedKmh ? ` (~${Math.round(speedKmh)} km/h)` : ""}, echo ${dist}.${etaBit}${expect ? ` Spodziewaj się: ${expect}.` : ""} Szansa ~${chance}%. To ruch echa, nie pewność.${trendNote} ${formNote}`;
   } else if (
     comingFrom &&
     missKm !== null &&
     missKm > PIN_KM &&
     (nearestKm === null || nearestKm > CLOSE_KM)
   ) {
-    detail = `Idzie od ${comingFrom}, echo ${dist}. Tor minie ${who} ok. ${missKm.toFixed(0)} km obok${etaMin ? ` za ~${etaMin} min` : ""}.${expect ? ` Spodziewaj się w okolicy: ${expect}.` : ""} Nad samym punktem szansa ~${chance}%. ${formNote}`;
+    detail = `Idzie od ${comingFrom}, echo ${dist}. Tor minie ${who} ok. ${missKm.toFixed(0)} km obok${etaMin ? ` za ~${etaMin} min` : ""}.${expect ? ` Spodziewaj się w okolicy: ${expect}.` : ""} Nad samym punktem szansa ~${chance}%.${trendNote} ${formNote}`;
   } else if (nearestKm !== null) {
-    detail = `Echo ${dist}${comingFrom ? `, od ${comingFrom}` : ""}.${expect ? ` Spodziewaj się: ${expect}.` : ""} Szansa ~${chance}%. ${formNote}`;
+    detail = `Echo ${dist}${comingFrom ? `, od ${comingFrom}` : ""}.${expect ? ` Spodziewaj się: ${expect}.` : ""} Szansa ~${chance}%.${trendNote} ${formNote}`;
   } else if (level === "watch") {
     const body =
       activeMatch[0]?.body ?? upcoming[0]?.body ?? "Instytut wydał ostrzeżenie dla powiatu.";
@@ -1121,5 +1153,6 @@ export function computeThreat(
     timeline,
     timelineAdvected: pinMotion !== null,
     lightningNearCell,
+    cellTrend,
   };
 }

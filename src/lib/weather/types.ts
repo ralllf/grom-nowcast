@@ -1,5 +1,8 @@
 export type ThreatLevel = "clear" | "watch" | "nearby" | "imminent" | "now";
 
+/** Per-mass growth/decay over the existing 4-frame trail. */
+export type CellTrend = "growing" | "decaying" | null;
+
 export type RadarLevel = 0 | 1 | 2 | 3 | 4;
 
 export type RadarSample = {
@@ -160,4 +163,9 @@ export type Threat = {
   timelineAdvected: boolean;
   /** True only when a PERUN strike sits near the cell that owns the headline. */
   lightningNearCell: boolean;
+  /**
+   * Intensity/area trend of the pin-relevant mass over the 4-frame trail.
+   * Copy only — does not change timeline / ETA (Slice-9 gate is closed).
+   */
+  cellTrend: CellTrend;
 };

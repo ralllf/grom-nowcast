@@ -28,6 +28,7 @@ function threat(partial: Partial<Threat>): Threat {
     timeline: [],
     timelineAdvected: false,
     lightningNearCell: false,
+    cellTrend: null,
     ...partial,
   };
 }
@@ -70,6 +71,15 @@ describe("nowcastHeadline", () => {
     const { nowcastHeadline } = await import("./threat-sheet-logic.ts");
     assert.equal(nowcastHeadline(null, true), "Skanuję radar…");
     assert.equal(nowcastHeadline(null, false), "Brak danych");
+  });
+});
+
+describe("cellTrendLine", () => {
+  it("prints Komórka rośnie / słabnie and stays quiet when steady", async () => {
+    const { cellTrendLine } = await import("./threat-sheet-logic.ts");
+    assert.equal(cellTrendLine("growing"), "Komórka rośnie");
+    assert.equal(cellTrendLine("decaying"), "Komórka słabnie");
+    assert.equal(cellTrendLine(null), null);
   });
 });
 

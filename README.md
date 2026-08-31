@@ -28,7 +28,7 @@ GROM jest bliżej **MeteoSwiss / RainViewer nowcast** niż klasycznej prognozy:
 - **Oś czasu opadu nad pinezką** 0–90 min co 5 min (adwekcja wsteczna z ruchu echa) — jak pasek „Niederschlag” w aplikacji MeteoSwiss.
 - Wektory ruchu: pomarańczowa strzałka wychodzi ze **środka komórki** w kierunku przesuwania się opadu.
 - **Szansa %** (skalibrowana z dziennika hindcastu) i **ETA** liczone dla pinezki, nie dla promienia alertu.
-- Tekst: *Idzie od… → na…* oraz *Spodziewaj się: …*
+- Tekst: *Idzie od… → na…*, *Spodziewaj się: …*, oraz *Komórka rośnie / słabnie* (trend z 4 klatek; bez korekty ETA, bramka Slice 0 nie przepuszcza).
 - Ostrzeżenia IMGW dopasowane TERYT-em do wybranego miasta.
 - **Alerty na pinezkę** (karta otwarta, może być w tle): „nadciąga” gdy tor trafia w pinezkę i dojście ≤ N min, „nad Tobą”, „przeszło”. Presety **Czuły / Normalny / Tylko pewne**; suwaki pod zaawansowanymi. Jeden alert na etap burzy, próg intensywności, ciche godziny, dźwięk, baner + powiadomienie systemowe.
 - Miasta PL z listy, wyszukiwarka Nominatim, klik na mapie. GPS na telefonie (w iframe podglądu przeglądarka go blokuje).
