@@ -53,6 +53,8 @@ type Props = {
   onShowRainMotion: () => void;
   /** Latest radar scan, unix seconds. `null` = no radar. */
   radarTime: number | null;
+  /** PERUN line — empty-state copy when this session has no strikes. */
+  lightningNote?: string;
 };
 
 export function ThreatSheet({
@@ -67,6 +69,7 @@ export function ThreatSheet({
   onClearGeoError,
   onShowRainMotion,
   radarTime,
+  lightningNote,
 }: Props) {
   const [open, setOpen] = useState(false);
   const autoKey = useRef<string | null>(null);
@@ -223,6 +226,10 @@ export function ThreatSheet({
 
         {radarCaption ? (
           <p className="mt-2 text-center font-mono text-[11px] text-faint">{radarCaption}</p>
+        ) : null}
+
+        {lightningNote ? (
+          <p className="mt-2 text-center text-[11px] text-faint">{lightningNote}</p>
         ) : null}
 
         {threat && threat.timeline.length > 0 ? (

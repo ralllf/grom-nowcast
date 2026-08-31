@@ -39,11 +39,12 @@ function threat(over: Partial<Threat> = {}): Threat {
     matchedWarnings: [],
     timeline: [],
     timelineAdvected: false,
+    lightningNearCell: false,
     ...over,
   };
 }
 
-const incoming = (etaMin: number, level: RadarLevel = 3) =>
+const incoming = (etaMin: number, level: RadarLevel = 3, extra: Partial<Threat> = {}) =>
   threat({
     level: "imminent",
     etaMin,
@@ -56,6 +57,7 @@ const incoming = (etaMin: number, level: RadarLevel = 3) =>
     comingFrom: "zachodu",
     toward: "wschód",
     expect: "ulewę i porywisty wiatr",
+    ...extra,
   });
 
 const overPin = (level: RadarLevel = 3) =>
@@ -357,4 +359,27 @@ test("'now' needs the threshold intensity over the pin, not within 25 km", () =>
     radarTime: T0 / 1000,
   });
   assert.equal(r.event, null);
+});
+
+test("klasa 4 without lightning is Ulewa, never Gwałtowna burza", () => {
+  const r = evaluateAlert(incoming(18, 4), on, EMPTY_ALERT_MEMORY, T0, {
+    placeLabel: "Kraków",
+    radarTime: T0 / 1000,
+  });
+  assert.ok(r.event);
+  assert.equal(r.event.title, "Ulewa za ok. 18 min");
+  assert.doesNotMatch(r.event.body, /wyładowania w komórce/);
+});
+
+test("klasa 4 with lightning near the cell says Gwałtowna burza and names the strikes", () => {
+  const r = evaluateAlert(
+    incoming(18, 4, { lightningNearCell: true }),
+    on,
+    EMPTY_ALERT_MEMORY,
+    T0,
+    { placeLabel: "Kraków", radarTime: T0 / 1000 },
+  );
+  assert.ok(r.event);
+  assert.equal(r.event.title, "Gwałtowna burza za ok. 18 min");
+  assert.match(r.event.body, /wyładowania w komórce/);
 });

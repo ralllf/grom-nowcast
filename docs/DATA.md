@@ -32,6 +32,21 @@ Sieć radarowa POLRAD należy do **Instytutu Meteorologii i Gospodarki Wodnej �
 
 To ostrzeżenia **oficjalne, powiatowe**. GROM pokazuje je obok nowcastu, nie zamiast. Nie zastępuje RCB.
 
+## Wyładowania (PERUN)
+
+IMGW publishes PERUN on the same datastore: listing `POST /pl/datastore/getFilesList` with `path=Oper/Perun/PERUN_Polska` (form-urlencoded) is public. Files are 1-min `YYYY.MM.DD.HH.MM.ld` + `.ld.csv` (plus `1min_secondaire` / `10min_secondaire`).
+
+**Access, 2026-08-31 (this slice):** every download of a Perun file bounced. POLCOMP on the same `getfiledown` scheme still served a PNG. Failed URLs (do not invent strikes from these):
+
+- `https://danepubliczne.imgw.pl/pl/datastore/getfiledown/Oper/Perun/PERUN_Polska/<file>.ld.csv` → **307** `Location: /datastore` (HTML)
+- `https://danepubliczne.imgw.pl/datastore/getfiledown/Oper/Perun/PERUN_Polska/<file>.ld.csv` → same 307
+- `https://danepubliczne.imgw.pl/pl/datastore/getfiledown?path=…` / `?file=…` → 307
+- `POST /pl/datastore/getfiledown` with `path=` → 303 `/datastore`
+- listing href `…/pl/datastore/getfiledownOper/Perun/…` (no slash) → **404**
+- `1min_secondaire` / `10min_secondaire` on the slash scheme → 307
+
+The client lists, then tries the POLCOMP-style URL. A bounce ships **no strikes** and the sheet says „Brak wyładowań w tej sesji”. One email to IMGW open-data support is still needed (out of scope for the Slice 5 agent). No Blitzortung.
+
 ## Geokodowanie i mapa
 
 - Wyszukiwarka i reverse: **Nominatim** (OpenStreetMap), `countrycodes=pl`, language `pl`. Szanujemy usage policy (User-Agent, brak hammerowania).

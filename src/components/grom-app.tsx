@@ -26,6 +26,7 @@ import { localImgwLane, stormWarningDegrees } from "@/lib/weather/imgw-lane";
 import { framesFromScan } from "@/lib/weather/pack";
 import { historyIsDegraded } from "@/lib/weather/radar-history";
 import { getSnapshot, searchPlaces, PL_RADAR_ORIGIN } from "@/lib/weather/server";
+import { lightningCaption } from "@/lib/weather/perun";
 import { canTrustRadar, IMGW_WARNINGS_UNAVAILABLE } from "@/lib/weather/snapshot";
 import { computeThreat } from "@/lib/weather/threat";
 import {
@@ -167,7 +168,14 @@ export function GromApp() {
       ...w,
       matchesPlace: place.terc ? w.teryt.includes(place.terc) : w.matchesPlace,
     }));
-    return computeThreat(place, radarHistory, warnings, radiusKm, PL_RADAR_ORIGIN);
+    return computeThreat(
+      place,
+      radarHistory,
+      warnings,
+      radiusKm,
+      PL_RADAR_ORIGIN,
+      snapshot.lightning,
+    );
   }, [snapshot, radarHistory, radiusKm, place]);
 
   const radarDegraded = historyIsDegraded(radarHistory);
@@ -319,6 +327,7 @@ export function GromApp() {
         tracks={tracks}
         imgwOn={imgwMap}
         imgwDegrees={imgwDegrees}
+        strikes={snapshot?.lightning ?? []}
         focus={focus}
         onPick={(lat, lon) => {
           if (Date.now() < ignoreMapClickUntil.current) return;
@@ -473,6 +482,10 @@ export function GromApp() {
             onClearGeoError={() => setGeoError(null)}
             onShowRainMotion={showRainMotion}
             radarTime={radarTime}
+            lightningNote={lightningCaption(
+              snapshot?.lightning.length ?? 0,
+              snapshot?.lightningUnavailable ?? true,
+            )}
           />
 
           <aside className="pointer-events-auto hidden max-h-72 overflow-y-auto rounded-3xl bg-surface/85 p-4 shadow-[0_0_0_1px_rgba(255,255,255,0.08)] backdrop-blur-md sm:block">

@@ -1,6 +1,8 @@
+import { PERUN_NO_STRIKES, emptyLightningScan, type LightningScan } from "./perun.ts";
 import type { OfficialWarning, Place, RadarScan, Snapshot } from "./types.ts";
 
 export const IMGW_WARNINGS_UNAVAILABLE = "Ostrzeżenia IMGW chwilowo niedostępne";
+export { PERUN_NO_STRIKES };
 
 export function warningMatches(w: OfficialWarning, place: Place): boolean {
   if (place.terc && w.teryt.includes(place.terc)) return true;
@@ -44,6 +46,7 @@ export function canTrustRadar(snapshot: Pick<Snapshot, "radarUnavailable">): boo
 export type SnapshotSources = {
   sampleRadar: () => Promise<RadarScan>;
   getImgwWarnings: () => Promise<OfficialWarning[]>;
+  getPerunStrikes?: () => Promise<LightningScan>;
 };
 
 /**
@@ -55,7 +58,14 @@ export async function loadSnapshot(
   sources: SnapshotSources,
   now = Date.now(),
 ): Promise<Snapshot> {
-  const [radarResult, warningsResult, place] = await Promise.all([
+  const lightningP = sources.getPerunStrikes
+    ? sources.getPerunStrikes().then(
+        (value) => ({ ok: true as const, value }),
+        () => ({ ok: false as const }),
+      )
+    : Promise.resolve({ ok: false as const });
+
+  const [radarResult, warningsResult, lightningResult, place] = await Promise.all([
     sources.sampleRadar().then(
       (value) => ({ ok: true as const, value }),
       () => ({ ok: false as const }),
@@ -64,6 +74,7 @@ export async function loadSnapshot(
       (value) => ({ ok: true as const, value }),
       () => ({ ok: false as const }),
     ),
+    lightningP,
     Promise.resolve(placeOr),
   ]);
 
@@ -71,6 +82,7 @@ export async function loadSnapshot(
   const rawWarnings = warningsResult.ok ? warningsResult.value : [];
   const warningsUnavailable = !warningsResult.ok;
   const radarUnavailable = !radarResult.ok;
+  const lightningScan = lightningResult.ok ? lightningResult.value : emptyLightningScan(now, true);
 
   return {
     fetchedAt: now,
@@ -80,5 +92,7 @@ export async function loadSnapshot(
     stormWarningCount: rawWarnings.filter((w) => w.stormRelated).length,
     warningsUnavailable,
     radarUnavailable,
+    lightning: lightningScan.unavailable ? [] : lightningScan.strikes,
+    lightningUnavailable: lightningScan.unavailable || !lightningResult.ok,
   };
 }

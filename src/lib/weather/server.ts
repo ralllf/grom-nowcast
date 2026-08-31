@@ -12,6 +12,7 @@ import {
   NOMINATIM_UA,
   RequestThrottle,
 } from "./nominatim";
+import { fetchPerunPolska, type FetchText, type LightningScan } from "./perun";
 import { loadSnapshot } from "./snapshot";
 import { applyTerytFallback } from "./teryt";
 import type {
@@ -28,6 +29,7 @@ const UA = NOMINATIM_UA;
 
 const mapsCache: { at: number; data: RainViewerMaps | null } = { at: 0, data: null };
 const warningCache: { at: number; data: OfficialWarning[] | null } = { at: 0, data: null };
+const lightningCache: { at: number; data: LightningScan | null } = { at: 0, data: null };
 const placeCache = new LruCache<Place>(NOMINATIM_CACHE_MAX);
 const nominatimGate = new RequestThrottle(NOMINATIM_MIN_GAP_MS);
 
@@ -121,6 +123,40 @@ async function getImgwWarnings(): Promise<OfficialWarning[]> {
   }));
   warningCache.data = data;
   warningCache.at = now;
+  return data;
+}
+
+const fetchPerunText: FetchText = async (url, init) => {
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), 10_000);
+  try {
+    const res = await fetch(url, {
+      ...init,
+      redirect: "follow",
+      signal: ctrl.signal,
+      headers: {
+        "User-Agent": UA,
+        Accept: "text/plain, text/csv, text/html, */*",
+        ...(init?.headers ?? {}),
+      },
+    });
+    return {
+      url,
+      status: res.status,
+      contentType: res.headers.get("content-type") ?? "",
+      body: await res.text(),
+    };
+  } finally {
+    clearTimeout(t);
+  }
+};
+
+async function getPerunStrikes(): Promise<LightningScan> {
+  const now = Date.now();
+  if (lightningCache.data && now - lightningCache.at < 60_000) return lightningCache.data;
+  const data = await fetchPerunPolska(now, fetchPerunText);
+  lightningCache.data = data;
+  lightningCache.at = now;
   return data;
 }
 
@@ -481,7 +517,7 @@ export const getSnapshot = createServerFn({ method: "POST" })
           )
     ).then(applyTerytFallback);
 
-    return loadSnapshot(placeP, { sampleRadar, getImgwWarnings });
+    return loadSnapshot(placeP, { sampleRadar, getImgwWarnings, getPerunStrikes });
   });
 
 const searchInput = z.object({ query: z.string().min(2).max(80) });
