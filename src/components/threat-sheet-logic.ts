@@ -1,8 +1,12 @@
 import type { Threat, ThreatLevel } from "@/lib/weather/types";
+import { wallClockMin } from "../lib/weather/wall-clock.ts";
 
-export function etaLabel(threat: Threat | null): string {
+export function etaLabel(threat: Threat | null, ageMin = 0): string {
   if (threat?.etaMin === 0) return "teraz";
-  if (threat?.etaMin != null) return `${threat.etaMin} min`;
+  if (threat?.etaMin != null) {
+    const wall = wallClockMin(threat.etaMin, ageMin);
+    return wall === 0 ? "teraz" : `${wall} min`;
+  }
   if (
     threat &&
     !threat.willHit &&

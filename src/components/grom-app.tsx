@@ -447,6 +447,7 @@ export function GromApp() {
             geoError={geoError}
             onClearGeoError={() => setGeoError(null)}
             onShowRainMotion={showRainMotion}
+            radarTime={radarTime}
           />
 
           <aside className="pointer-events-auto hidden max-h-72 overflow-y-auto rounded-3xl bg-surface/85 p-4 shadow-[0_0_0_1px_rgba(255,255,255,0.08)] backdrop-blur-md sm:block">

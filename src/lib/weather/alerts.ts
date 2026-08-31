@@ -1,4 +1,5 @@
 import type { RadarLevel, Threat } from "./types.ts";
+import { radarAgeCaption, radarAgeMin, wallClockMin } from "./wall-clock.ts";
 
 /**
  * In-tab alert engine.
@@ -115,17 +116,9 @@ export function isQuietHour(
   return h >= quietFrom || h < quietTo;
 }
 
-function clockPl(unixSec: number | null): string {
-  if (!unixSec) return "";
-  return new Date(unixSec * 1000).toLocaleTimeString("pl-PL", {
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
-
-function radarSuffix(radarTime: number | null): string {
-  const c = clockPl(radarTime);
-  return c ? ` Radar ${c}.` : "";
+function radarSuffix(radarTime: number | null, nowMs: number): string {
+  const cap = radarAgeCaption(radarTime, nowMs);
+  return cap ? ` ${cap}.` : "";
 }
 
 /**
@@ -178,12 +171,16 @@ export function evaluateAlert(
     threat.pinLevel >= minLevel;
   // ETA to the *threshold* intensity, not to the first drop: when it is already
   // drizzling (etaMin = 0) and a downpour is 20 min out, the downpour is the alert.
-  const eta = etaToLevel(threat, minLevel);
+  // `frameEta` stays in radar-scan minutes (hindcast / timeline). `eta` is wall-clock.
+  const frameEta = etaToLevel(threat, minLevel);
+  const ageMin = radarAgeMin(opts.radarTime, now);
+  const eta = frameEta === null ? null : wallClockMin(frameEta, ageMin);
   const incoming =
     !overPin &&
     !threat.receding &&
+    frameEta !== null &&
+    frameEta > 0 &&
     eta !== null &&
-    eta > 0 &&
     eta <= settings.leadMin &&
     threat.chancePct >= settings.minChancePct;
   const qualifies = overPin || incoming;
@@ -201,9 +198,9 @@ export function evaluateAlert(
   }
 
   const arriving =
-    eta !== null && threat.timelineAdvected
+    frameEta !== null && threat.timelineAdvected
       ? threat.timeline.reduce<RadarLevel>(
-          (m, p) => (p.t >= eta && p.t <= eta + 30 && p.level > m ? p.level : m),
+          (m, p) => (p.t >= frameEta && p.t <= frameEta + 30 && p.level > m ? p.level : m),
           0,
         )
       : 0;
@@ -238,7 +235,7 @@ export function evaluateAlert(
           id: `${episode}:now`,
           kind: "now",
           title: `${levelNounPl(level)} nad ${opts.placeLabel}`,
-          body: `Opad jest nad pinezką teraz.${expect}${radarSuffix(opts.radarTime)}`,
+          body: `Opad jest nad pinezką teraz.${expect}${radarSuffix(opts.radarTime, now)}`,
         },
       };
     }
@@ -255,8 +252,11 @@ export function evaluateAlert(
           ...base,
           id: `${episode}:incoming`,
           kind: "incoming",
-          title: `${levelNounPl(level)} za ok. ${eta} min`,
-          body: `${from}${speed} na ${opts.placeLabel}. Szansa ~${threat.chancePct}%.${expect}${radarSuffix(opts.radarTime)}`,
+          title:
+            eta === 0
+              ? `${levelNounPl(level)} teraz`
+              : `${levelNounPl(level)} za ok. ${eta} min`,
+          body: `${from}${speed} na ${opts.placeLabel}. Szansa ~${threat.chancePct}%.${expect}${radarSuffix(opts.radarTime, now)}`,
         },
       };
     }
@@ -302,8 +302,8 @@ export function evaluateAlert(
       kind: "allclear",
       title: `Przeszło · ${opts.placeLabel}`,
       body: hit
-        ? `Opad odszedł${toward}. Radar czysty w promieniu ${CLEAR_KM} km.${radarSuffix(opts.radarTime)}`
-        : `Komórka minęła ${opts.placeLabel} bokiem. Radar czysty w promieniu ${CLEAR_KM} km.${radarSuffix(opts.radarTime)}`,
+        ? `Opad odszedł${toward}. Radar czysty w promieniu ${CLEAR_KM} km.${radarSuffix(opts.radarTime, now)}`
+        : `Komórka minęła ${opts.placeLabel} bokiem. Radar czysty w promieniu ${CLEAR_KM} km.${radarSuffix(opts.radarTime, now)}`,
     },
   };
 }

@@ -4,6 +4,13 @@ import { etaLabel, shouldAutoExpandSheet } from "@/components/threat-sheet-logic
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { LEVEL_SWATCH, levelLabelPl } from "@/lib/weather/palette";
+import {
+  radarAgeCaption,
+  radarAgeMin,
+  rewriteArrivalMinutes,
+  wallClockAxisLabel,
+  wallClockMin,
+} from "@/lib/weather/wall-clock";
 import type {
   CellTrack,
   OfficialWarning,
@@ -42,6 +49,8 @@ type Props = {
   geoError: string | null;
   onClearGeoError: () => void;
   onShowRainMotion: () => void;
+  /** Latest radar scan, unix seconds. `null` = no radar. */
+  radarTime: number | null;
 };
 
 export function ThreatSheet({
@@ -54,13 +63,18 @@ export function ThreatSheet({
   geoError,
   onClearGeoError,
   onShowRainMotion,
+  radarTime,
 }: Props) {
   const [open, setOpen] = useState(false);
   const autoKey = useRef<string | null>(null);
   const startY = useRef<number | null>(null);
   const dragged = useRef(false);
 
-  const eta = etaLabel(threat);
+  const nowMs = Date.now();
+  const ageMin = radarAgeMin(radarTime, nowMs);
+  const eta = etaLabel(threat, ageMin);
+  const radarCaption = radarAgeCaption(radarTime, nowMs);
+  const detail = threat ? rewriteArrivalMinutes(threat.detail, threat.etaMin, ageMin) : null;
   const echo = threat?.nearestKm != null ? `${threat.nearestKm.toFixed(0)} km` : "brak";
   const echoFull =
     threat?.nearestKm != null
@@ -192,7 +206,7 @@ export function ThreatSheet({
         <p className="mt-3 max-w-prose text-sm leading-relaxed text-muted text-pretty">
           {error
             ? "Nie udało się pobrać radaru albo ostrzeżeń. Spróbuj za chwilę."
-            : threat?.detail}
+            : (detail ?? threat?.detail)}
         </p>
 
         <dl className="mt-4 grid grid-cols-3 gap-2 text-center">
@@ -201,8 +215,12 @@ export function ThreatSheet({
           <Stat label="Echo" value={echoFull} />
         </dl>
 
+        {radarCaption ? (
+          <p className="mt-2 text-center font-mono text-[11px] text-faint">{radarCaption}</p>
+        ) : null}
+
         {threat && threat.timeline.length > 0 ? (
-          <Timeline points={threat.timeline} advected={threat.timelineAdvected} />
+          <Timeline points={threat.timeline} advected={threat.timelineAdvected} ageMin={ageMin} />
         ) : null}
 
         {tracks.length > 0 && (threat?.nearestKm == null || threat.nearestKm > 25) ? (
@@ -263,7 +281,15 @@ const LEGEND: Array<{ level: RadarLevel; range: string }> = [
 ];
 
 /** MeteoSwiss-style strip: rain at the pin for the next 90 min, one bar per 5 min. */
-function Timeline({ points, advected }: { points: TimelinePoint[]; advected: boolean }) {
+function Timeline({
+  points,
+  advected,
+  ageMin,
+}: {
+  points: TimelinePoint[];
+  advected: boolean;
+  ageMin: number;
+}) {
   const any = points.some((p) => p.level > 0);
   return (
     <div className="mt-3 rounded-2xl bg-surface-2 px-3 py-2.5">
@@ -272,23 +298,27 @@ function Timeline({ points, advected }: { points: TimelinePoint[]; advected: boo
         <span className="text-faint">{advected ? "z ruchu echa" : "bez ruchu — jak teraz"}</span>
       </div>
       <div className="mt-2 flex h-9 items-end gap-px" role="img" aria-label="Oś czasu opadu">
-        {points.map((p) => (
-          <div
-            key={p.t}
-            title={`+${p.t} min: ${p.level > 0 ? `${levelLabelPl(p.level)}, ~${p.rate} mm/h` : "sucho"}`}
-            className="flex-1 rounded-sm"
-            style={{
-              height: p.level > 0 ? `${25 + p.level * 18}%` : "4px",
-              backgroundColor: p.level > 0 ? LEVEL_SWATCH[p.level] : "var(--color-border)",
-            }}
-          />
-        ))}
+        {points.map((p) => {
+          const wall = wallClockMin(p.t, ageMin);
+          const when = wall === 0 ? "teraz" : `+${wall} min`;
+          return (
+            <div
+              key={p.t}
+              title={`${when}: ${p.level > 0 ? `${levelLabelPl(p.level)}, ~${p.rate} mm/h` : "sucho"}`}
+              className="flex-1 rounded-sm"
+              style={{
+                height: p.level > 0 ? `${25 + p.level * 18}%` : "4px",
+                backgroundColor: p.level > 0 ? LEVEL_SWATCH[p.level] : "var(--color-border)",
+              }}
+            />
+          );
+        })}
       </div>
       <div className="mt-1 flex justify-between font-mono text-[10px] text-faint">
-        <span>teraz</span>
-        <span>30</span>
-        <span>60</span>
-        <span>90 min</span>
+        <span>{wallClockAxisLabel(0, ageMin)}</span>
+        <span>{wallClockAxisLabel(30, ageMin)}</span>
+        <span>{wallClockAxisLabel(60, ageMin)}</span>
+        <span>{wallClockAxisLabel(90, ageMin, true)}</span>
       </div>
       <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-faint">
         {LEGEND.map((l) => (
