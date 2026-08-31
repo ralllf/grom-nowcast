@@ -40,6 +40,8 @@ test("sheet caption prints the radar clock and its age", () => {
     minute: "2-digit",
   });
   assert.equal(radarAgeCaption(radar, now), `Radar ${clock} · sprzed 6 min`);
+  assert.equal(radarAgeCaption(radar, now, "rainviewer"), `Radar ${clock} · sprzed 6 min`);
+  assert.equal(radarAgeCaption(radar, now, "sri"), `Radar IMGW ${clock} · sprzed 6 min`);
   assert.equal(radarAgeCaption(null, now), null);
 });
 

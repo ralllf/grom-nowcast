@@ -25,8 +25,9 @@ import { formatImgwRange } from "@/lib/weather/imgw-time";
 import { localImgwLane, stormWarningDegrees } from "@/lib/weather/imgw-lane";
 import { framesFromScan } from "@/lib/weather/pack";
 import { historyIsDegraded } from "@/lib/weather/radar-history";
-import { getSnapshot, searchPlaces, PL_RADAR_ORIGIN } from "@/lib/weather/server";
 import { lightningCaption } from "@/lib/weather/perun";
+import { PL_RADAR_ORIGIN } from "@/lib/weather/radar-grid";
+import { getSnapshot, searchPlaces } from "@/lib/weather/server";
 import { canTrustRadar, IMGW_WARNINGS_UNAVAILABLE } from "@/lib/weather/snapshot";
 import { computeThreat } from "@/lib/weather/threat";
 import {
@@ -205,6 +206,7 @@ export function GromApp() {
     const result = evaluateAlert(threat, alerts, memory, now, {
       placeLabel: place.label,
       radarTime,
+      analysisSource: snapshot?.radar.analysisSource,
     });
     if (!shallowEqual(result.memory, memory)) setAlertMemory(result.memory);
     if (!result.event) return;
@@ -213,7 +215,7 @@ export function GromApp() {
       sound: alerts.sound,
       quiet: isQuietHour(alerts, new Date(now)),
     });
-  }, [threat, alerts, place.label, radarTime, setAlertMemory, recordAlert]);
+  }, [threat, alerts, place.label, radarTime, snapshot?.radar.analysisSource, setAlertMemory, recordAlert]);
 
   const searchMut = useMutation({
     mutationFn: (q: string) => searchPlaces({ data: { query: q } }),
@@ -482,6 +484,7 @@ export function GromApp() {
             onClearGeoError={() => setGeoError(null)}
             onShowRainMotion={showRainMotion}
             radarTime={radarTime}
+            analysisSource={snapshot?.radar.analysisSource}
             lightningNote={lightningCaption(
               snapshot?.lightning.length ?? 0,
               snapshot?.lightningUnavailable ?? true,

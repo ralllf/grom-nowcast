@@ -116,8 +116,12 @@ export function isQuietHour(
   return h >= quietFrom || h < quietTo;
 }
 
-function radarSuffix(radarTime: number | null, nowMs: number): string {
-  const cap = radarAgeCaption(radarTime, nowMs);
+function radarSuffix(
+  radarTime: number | null,
+  nowMs: number,
+  source: "sri" | "rainviewer" = "rainviewer",
+): string {
+  const cap = radarAgeCaption(radarTime, nowMs, source);
   return cap ? ` ${cap}.` : "";
 }
 
@@ -138,6 +142,7 @@ export type EvaluateOptions = {
   placeLabel: string;
   /** Latest radar scan time, unix seconds. `null` = no radar. */
   radarTime: number | null;
+  analysisSource?: "sri" | "rainviewer";
 };
 
 export type EvaluateResult = {
@@ -237,7 +242,7 @@ export function evaluateAlert(
           id: `${episode}:now`,
           kind: "now",
           title: `${noun} nad ${opts.placeLabel}`,
-          body: `Opad jest nad pinezką teraz.${expect}${lightningBit}${radarSuffix(opts.radarTime, now)}`,
+          body: `Opad jest nad pinezką teraz.${expect}${lightningBit}${radarSuffix(opts.radarTime, now, opts.analysisSource)}`,
         },
       };
     }
@@ -255,7 +260,7 @@ export function evaluateAlert(
           id: `${episode}:incoming`,
           kind: "incoming",
           title: eta === 0 ? `${noun} teraz` : `${noun} za ok. ${eta} min`,
-          body: `${from}${speed} na ${opts.placeLabel}. Szansa ~${threat.chancePct}%.${expect}${lightningBit}${radarSuffix(opts.radarTime, now)}`,
+          body: `${from}${speed} na ${opts.placeLabel}. Szansa ~${threat.chancePct}%.${expect}${lightningBit}${radarSuffix(opts.radarTime, now, opts.analysisSource)}`,
         },
       };
     }
@@ -301,8 +306,8 @@ export function evaluateAlert(
       kind: "allclear",
       title: `Przeszło · ${opts.placeLabel}`,
       body: hit
-        ? `Opad odszedł${toward}. Radar czysty w promieniu ${CLEAR_KM} km.${radarSuffix(opts.radarTime, now)}`
-        : `Komórka minęła ${opts.placeLabel} bokiem. Radar czysty w promieniu ${CLEAR_KM} km.${radarSuffix(opts.radarTime, now)}`,
+        ? `Opad odszedł${toward}. Radar czysty w promieniu ${CLEAR_KM} km.${radarSuffix(opts.radarTime, now, opts.analysisSource)}`
+        : `Komórka minęła ${opts.placeLabel} bokiem. Radar czysty w promieniu ${CLEAR_KM} km.${radarSuffix(opts.radarTime, now, opts.analysisSource)}`,
     },
   };
 }

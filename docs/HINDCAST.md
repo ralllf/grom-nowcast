@@ -3,8 +3,8 @@
 Nowcast, którego nikt nie sprawdził, to zgadywanie. `npm run hindcast` mierzy, jak
 GROM radzi sobie **na prawdziwym radarze**, tak jak robią to służby meteo:
 
-1. Pobiera ostatnie 2 h klatek RainViewera (13 klatek co 10 min) i dekoduje je
-   dokładnie tak, jak serwer (`palette.ts`, siatka ~3 km).
+1. Pobiera ostatnie 2 h klatek — domyślnie RainViewer (13 × 10 min); `npm run hindcast -- --sri`
+   bierze IMGW COMPO_SRI (24 × 5 min, `.sri.h5`) i dekoduje je tak jak serwer.
 2. Dla siatki ~170 pinezek nad Polską liczy `computeThreat` z klatek *t−30…t*.
 3. Porównuje oś czasu 0–60 min i decyzję `evaluateAlert()` z tym, co radar
    **naprawdę** pokazał w klatkach *t+10…t+60*.

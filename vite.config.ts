@@ -17,11 +17,12 @@ export default defineConfig(({ command, isPreview }) => ({
   },
   resolve: { tsconfigPaths: true },
   optimizeDeps: {
-    exclude: ["maplibre-gl"],
+    exclude: ["maplibre-gl", "h5wasm"],
   },
   // TanStack Start SSR otherwise resolves maplibre-gl's CJS/package entry and
   // the worker URL import never reaches Vite's ?worker&url pipeline.
-  ssr: { noExternal: ["maplibre-gl"] },
+  // h5wasm ships its own Node/wasm loader — keep it external.
+  ssr: { noExternal: ["maplibre-gl"], external: ["h5wasm"] },
   plugins: [
     tailwindcss(),
     tanstackStart(),

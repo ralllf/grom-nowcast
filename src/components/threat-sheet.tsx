@@ -53,6 +53,7 @@ type Props = {
   onShowRainMotion: () => void;
   /** Latest radar scan, unix seconds. `null` = no radar. */
   radarTime: number | null;
+  analysisSource?: "sri" | "rainviewer";
   /** PERUN line — empty-state copy when this session has no strikes. */
   lightningNote?: string;
 };
@@ -69,6 +70,7 @@ export function ThreatSheet({
   onClearGeoError,
   onShowRainMotion,
   radarTime,
+  analysisSource = "rainviewer",
   lightningNote,
 }: Props) {
   const [open, setOpen] = useState(false);
@@ -79,7 +81,7 @@ export function ThreatSheet({
   const nowMs = Date.now();
   const ageMin = radarAgeMin(radarTime, nowMs);
   const eta = etaLabel(threat, ageMin);
-  const radarCaption = radarAgeCaption(radarTime, nowMs);
+  const radarCaption = radarAgeCaption(radarTime, nowMs, analysisSource);
   const detail = threat ? rewriteArrivalMinutes(threat.detail, threat.etaMin, ageMin) : null;
   const echo = threat?.nearestKm != null ? `${threat.nearestKm.toFixed(0)} km` : "brak";
   const echoFull =
@@ -275,9 +277,10 @@ export function ThreatSheet({
 
         <p className="mt-4 text-xs leading-relaxed text-faint">
           Źródłem danych ostrzeżeń i sieci POLRAD jest Instytut Meteorologii i Gospodarki Wodnej –
-          Państwowy Instytut Badawczy. Dane radarowe zostały przetworzone (dBZ → mm/h wg
-          Marshalla–Palmera, siatka ~3 km). Radar: RainViewer. Mapa: OpenFreeMap / OSM. To nie jest
-          oficjalny alert RCB. Komórka burzowa może powstać lokalnie nawet przy czystym radarze.
+          Państwowy Instytut Badawczy. Dane radarowe zostały przetworzone (SRI mm/h IMGW, siatka
+          ~3 km; RainViewer dBZ → Marshall–Palmer gdy SRI niedostępne). Analiza: IMGW COMPO_SRI.
+          Mapa: RainViewer / OpenFreeMap / OSM. To nie jest oficjalny alert RCB. Komórka burzowa
+          może powstać lokalnie nawet przy czystym radarze.
         </p>
       </div>
     </article>
