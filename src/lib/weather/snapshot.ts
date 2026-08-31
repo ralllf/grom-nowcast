@@ -37,6 +37,10 @@ function selectWarnings(warnings: OfficialWarning[], place: Place): OfficialWarn
     : storms.slice(0, 40);
 }
 
+export function canTrustRadar(snapshot: Pick<Snapshot, "radarUnavailable">): boolean {
+  return !snapshot.radarUnavailable;
+}
+
 export type SnapshotSources = {
   sampleRadar: () => Promise<RadarScan>;
   getImgwWarnings: () => Promise<OfficialWarning[]>;
@@ -66,6 +70,7 @@ export async function loadSnapshot(
   const radar = radarResult.ok ? radarResult.value : emptyRadarScan();
   const rawWarnings = warningsResult.ok ? warningsResult.value : [];
   const warningsUnavailable = !warningsResult.ok;
+  const radarUnavailable = !radarResult.ok;
 
   return {
     fetchedAt: now,
@@ -74,5 +79,6 @@ export async function loadSnapshot(
     warnings: selectWarnings(rawWarnings, place),
     stormWarningCount: rawWarnings.filter((w) => w.stormRelated).length,
     warningsUnavailable,
+    radarUnavailable,
   };
 }

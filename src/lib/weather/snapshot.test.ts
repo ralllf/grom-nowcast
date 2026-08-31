@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { DEFAULT_ALERT_SETTINGS, EMPTY_ALERT_MEMORY, evaluateAlert } from "./alerts.ts";
-import { IMGW_WARNINGS_UNAVAILABLE, loadSnapshot } from "./snapshot.ts";
+import { canTrustRadar, emptyRadarScan, IMGW_WARNINGS_UNAVAILABLE, loadSnapshot } from "./snapshot.ts";
 import type { OfficialWarning, Place, RadarScan } from "./types.ts";
 
 const place: Place = {
@@ -90,6 +90,8 @@ test("both sources up: radar unchanged, IMGW tagged, no unavailable notice", asy
   });
 
   assert.equal(snap.warningsUnavailable, false);
+  assert.equal(snap.radarUnavailable, false);
+  assert.equal(canTrustRadar(snap), true);
   assert.equal(snap.radar, radar);
   assert.equal(snap.place, place);
   assert.equal(snap.stormWarningCount, 2);
@@ -117,6 +119,8 @@ test("IMGW 404 leaves radar fully functional and shows the notice", async () => 
   assert.deepEqual(snap.warnings, []);
   assert.equal(snap.stormWarningCount, 0);
   assert.equal(snap.warningsUnavailable, true);
+  assert.equal(snap.radarUnavailable, false);
+  assert.equal(canTrustRadar(snap), true);
   assert.equal(IMGW_WARNINGS_UNAVAILABLE, "Ostrzeżenia IMGW chwilowo niedostępne");
 });
 
@@ -142,6 +146,8 @@ test("radar 404 leaves IMGW warnings fully functional", async () => {
   });
 
   assert.equal(snap.warningsUnavailable, false);
+  assert.equal(snap.radarUnavailable, true);
+  assert.equal(canTrustRadar(snap), false);
   assert.equal(snap.radar.latestTime, null);
   assert.deepEqual(snap.radar.history, []);
   assert.deepEqual(snap.radar.past, []);
@@ -164,6 +170,8 @@ test("radar timeout leaves IMGW warnings fully functional", async () => {
   });
 
   assert.equal(snap.warningsUnavailable, false);
+  assert.equal(snap.radarUnavailable, true);
+  assert.equal(canTrustRadar(snap), false);
   assert.equal(snap.radar.latestTime, null);
   assert.equal(snap.warnings[0]?.id, "local");
   assert.equal(snap.warnings[0]?.matchesPlace, true);
@@ -211,4 +219,30 @@ test("radar-down snapshot is stale for alerts (existing honesty)", async () => {
   );
   assert.equal(result.reason, "stale");
   assert.equal(result.event, null);
+});
+
+test("maps-up but empty past is not a radar outage", async () => {
+  const empty = emptyRadarScan();
+  const snap = await loadSnapshot(place, {
+    sampleRadar: async () => empty,
+    getImgwWarnings: async () => [localStorm],
+  });
+  assert.equal(snap.radarUnavailable, false);
+  assert.equal(canTrustRadar(snap), true);
+  assert.equal(snap.radar, empty);
+});
+
+test("both sources down: IMGW notice, radar untrusted, no throw", async () => {
+  const snap = await loadSnapshot(place, {
+    sampleRadar: async () => {
+      throw timeout();
+    },
+    getImgwWarnings: async () => {
+      throw http404("https://danepubliczne.imgw.pl/api/data/warningsmeteo");
+    },
+  });
+  assert.equal(snap.warningsUnavailable, true);
+  assert.equal(snap.radarUnavailable, true);
+  assert.equal(canTrustRadar(snap), false);
+  assert.deepEqual(snap.warnings, []);
 });

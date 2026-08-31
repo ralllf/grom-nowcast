@@ -77,6 +77,8 @@ export type Snapshot = {
   stormWarningCount: number;
   /** True when the IMGW warnings API failed; radar may still be fresh. */
   warningsUnavailable: boolean;
+  /** True when RainViewer failed; do not treat the empty scan as "Czysto". */
+  radarUnavailable: boolean;
 };
 
 export type CellTrack = {
