@@ -22,6 +22,8 @@ export type RadarMemoryFrame = {
   nearestKm: number | null;
   /** Wire form: base64, 8 bytes per sample — see pack.ts. `samples` is then empty. */
   packed?: string;
+  /** True when at least one Poland-domain tile failed to fetch. */
+  degraded?: boolean;
 };
 
 export type RadarScan = {
@@ -30,9 +32,7 @@ export type RadarScan = {
   latestTime: number | null;
   past: RadarFrameMeta[];
   nowcast: RadarFrameMeta[];
-  /** @deprecated Legacy shape; empty when `history` is present. Use framesFromScan(). */
   samples: RadarSample[];
-  /** @deprecated See `samples`. */
   prevSamples: RadarSample[];
   prevTime: number | null;
   /** Oldest → newest sampled frames (up to 4) used for motion. */

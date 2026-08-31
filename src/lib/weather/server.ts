@@ -3,7 +3,16 @@ import { PNG } from "pngjs";
 import { z } from "zod";
 import { lonLatToTile, tilePixelToLonLat } from "./geo";
 import { packSamples } from "./pack";
-import { dbzFromRgba, levelFromRate, rateFromDbz } from "./palette";
+import { ANALYSIS_COLOR_OPTIONS, dbzFromRgba, levelFromRate, rateFromDbz } from "./palette";
+import {
+  LruCache,
+  NOMINATIM_CACHE_MAX,
+  NOMINATIM_CACHE_TTL_MS,
+  NOMINATIM_MIN_GAP_MS,
+  NOMINATIM_UA,
+  RequestThrottle,
+} from "./nominatim";
+import { applyTerytFallback } from "./teryt";
 import type {
   OfficialWarning,
   Place,
@@ -14,11 +23,12 @@ import type {
   Snapshot,
 } from "./types";
 
-const UA = "GROM/0.1 (storm nowcast mvp)";
+const UA = NOMINATIM_UA;
 
 const mapsCache: { at: number; data: RainViewerMaps | null } = { at: 0, data: null };
 const warningCache: { at: number; data: OfficialWarning[] | null } = { at: 0, data: null };
-const placeCache = new Map<string, { at: number; place: Place }>();
+const placeCache = new LruCache<Place>(NOMINATIM_CACHE_MAX);
+const nominatimGate = new RequestThrottle(NOMINATIM_MIN_GAP_MS);
 
 type RainViewerMaps = {
   version: string;
@@ -136,9 +146,10 @@ type NominatimReverse = {
 
 export async function reversePlace(lat: number, lon: number): Promise<Place> {
   const key = `${lat.toFixed(2)},${lon.toFixed(2)}`;
-  const hit = placeCache.get(key);
-  if (hit && Date.now() - hit.at < 60 * 60_000) return { ...hit.place, lat, lon };
+  const hit = placeCache.get(key, Date.now(), NOMINATIM_CACHE_TTL_MS);
+  if (hit) return applyTerytFallback({ ...hit, lat, lon });
 
+  await nominatimGate.wait();
   const url =
     `https://nominatim.openstreetmap.org/reverse?format=jsonv2` +
     `&lat=${lat}&lon=${lon}&zoom=10&addressdetails=1&extratags=1&accept-language=pl`;
@@ -148,8 +159,8 @@ export async function reversePlace(lat: number, lon: number): Promise<Place> {
   const state = json.address?.state;
   const terc = normalizeTerc(json.extratags?.["teryt:terc"]);
   const label = city || county || json.display_name?.split(",")[0] || "Wybrany punkt";
-  const place: Place = { lat, lon, label, city, county, state, terc };
-  placeCache.set(key, { at: Date.now(), place });
+  const place = applyTerytFallback({ lat, lon, label, city, county, state, terc });
+  placeCache.set(key, place);
   return place;
 }
 
@@ -165,6 +176,7 @@ type NominatimSearch = {
 export async function searchNominatim(query: string): Promise<Place[]> {
   const q = query.trim();
   if (q.length < 2) return [];
+  await nominatimGate.wait();
   const url =
     `https://nominatim.openstreetmap.org/search?format=jsonv2&q=${encodeURIComponent(q)}` +
     `&countrycodes=pl&addressdetails=1&extratags=1&limit=6&accept-language=pl`;
@@ -176,7 +188,7 @@ export async function searchNominatim(query: string): Promise<Place[]> {
     const county = item.address?.county;
     const state = item.address?.state;
     const terc = normalizeTerc(item.extratags?.["teryt:terc"]);
-    return {
+    return applyTerytFallback({
       lat,
       lon,
       label: city || item.display_name.split(",")[0] || q,
@@ -184,7 +196,7 @@ export async function searchNominatim(query: string): Promise<Place[]> {
       county,
       state,
       terc,
-    };
+    });
   });
 }
 
@@ -311,7 +323,7 @@ async function decodeFrame(host: string, frame: RadarFrameMeta): Promise<Sampled
   await Promise.all(
     tiles.map(async (tile) => {
       // color scheme 2 (Universal Blue), smooth=0, snow=0 → exact palette colours.
-      const url = `${host}${frame.path}/256/${z}/${tile.x}/${tile.y}/2/0_0.png`;
+      const url = `${host}${frame.path}/256/${z}/${tile.x}/${tile.y}/${ANALYSIS_COLOR_OPTIONS}.png`;
       try {
         const buf = await fetchBuf(url);
         const png = PNG.sync.read(buf);
@@ -413,16 +425,16 @@ async function sampleRadar(): Promise<RadarScan> {
     latestTime: latest.time,
     past,
     nowcast,
-    // Frames travel once, packed, inside `history`; the legacy top-level copies stay empty.
     samples: [],
     prevSamples: [],
     prevTime: before?.time ?? null,
-    history: sampled.map(({ time, samples, maxLevel, nearestKm }) => ({
+    history: sampled.map(({ time, samples, maxLevel, nearestKm, complete }) => ({
       time,
       samples: [],
       packed: packSamples(samples),
       maxLevel,
       nearestKm,
+      degraded: !complete,
     })),
     maxLevel: now.maxLevel,
     nearestKm: now.nearestKm,
@@ -460,20 +472,23 @@ export const getSnapshot = createServerFn({ method: "POST" })
       getImgwWarnings(),
       userPlace?.terc
         ? Promise.resolve({ ...userPlace })
-        : reversePlace(userPlace?.lat ?? data.lat, userPlace?.lon ?? data.lon).catch(() => ({
-            lat: userPlace?.lat ?? data.lat,
-            lon: userPlace?.lon ?? data.lon,
-            label: userPlace?.label ?? "Wybrany punkt",
-            terc: userPlace?.terc,
-            city: userPlace?.city,
-            county: userPlace?.county,
-            state: userPlace?.state,
-          })),
+        : reversePlace(userPlace?.lat ?? data.lat, userPlace?.lon ?? data.lon).catch(() =>
+            applyTerytFallback({
+              lat: userPlace?.lat ?? data.lat,
+              lon: userPlace?.lon ?? data.lon,
+              label: userPlace?.label ?? "Wybrany punkt",
+              terc: userPlace?.terc,
+              city: userPlace?.city,
+              county: userPlace?.county,
+              state: userPlace?.state,
+            }),
+          ),
     ]);
 
+    const placed = applyTerytFallback(place);
     const tagged = warnings.map((w) => ({
       ...w,
-      matchesPlace: warningMatches(w, place),
+      matchesPlace: warningMatches(w, placed),
     }));
 
     const matched = tagged.filter((w) => w.matchesPlace);
@@ -481,7 +496,7 @@ export const getSnapshot = createServerFn({ method: "POST" })
 
     return {
       fetchedAt: Date.now(),
-      place,
+      place: placed,
       radar,
       // Enough national storms for the client to re-tag when the pin moves (radar is shared).
       warnings:

@@ -64,6 +64,10 @@ const UNIVERSAL_BLUE: ReadonlyArray<readonly [dbz: number, rgb: number]> = [
   [75, 0x00ff00],
 ];
 
+/** Tile variants: analysis unsmoothed (exact colours); map overlay smoothed, no snow palette. */
+export const ANALYSIS_COLOR_OPTIONS = "2/0_0";
+export const OVERLAY_COLOR_OPTIONS = "2/1_0";
+
 const EXACT = new Map<number, number>(UNIVERSAL_BLUE.map(([dbz, rgb]) => [rgb, dbz]));
 
 /** Max RGB distance (Euclidean) for the nearest-colour fallback; beyond this → no echo. */

@@ -10,6 +10,7 @@ import type {
   ThreatLevel,
   TimelinePoint,
 } from "./types.ts";
+import { isActiveWarning } from "./imgw-time.ts";
 import { LEVEL_MIN_RATE, levelFromRate } from "./palette.ts";
 
 /** Distance at which the cell is treated as covering the city / GPS pin. */
@@ -390,8 +391,6 @@ function pinTimeline(
       const back = (motion.bearing + 180) % 360;
       at = destPoint(pinLat, pinLon, back, motion.speedKmh * (t / 60));
     }
-    // Position uncertainty grows with lead time (~15 % of the displacement, capped):
-    // measured on live radar this lifts alert POD ~20 points for a few points of FAR.
     const grow = motion ? 0.15 * motion.speedKmh * (t / 60) : 0;
     const rate = maxRateWithin(near, at.lat, at.lon, radius + Math.min(grow, 6));
     out.push({ t, level: levelFromRate(rate), rate: Math.round(rate * 10) / 10 });
@@ -747,10 +746,7 @@ function closestApproach(
 }
 
 function isActive(warning: OfficialWarning, now = Date.now()) {
-  const from = Date.parse(warning.from.replace(" ", "T"));
-  const to = Date.parse(warning.to.replace(" ", "T"));
-  if (Number.isNaN(from) || Number.isNaN(to)) return true;
-  return now >= from - 30 * 60_000 && now <= to;
+  return isActiveWarning(warning.from, warning.to, now);
 }
 
 function roundPct(n: number) {

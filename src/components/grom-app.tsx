@@ -6,7 +6,6 @@ import {
   CloudLightning,
   CloudRain,
   Crosshair,
-  MapPin,
   Radar,
   Search,
   Settings2,
@@ -18,11 +17,14 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { RadarMap } from "@/components/radar-map";
+import { ThreatSheet } from "@/components/threat-sheet";
 import { cn } from "@/lib/utils";
 import { CITIES } from "@/lib/weather/cities";
 import { haversineKm } from "@/lib/weather/geo";
-import { getSnapshot, searchPlaces, PL_RADAR_ORIGIN } from "@/lib/weather/server";
+import { formatImgwWhen } from "@/lib/weather/imgw-time";
 import { framesFromScan } from "@/lib/weather/pack";
+import { historyIsDegraded } from "@/lib/weather/radar-history";
+import { getSnapshot, searchPlaces, PL_RADAR_ORIGIN } from "@/lib/weather/server";
 import { computeThreat } from "@/lib/weather/threat";
 import {
   evaluateAlert,
@@ -40,25 +42,8 @@ import {
   stopTitleFlash,
   type NotifyPermission,
 } from "@/lib/alert-delivery";
-import { LEVEL_SWATCH, levelLabelPl } from "@/lib/weather/palette";
-import type { Place, RadarLevel, ThreatLevel, TimelinePoint } from "@/lib/weather/types";
+import type { Place } from "@/lib/weather/types";
 import { useGrom } from "@/lib/store";
-
-const TONE: Record<ThreatLevel, "ok" | "warn" | "danger" | "accent" | "mute"> = {
-  clear: "ok",
-  watch: "warn",
-  nearby: "accent",
-  imminent: "danger",
-  now: "danger",
-};
-
-const PANEL: Record<ThreatLevel, string> = {
-  clear: "border-ok/30",
-  watch: "border-warn/40",
-  nearby: "border-accent/40",
-  imminent: "border-danger/50",
-  now: "border-danger",
-};
 
 function formatClock(ts: number | null) {
   if (!ts) return "—";
@@ -69,15 +54,7 @@ function formatClock(ts: number | null) {
 }
 
 function formatWhen(iso: string) {
-  const d = new Date(iso.replace(" ", "T"));
-  if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleString("pl-PL", {
-    weekday: "short",
-    hour: "2-digit",
-    minute: "2-digit",
-    day: "numeric",
-    month: "short",
-  });
+  return formatImgwWhen(iso);
 }
 
 const ALERT_TONE: Record<AlertKind, string> = {
@@ -123,7 +100,6 @@ export function GromApp() {
   const recordAlert = useGrom((s) => s.recordAlert);
   const dismissAlert = useGrom((s) => s.dismissAlert);
   const clearAlertLog = useGrom((s) => s.clearAlertLog);
-  const pushFrame = useGrom((s) => s.pushFrame);
   const [permission, setPermission] = useState<NotifyPermission>("default");
 
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -176,17 +152,6 @@ export function GromApp() {
     void refetchSnapshot();
   }, [place.lat, place.lon, place.terc, refetchSnapshot]);
 
-  // Unpack the wire frames once per snapshot; threat + RAM history both use this.
-  const radarFrames = useMemo(
-    () => (snapshot ? framesFromScan(snapshot.radar) : []),
-    [snapshot],
-  );
-
-  useEffect(() => {
-    if (!snapshot?.radar.latestTime) return;
-    for (const frame of radarFrames) pushFrame(frame);
-  }, [snapshot, radarFrames, pushFrame]);
-
   useEffect(() => {
     if (!snapshot?.place.terc || place.terc) return;
     if (haversineKm(snapshot.place.lat, snapshot.place.lon, place.lat, place.lon) < 3) {
@@ -194,15 +159,18 @@ export function GromApp() {
     }
   }, [snapshot, place, updatePlaceMeta]);
 
+  const radarHistory = useMemo(() => (snapshot ? framesFromScan(snapshot.radar) : []), [snapshot]);
+
   const threat = useMemo(() => {
     if (!snapshot) return null;
-    const hist = radarFrames;
     const warnings = snapshot.warnings.map((w) => ({
       ...w,
       matchesPlace: place.terc ? w.teryt.includes(place.terc) : w.matchesPlace,
     }));
-    return computeThreat(place, hist, warnings, radiusKm, PL_RADAR_ORIGIN);
-  }, [snapshot, radarFrames, radiusKm, place]);
+    return computeThreat(place, radarHistory, warnings, radiusKm, PL_RADAR_ORIGIN);
+  }, [snapshot, radarHistory, radiusKm, place]);
+
+  const radarDegraded = historyIsDegraded(radarHistory);
 
   // Coming back to the tab: fresh radar right away, stop nagging in the title.
   useEffect(() => {
@@ -245,9 +213,7 @@ export function GromApp() {
 
   const past = snapshot?.radar.past ?? [];
   const activePath =
-    frameIndex !== null && past[frameIndex]
-      ? past[frameIndex].path
-      : (past.at(-1)?.path ?? null);
+    frameIndex !== null && past[frameIndex] ? past[frameIndex].path : (past.at(-1)?.path ?? null);
 
   function locate() {
     if (isEmbeddedPreview() || !navigator.geolocation) {
@@ -334,24 +300,11 @@ export function GromApp() {
   const localWarnings = warnings.filter((w) => w.matchesPlace);
   const shownWarnings = localWarnings.length > 0 ? localWarnings : warnings;
   const tracks = threat?.tracks ?? [];
-  const etaValue =
-    threat?.etaMin === 0
-      ? "teraz"
-      : threat?.etaMin != null
-        ? `${threat.etaMin} min`
-        : threat &&
-            !threat.willHit &&
-            threat.missKm != null &&
-            threat.missKm > 8 &&
-            threat.nearestKm != null &&
-            threat.nearestKm > 20 &&
-            threat.nearestKm <= 80
-          ? "minie"
-          : "—";
 
   return (
-    <div className="relative isolate h-dvh overflow-hidden bg-bg text-fg">
+    <div className="relative h-dvh overflow-hidden bg-bg text-fg">
       <RadarMap
+        className="absolute inset-0"
         lat={place.lat}
         lon={place.lon}
         radiusKm={radiusKm}
@@ -367,7 +320,7 @@ export function GromApp() {
         }}
       />
 
-      <div className="pointer-events-none absolute inset-0 bg-linear-to-b from-transparent via-transparent to-bg/45" />
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-2/5 bg-linear-to-t from-bg/50 to-transparent" />
 
       <header className="pointer-events-none absolute inset-x-0 top-0 z-10 p-3 pt-[max(0.75rem,env(safe-area-inset-top))] sm:p-5">
         <div className="mx-auto flex max-w-6xl items-start justify-between gap-3">
@@ -417,6 +370,11 @@ export function GromApp() {
             <span className="w-12 text-right font-mono text-xs tabular-nums text-muted">
               {formatClock(past[frameIndex ?? past.length - 1]?.time ?? null)}
             </span>
+            {radarDegraded ? (
+              <span className="text-[10px] text-faint" title="Brakowało kafelka radaru">
+                niepełne
+              </span>
+            ) : null}
           </div>
         </div>
       ) : null}
@@ -477,128 +435,19 @@ export function GromApp() {
         </div>
       ) : null}
 
-      <section className="pointer-events-none absolute inset-x-0 bottom-0 z-10 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:p-5">
+      <section className="pointer-events-none absolute inset-x-0 bottom-0 z-10 sm:p-5">
         <div className="mx-auto grid max-w-6xl gap-3 lg:grid-cols-[minmax(0,26rem)_1fr] lg:items-end">
-          <article
-            className={cn(
-              "pointer-events-auto rounded-3xl bg-surface/90 p-4 shadow-[0_0_0_1px_rgba(255,255,255,0.08)] backdrop-blur-md sm:p-5",
-              threat ? PANEL[threat.level] : "border-transparent",
-              "border",
-            )}
-          >
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <MapPin className="size-4 text-accent" />
-                  <p className="text-sm font-medium">{place.label}</p>
-                  {place.terc ? (
-                    <span className="font-mono text-xs text-faint">TERYT {place.terc}</span>
-                  ) : null}
-                </div>
-                <h2 className="mt-2 font-display text-3xl font-semibold leading-none tracking-tight text-balance">
-                  {snapshotQuery.isPending && !threat ? "Skanuję radar…" : threat?.title ?? "Brak danych"}
-                </h2>
-              </div>
-              {threat ? <Badge tone={TONE[threat.level]}>{threat.level}</Badge> : null}
-            </div>
-
-            {threat?.comingFrom || threat?.expect ? (
-              <div className="mt-3 space-y-1.5 rounded-2xl bg-surface-2 px-3 py-3 text-sm leading-relaxed">
-                {threat.comingFrom ? (
-                  <p>
-                    <span className="text-faint">Idzie od </span>
-                    <span className="font-medium">{threat.comingFrom}</span>
-                    {threat.toward ? (
-                      <span className="text-muted"> → na {threat.toward}</span>
-                    ) : null}
-                    {threat.speedKmh ? (
-                      <span className="font-mono text-xs text-muted">
-                        {" "}
-                        · {Math.round(threat.speedKmh)} km/h
-                      </span>
-                    ) : null}
-                  </p>
-                ) : null}
-                {threat.expect ? (
-                  <p>
-                    <span className="text-faint">Spodziewaj się: </span>
-                    <span className="font-medium">{threat.expect}</span>
-                  </p>
-                ) : null}
-              </div>
-            ) : null}
-
-            <p className="mt-3 max-w-prose text-sm leading-relaxed text-muted text-pretty">
-              {snapshotQuery.isError
-                ? "Nie udało się pobrać radaru albo ostrzeżeń. Spróbuj za chwilę."
-                : threat?.detail}
-            </p>
-
-            <dl className="mt-4 grid grid-cols-3 gap-2 text-center">
-              <Stat label="Szansa" value={threat ? `${threat.chancePct}%` : "—"} />
-              <Stat label="ETA" value={etaValue} />
-              <Stat
-                label="Echo"
-                value={
-                  threat?.nearestKm != null
-                    ? `${threat.nearestKm.toFixed(0)} km${threat.pinLevel > 0 ? ` · ${levelLabelPl(threat.pinLevel)}` : ""}`
-                    : "brak"
-                }
-              />
-            </dl>
-
-            {threat && threat.timeline.length > 0 ? (
-              <Timeline points={threat.timeline} advected={threat.timelineAdvected} />
-            ) : null}
-
-            {tracks.length > 0 && (threat?.nearestKm == null || threat.nearestKm > 25) ? (
-              <button
-                type="button"
-                onClick={showRainMotion}
-                className="mt-3 w-full rounded-xl bg-surface-2 px-3 py-2 text-xs font-medium text-accent hover:text-fg"
-              >
-                Pokaż ruch opadu na mapie
-                {threat?.nearestKm != null ? ` · ${threat.nearestKm.toFixed(0)} km` : ""}
-              </button>
-            ) : null}
-
-            <p className="mt-3 text-xs leading-relaxed text-faint">
-              Szansa i ETA są dla pinezki ({place.label}) — miasta albo punktu GPS —
-              nie dla całego promienia. Na mapie jedna albo dwie strzałki — te,
-              które dotyczą pinezki, nie cały front. Promień w ustawieniach mówi
-              tylko, jak daleko wołamy alert.
-            </p>
-
-            {shownWarnings[0] ? (
-              <p className="mt-3 text-xs text-muted lg:hidden">
-                IMGW: {shownWarnings[0].event}
-                {shownWarnings[0].degree ? ` · stopień ${shownWarnings[0].degree}` : ""}
-                {!shownWarnings[0].matchesPlace ? " · inny powiat" : ""}
-              </p>
-            ) : null}
-
-            {geoError ? (
-              <p className="mt-3 flex items-start justify-between gap-2 text-xs text-warn">
-                <span>{geoError}</span>
-                <button
-                  type="button"
-                  className="shrink-0 text-faint hover:text-fg"
-                  onClick={() => setGeoError(null)}
-                  aria-label="Zamknij komunikat"
-                >
-                  <X className="size-3.5" />
-                </button>
-              </p>
-            ) : null}
-
-            <p className="mt-4 text-xs leading-relaxed text-faint">
-              Źródłem danych ostrzeżeń i sieci POLRAD jest Instytut Meteorologii i
-              Gospodarki Wodnej – Państwowy Instytut Badawczy. Dane radarowe zostały
-              przetworzone (dBZ → mm/h wg Marshalla–Palmera, siatka ~3 km). Radar:
-              RainViewer. Mapa: OpenFreeMap / OSM. To nie jest oficjalny alert RCB.
-              Komórka burzowa może powstać lokalnie nawet przy czystym radarze.
-            </p>
-          </article>
+          <ThreatSheet
+            place={place}
+            threat={threat}
+            pending={snapshotQuery.isPending}
+            error={snapshotQuery.isError}
+            tracks={tracks}
+            shownWarnings={shownWarnings}
+            geoError={geoError}
+            onClearGeoError={() => setGeoError(null)}
+            onShowRainMotion={showRainMotion}
+          />
 
           <aside className="pointer-events-auto hidden max-h-72 overflow-y-auto rounded-3xl bg-surface/85 p-4 shadow-[0_0_0_1px_rgba(255,255,255,0.08)] backdrop-blur-md sm:block">
             <div className="mb-3 flex items-center justify-between gap-2">
@@ -617,9 +466,7 @@ export function GromApp() {
                   <li key={w.id} className="rounded-xl bg-surface-2 p-3">
                     <div className="flex items-center justify-between gap-2">
                       <p className="text-sm font-medium">{w.event}</p>
-                      <Badge tone={w.degree >= 2 ? "danger" : "warn"}>
-                        stopień {w.degree}
-                      </Badge>
+                      <Badge tone={w.degree >= 2 ? "danger" : "warn"}>stopień {w.degree}</Badge>
                     </div>
                     <p className="mt-1 text-xs text-muted">
                       {formatWhen(w.from)} — {formatWhen(w.to)}
@@ -647,7 +494,12 @@ export function GromApp() {
               <h2 id="settings-title" className="font-display text-xl font-semibold">
                 Lokalizacja i alerty
               </h2>
-              <Button variant="ghost" size="iconSm" onClick={() => setSettingsOpen(false)} aria-label="Zamknij">
+              <Button
+                variant="ghost"
+                size="iconSm"
+                onClick={() => setSettingsOpen(false)}
+                aria-label="Zamknij"
+              >
                 <X className="size-4" />
               </Button>
             </div>
@@ -724,8 +576,8 @@ export function GromApp() {
               />
             </label>
             <p className="mt-2 text-xs leading-relaxed text-muted">
-              Promień to zasięg alertu. Szansa, ETA i strzałka są liczone dla
-              pinezki — teraz miasta, później dokładnego GPS.
+              Promień to zasięg alertu. Szansa, ETA i strzałka są liczone dla pinezki — teraz
+              miasta, później dokładnego GPS.
             </p>
 
             <div className="mt-5 rounded-xl bg-surface-2 px-3 py-3">
@@ -733,8 +585,8 @@ export function GromApp() {
                 <div>
                   <p className="text-sm font-medium">Alerty na pinezkę</p>
                   <p className="text-xs text-muted">
-                    Wołamy, gdy tor opadu trafia w {place.label}. Działa, gdy karta
-                    GROM jest otwarta (może być w tle).
+                    Wołamy, gdy tor opadu trafia w {place.label}. Działa, gdy karta GROM jest
+                    otwarta (może być w tle).
                   </p>
                 </div>
                 <Button
@@ -819,7 +671,11 @@ export function GromApp() {
                         setAlerts({ sound: !alerts.sound });
                       }}
                     >
-                      {alerts.sound ? <Volume2 className="size-4" /> : <VolumeX className="size-4" />}
+                      {alerts.sound ? (
+                        <Volume2 className="size-4" />
+                      ) : (
+                        <VolumeX className="size-4" />
+                      )}
                       {alerts.sound ? "Dźwięk" : "Bez dźwięku"}
                     </Button>
                     <label className="flex h-9 items-center gap-2 rounded-full bg-surface px-3 text-xs font-medium">
@@ -906,73 +762,22 @@ export function GromApp() {
                   </div>
 
                   <p className="text-xs leading-relaxed text-faint">
-                    Jeden alert na etap burzy: „nadciąga”, „nad Tobą”, „przeszło”. Bez
-                    powtórek co godzinę. Radar starszy niż 30 min nie woła. Push w tle,
-                    gdy karta jest zamknięta — w kolejnej wersji.
+                    Jeden alert na etap burzy: „nadciąga”, „nad Tobą”, „przeszło”. Bez powtórek co
+                    godzinę. Radar starszy niż 30 min nie woła. Push w tle, gdy karta jest zamknięta
+                    — w kolejnej wersji.
                   </p>
                 </div>
               ) : null}
             </div>
 
             <p className="mt-4 text-xs leading-relaxed text-faint">
-              Klatki radaru trzymamy chwilowo w pamięci urządzenia (ostatnie kilka
-              skanów), żeby policzyć ruch komórki. Nie zapisujemy ich w repozytorium
-              ani w bazie. Ustawienia zostają w przeglądarce.
+              Klatki radaru trzymamy chwilowo w pamięci urządzenia (ostatnie kilka skanów), żeby
+              policzyć ruch komórki. Nie zapisujemy ich w repozytorium ani w bazie. Ustawienia
+              zostają w przeglądarce.
             </p>
           </div>
         </div>
       ) : null}
-    </div>
-  );
-}
-
-const LEGEND: Array<{ level: RadarLevel; range: string }> = [
-  { level: 1, range: "<1" },
-  { level: 2, range: "1–4" },
-  { level: 3, range: "4–10" },
-  { level: 4, range: ">10" },
-];
-
-/** MeteoSwiss-style strip: rain at the pin for the next 90 min, one bar per 5 min. */
-function Timeline({ points, advected }: { points: TimelinePoint[]; advected: boolean }) {
-  const any = points.some((p) => p.level > 0);
-  return (
-    <div className="mt-3 rounded-2xl bg-surface-2 px-3 py-2.5">
-      <div className="flex items-center justify-between gap-2 text-xs">
-        <span className="text-faint">Opad nad pinezką · 90 min · mm/h</span>
-        <span className="text-faint">{advected ? "z ruchu echa" : "bez ruchu — jak teraz"}</span>
-      </div>
-      <div className="mt-2 flex h-9 items-end gap-px" role="img" aria-label="Oś czasu opadu">
-        {points.map((p) => (
-          <div
-            key={p.t}
-            title={`+${p.t} min: ${p.level > 0 ? `${levelLabelPl(p.level)}, ~${p.rate} mm/h` : "sucho"}`}
-            className="flex-1 rounded-sm"
-            style={{
-              height: p.level > 0 ? `${25 + p.level * 18}%` : "4px",
-              backgroundColor: p.level > 0 ? LEVEL_SWATCH[p.level] : "var(--color-border)",
-            }}
-          />
-        ))}
-      </div>
-      <div className="mt-1 flex justify-between font-mono text-[10px] text-faint">
-        <span>teraz</span>
-        <span>30</span>
-        <span>60</span>
-        <span>90 min</span>
-      </div>
-      <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-faint">
-        {LEGEND.map((l) => (
-          <span key={l.level} className="inline-flex items-center gap-1">
-            <span
-              className="inline-block size-2 rounded-sm"
-              style={{ backgroundColor: LEVEL_SWATCH[l.level] }}
-            />
-            {levelLabelPl(l.level)} {l.range}
-          </span>
-        ))}
-        {!any ? <span className="ml-auto">nic w oknie 90 min</span> : null}
-      </div>
     </div>
   );
 }
@@ -990,14 +795,5 @@ function HourSelect({ value, onChange }: { value: number; onChange: (h: number) 
         </option>
       ))}
     </select>
-  );
-}
-
-function Stat({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-xl bg-surface-2 px-2 py-3">
-      <dt className="text-xs uppercase tracking-wider text-faint">{label}</dt>
-      <dd className="mt-1 font-mono text-sm tabular-nums">{value}</dd>
-    </div>
   );
 }

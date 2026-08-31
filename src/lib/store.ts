@@ -8,7 +8,7 @@ import {
   type AlertSettings,
 } from "./weather/alerts";
 import { DEFAULT_PLACE } from "./weather/cities";
-import type { Place, RadarMemoryFrame } from "./weather/types";
+import type { Place } from "./weather/types";
 
 const STORAGE_KEY = "grom-settings-v1";
 const ALERT_LOG_KEY = "grom-alerts-v1";
@@ -127,7 +127,6 @@ function persistAlertMemory(place: Place, memory: AlertMemory) {
 }
 
 type GromState = Persisted & {
-  frames: RadarMemoryFrame[];
   /** Alert state machine memory — mirrored to localStorage so a reload mid-storm does not re-alert. */
   alertMemory: AlertMemory;
   /** Newest first. */
@@ -142,7 +141,6 @@ type GromState = Persisted & {
   recordAlert: (event: AlertEvent) => void;
   dismissAlert: () => void;
   clearAlertLog: () => void;
-  pushFrame: (frame: RadarMemoryFrame) => void;
   hydrate: () => void;
 };
 
@@ -160,7 +158,6 @@ function persist(s: Persisted) {
 
 export const useGrom = create<GromState>((set, get) => ({
   ...DEFAULTS,
-  frames: [],
   alertMemory: EMPTY_ALERT_MEMORY,
   alertLog: [],
   activeAlert: null,
@@ -170,7 +167,7 @@ export const useGrom = create<GromState>((set, get) => ({
   },
   setPlace: (place) => {
     // New pin = new story; do not carry an episode from another city.
-    set({ place, frames: [], alertMemory: EMPTY_ALERT_MEMORY, activeAlert: null });
+    set({ place, alertMemory: EMPTY_ALERT_MEMORY, activeAlert: null });
     persist(get());
     persistAlertMemory(place, EMPTY_ALERT_MEMORY);
   },
@@ -179,7 +176,7 @@ export const useGrom = create<GromState>((set, get) => ({
     persist(get());
   },
   setRadiusKm: (radiusKm) => {
-    set({ radiusKm, frames: [] });
+    set({ radiusKm });
     persist(get());
   },
   setAlerts: (patch) => {
@@ -204,10 +201,4 @@ export const useGrom = create<GromState>((set, get) => ({
     persistAlertLog([]);
     set({ alertLog: [] });
   },
-  pushFrame: (frame) =>
-    set((s) => {
-      const without = s.frames.filter((f) => f.time !== frame.time);
-      const frames = [...without, frame].sort((a, b) => a.time - b.time).slice(-6);
-      return { frames };
-    }),
 }));

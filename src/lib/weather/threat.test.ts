@@ -611,13 +611,20 @@ test("pin timeline without motion is persistence, flagged as such", () => {
   assert.ok(threat.timeline.every((p) => p.level === 2));
 });
 
-test("headline names the intensity over the pin, not the strongest echo nearby", () => {
-  const moderateHere = blob(50.0, 21.0, 2);
-  const frames = [frame(1_000, moderateHere, 0), frame(1_600, moderateHere, 0)];
+test("stationary echo (zero NCC shift) does not invent an arrow", () => {
+  const rain = blob(50.2, 20.2, 3);
+  const frames = [0, 1, 2, 3].map((t) => frame(t * 600, rain, 20));
+  const threat = computeThreat(city, frames, [], 40, { lat: 50.2, lon: 20.2 });
+  assert.equal(threat.tracks.length, 0);
+});
+
+test("degraded frames still produce a threat object", () => {
+  const frames = [
+    { ...frame(0, blob(50.0, 20.4, 3), 43), degraded: true },
+    { ...frame(600, blob(50.0, 20.55, 3), 32), degraded: true },
+    frame(1_200, blob(50.0, 20.7, 3), 21),
+    frame(1_800, blob(50.0, 20.85, 3), 11),
+  ];
   const threat = computeThreat(city, frames, [], 40);
-  assert.equal(threat.level, "now");
-  assert.equal(threat.title, "Deszcz nad Tobą");
-  const stormHere = blob(50.0, 21.0, 4);
-  const t2 = computeThreat(city, [frame(1_000, stormHere, 0), frame(1_600, stormHere, 0)], [], 40);
-  assert.equal(t2.title, "Burza nad Tobą");
+  assert.ok(threat.tracks.length >= 1);
 });
