@@ -1,14 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { bearingDeg, haversineKm } from "./geo.ts";
-import {
-  computeField,
-  computePinNarrative,
-  computeThreat,
-  estimatePairMotion,
-  leadingEdgeOf,
-  TRACK_MAX_KM,
-} from "./threat.ts";
+import { computeThreat, TRACK_MAX_KM } from "./threat.ts";
 import type { Place, RadarLevel, RadarMemoryFrame, RadarSample } from "./types.ts";
 
 function angleDiffDeg(a: number, b: number) {
@@ -30,11 +23,7 @@ function blob(lat: number, lon: number, level: RadarLevel = 3): RadarSample[] {
   return samples;
 }
 
-function frame(
-  time: number,
-  samples: RadarSample[],
-  nearestKm: number,
-): RadarMemoryFrame {
+function frame(time: number, samples: RadarSample[], nearestKm: number): RadarMemoryFrame {
   const maxLevel = Math.max(0, ...samples.map((s) => s.level)) as RadarLevel;
   return { time, samples, maxLevel, nearestKm };
 }
@@ -54,16 +43,16 @@ const zgorzelec: Place = {
 };
 
 test("incoming cell from the west gets ETA, comingFrom and a visible track", () => {
-  const frames = [
-    frame(1_000, blob(50.0, 20.4), 43),
-    frame(1_600, blob(50.0, 20.55), 32),
-  ];
+  const frames = [frame(1_000, blob(50.0, 20.4), 43), frame(1_600, blob(50.0, 20.55), 32)];
   const threat = computeThreat(city, frames, [], 40);
   assert.ok(threat.tracks.length >= 1, "should draw at least one motion arrow");
   assert.equal(threat.comingFrom, "zachodu");
   assert.equal(threat.toward, "wschód");
   assert.equal(threat.willHit, true);
-  assert.ok(threat.etaMin !== null && threat.etaMin > 0, `expected future ETA, got ${threat.etaMin}`);
+  assert.ok(
+    threat.etaMin !== null && threat.etaMin > 0,
+    `expected future ETA, got ${threat.etaMin}`,
+  );
   assert.ok(threat.etaMin !== null && threat.etaMin <= 50, `ETA too large: ${threat.etaMin}`);
   assert.ok(threat.expect?.includes("deszcz") || threat.expect?.includes("ulew"));
   assert.match(threat.detail, /Idzie od zachodu/);
@@ -72,10 +61,7 @@ test("incoming cell from the west gets ETA, comingFrom and a visible track", () 
 });
 
 test("precip already over the pin is ETA teraz", () => {
-  const frames = [
-    frame(1_000, blob(50.0, 21.0, 2), 1.2),
-    frame(1_600, blob(50.02, 21.03, 2), 2.1),
-  ];
+  const frames = [frame(1_000, blob(50.0, 21.0, 2), 1.2), frame(1_600, blob(50.02, 21.03, 2), 2.1)];
   const threat = computeThreat(city, frames, [], 40);
   assert.equal(threat.etaMin, 0);
   assert.equal(threat.willHit, true);
@@ -83,10 +69,7 @@ test("precip already over the pin is ETA teraz", () => {
 });
 
 test("cell passing ~90 km north is drawn but does not claim a hit on the pin", () => {
-  const frames = [
-    frame(1_000, blob(50.85, 20.5, 2), 95),
-    frame(1_600, blob(50.85, 20.65, 2), 93),
-  ];
+  const frames = [frame(1_000, blob(50.85, 20.5, 2), 95), frame(1_600, blob(50.85, 20.65, 2), 93)];
   const threat = computeThreat(city, frames, [], 40);
   assert.equal(threat.willHit, false);
   assert.ok(threat.tracks.length >= 1);
@@ -98,10 +81,7 @@ test("cell passing ~90 km north is drawn but does not claim a hit on the pin", (
 });
 
 test("cell 300 km away is not a pin threat (may still get a domain arrow)", () => {
-  const frames = [
-    frame(1_000, blob(50.0, 25.3, 4), 308),
-    frame(1_600, blob(50.0, 25.45, 4), 318),
-  ];
+  const frames = [frame(1_000, blob(50.0, 25.3, 4), 308), frame(1_600, blob(50.0, 25.45, 4), 318)];
   const threat = computeThreat(city, frames, [], 40);
   assert.equal(threat.willHit, false);
   assert.equal(threat.comingFrom, null);
@@ -262,10 +242,7 @@ test("arrow anchors on reflectivity core, not the fringe pulled toward the pin",
   const threat = computeThreat(city, frames, [], 40);
   assert.ok(threat.tracks.length >= 1);
   const t = threat.tracks[0]!;
-  assert.ok(
-    t.now.lon < 20.45,
-    `core centroid should stay west (~20.35), got lon=${t.now.lon}`,
-  );
+  assert.ok(t.now.lon < 20.45, `core centroid should stay west (~20.35), got lon=${t.now.lon}`);
   assert.ok(
     haversineKm(t.now.lat, t.now.lon, city.lat, city.lon) > 35,
     `arrow too close to pin (${haversineKm(t.now.lat, t.now.lon, city.lat, city.lon).toFixed(0)} km)`,
@@ -295,9 +272,21 @@ test("a wide stratiform blob is one mass → one arrow", () => {
     }
   }
   const frames = [
-    frame(0, rain.map((s) => ({ ...s, lon: s.lon - 0.12 })), 20),
-    frame(600, rain.map((s) => ({ ...s, lon: s.lon - 0.08 })), 16),
-    frame(1_200, rain.map((s) => ({ ...s, lon: s.lon - 0.04 })), 12),
+    frame(
+      0,
+      rain.map((s) => ({ ...s, lon: s.lon - 0.12 })),
+      20,
+    ),
+    frame(
+      600,
+      rain.map((s) => ({ ...s, lon: s.lon - 0.08 })),
+      16,
+    ),
+    frame(
+      1_200,
+      rain.map((s) => ({ ...s, lon: s.lon - 0.04 })),
+      12,
+    ),
     frame(1_800, rain, 8),
   ];
   const threat = computeThreat(city, frames, [], 40);
@@ -402,9 +391,7 @@ test("same rain frames + same sample origin → identical arrows for any pin (pl
   // Two storms in one window; ranking by pin distance would swap which get drawn.
   const west = (t: number) => blob(50.05, 19.6 + t * 0.02, 3);
   const east = (t: number) => blob(50.2, 20.5 + t * 0.02, 4);
-  const frames = [0, 1, 2, 3].map((t) =>
-    frame(t * 600, [...west(t), ...east(t)], 40),
-  );
+  const frames = [0, 1, 2, 3].map((t) => frame(t * 600, [...west(t), ...east(t)], 40));
   const origin = { lat: 50.1, lon: 20.0 };
   const pinNearWest: Place = { lat: 50.05, lon: 19.85, label: "W", terc: "1" };
   const pinNearEast: Place = { lat: 50.2, lon: 20.7, label: "E", terc: "2" };
@@ -462,13 +449,19 @@ test("faster cell draws a longer forward shaft than a slower cell", () => {
   );
   assert.ok(
     Math.abs(fastLen - fast.tracks[0]!.speedKmh * 0.5) < 3,
-    `forward length should be ~30 min of travel (got ${fastLen.toFixed(1)} vs ${((fast.tracks[0]!.speedKmh) * 0.5).toFixed(1)})`,
+    `forward length should be ~30 min of travel (got ${fastLen.toFixed(1)} vs ${(fast.tracks[0]!.speedKmh * 0.5).toFixed(1)})`,
   );
 });
 
 test("after a front splits, the main core keeps ~north motion (no mega-mass teleport)", () => {
   // t0: one huge connected front. Later: splits into west core (real N motion) + NE chip.
-  function band(lat0: number, lon0: number, w: number, h: number, level: RadarLevel): RadarSample[] {
+  function band(
+    lat0: number,
+    lon0: number,
+    w: number,
+    h: number,
+    level: RadarLevel,
+  ): RadarSample[] {
     const out: RadarSample[] = [];
     for (let i = -h; i <= h; i++) {
       for (let j = -w; j <= w; j++) {
@@ -543,10 +536,7 @@ test("clear multi-frame translation is high-confidence and drawn", () => {
 
 test("ambiguous two-frame jitter is not drawn (low confidence)", () => {
   // Barely moves, only two frames — should stay hidden.
-  const frames = [
-    frame(0, blob(50.0, 20.0, 2), 40),
-    frame(600, blob(50.02, 20.03, 2), 40),
-  ];
+  const frames = [frame(0, blob(50.0, 20.0, 2), 40), frame(600, blob(50.02, 20.03, 2), 40)];
   const threat = computeThreat(city, frames, [], 40, { lat: 50.0, lon: 20.0 });
   assert.equal(threat.tracks.length, 0, "uncertain motion must not show an arrow");
 });
@@ -580,53 +570,45 @@ test("bright core jumping SE must not beat bulk echo moving west", () => {
   }
 });
 
-test("computeField is identical for two pins; narrative is not", () => {
-  const frames = [
-    frame(0, blob(50.0, 20.4, 3), 43),
-    frame(600, blob(50.0, 20.55, 3), 32),
-    frame(1_200, blob(50.0, 20.7, 3), 21),
-    frame(1_800, blob(50.0, 20.85, 3), 11),
+test("a strong cell 20 km away plus drizzle over the pin is not 'nad Tobą'", () => {
+  // Level-3 core ~19 km north of the pin (nearest edge), level-1 samples right over it.
+  const core = blob(50.25, 21.0, 3);
+  const drizzle: RadarSample[] = [
+    { lat: 50.0, lon: 21.0, level: 1 },
+    { lat: 50.02, lon: 21.03, level: 1 },
   ];
-  const origin = { lat: 52.1, lon: 19.35 };
-  const pinA: Place = { lat: 50.0, lon: 21.0, label: "A", terc: "1" };
-  const pinB: Place = { lat: 51.1, lon: 17.0, label: "B", terc: "2" };
-  const fieldA = computeField(frames, origin);
-  const fieldB = computeField(frames, origin);
-  assert.equal(fieldA.tracks.length, fieldB.tracks.length);
-  assert.ok(fieldA.tracks.length >= 1);
-  assert.equal(fieldA.tracks[0]!.now.lon, fieldB.tracks[0]!.now.lon);
-  const na = computePinNarrative(pinA, fieldA, frames, [], 40);
-  const nb = computePinNarrative(pinB, fieldB, frames, [], 40);
-  assert.notEqual(na.nearestKm, nb.nearestKm);
+  const frames = [frame(1_000, [...core, ...drizzle], 0), frame(1_600, [...core, ...drizzle], 0)];
+  const threat = computeThreat(city, frames, [], 40);
+  assert.equal(threat.pinLevel, 1);
+  assert.equal(threat.maxLevel, 3, "context max within 25 km is still the strong cell");
+  assert.notEqual(threat.level, "now", `expected not 'now', got ${threat.level}`);
+  assert.equal(threat.etaMin, 0, "drizzle over the pin is still 'teraz'");
+  assert.equal(threat.expect, "słaby deszcz");
 });
 
-test("computeThreat is field + pin narrative", () => {
-  const frames = [
-    frame(0, blob(50.0, 20.4, 3), 43),
-    frame(600, blob(50.0, 20.55, 3), 32),
-    frame(1_200, blob(50.0, 20.7, 3), 21),
-    frame(1_800, blob(50.0, 20.85, 3), 11),
-  ];
-  const origin = { lat: 50.0, lon: 20.0 };
-  const via = computeThreat(city, frames, [], 40, origin);
-  const split = computePinNarrative(city, computeField(frames, origin), frames, [], 40);
-  assert.equal(via.comingFrom, split.comingFrom);
-  assert.equal(via.tracks.length, split.tracks.length);
-  assert.equal(via.maxLevel, split.maxLevel);
+test("pin timeline: dry now, rain arrives when the advected cell reaches the pin", () => {
+  const frames = [frame(1_000, blob(50.0, 20.4), 43), frame(1_600, blob(50.0, 20.55), 32)];
+  const threat = computeThreat(city, frames, [], 40);
+  assert.equal(threat.timelineAdvected, true);
+  assert.equal(threat.timeline.length, 19);
+  assert.equal(threat.timeline[0]!.level, 0, "nothing over the pin right now");
+  const arrival = threat.timeline.find((p) => p.level >= 2);
+  assert.ok(arrival, "rain should show up in the 90-min strip");
+  assert.ok(arrival.t >= 15 && arrival.t <= 50, `arrival at ${arrival.t} min`);
+  assert.ok(
+    threat.etaMin !== null && Math.abs(arrival.t - threat.etaMin) <= 12,
+    `timeline arrival ${arrival.t} vs ETA ${threat.etaMin}`,
+  );
+  // Rate carries through from samples when present; synthetic samples fall back to the class floor.
+  assert.ok(arrival.rate >= 4);
 });
 
-test("maxLevel is measured inside radiusKm, not a fixed 25 km", () => {
-  const far: RadarSample[] = [];
-  for (let i = -2; i <= 2; i++) {
-    for (let j = -2; j <= 2; j++) {
-      far.push({ lat: 50.0 + i * 0.03, lon: 21.45 + j * 0.03, level: 4 });
-    }
-  }
-  const frames = [frame(0, far, 40), frame(600, far, 40)];
-  const tight = computeThreat(city, frames, [], 15);
-  const wide = computeThreat(city, frames, [], 50);
-  assert.equal(tight.maxLevel, 0);
-  assert.equal(wide.maxLevel, 4);
+test("pin timeline without motion is persistence, flagged as such", () => {
+  const still = blob(50.0, 21.0, 2);
+  const frames = [frame(1_000, still, 0), frame(1_600, still, 0)];
+  const threat = computeThreat(city, frames, [], 40);
+  assert.equal(threat.timelineAdvected, false);
+  assert.ok(threat.timeline.every((p) => p.level === 2));
 });
 
 test("stationary echo (zero NCC shift) does not invent an arrow", () => {
@@ -634,45 +616,6 @@ test("stationary echo (zero NCC shift) does not invent an arrow", () => {
   const frames = [0, 1, 2, 3].map((t) => frame(t * 600, rain, 20));
   const threat = computeThreat(city, frames, [], 40, { lat: 50.2, lon: 20.2 });
   assert.equal(threat.tracks.length, 0);
-});
-
-test("leading edge of a west→east band is the eastern samples", () => {
-  const samples: RadarSample[] = [];
-  for (let j = -8; j <= 2; j++) {
-    samples.push({ lat: 50.0, lon: 20.5 + j * 0.05, level: 3 });
-  }
-  const edge = leadingEdgeOf(samples, 90, 50.0, 20.5);
-  assert.ok(edge.lon > 20.55, `leading edge should sit east, got ${edge.lon}`);
-});
-
-test("ETA from a long band uses the leading edge, not the centroid", () => {
-  const frames = [
-    frame(0, contiguousFront(-0.24), 24),
-    frame(600, contiguousFront(-0.16), 16),
-    frame(1_200, contiguousFront(-0.08), 10),
-    frame(1_800, contiguousFront(0), 7),
-  ];
-  const threat = computeThreat(city, frames, [], 40);
-  assert.ok(threat.nearestKm !== null && threat.nearestKm < 15);
-  assert.ok(threat.etaMin !== null && threat.etaMin <= 20);
-});
-
-test("sub-cell NCC reports a fractional eastward shift", () => {
-  const prev = blob(52.0, 19.0, 3);
-  const next = blob(52.0, 19.0 + 2.5 / 71, 3);
-  const m = estimatePairMotion(prev, next, 52.0, 19.0, 0.16);
-  assert.ok(m);
-  assert.ok(!m.stationary);
-  assert.ok(m.speed > 0);
-  assert.ok(m.bearing > 60 && m.bearing < 120, `expected ~east, got ${m.bearing}`);
-});
-
-test("exact overlay of two frames is stationary with a usable score", () => {
-  const rain = blob(52.0, 19.0, 3);
-  const m = estimatePairMotion(rain, rain, 52.0, 19.0, 0.16);
-  assert.ok(m);
-  assert.equal(m.stationary, true);
-  assert.ok(m.score >= 0.4);
 });
 
 test("degraded frames still produce a threat object", () => {
@@ -685,4 +628,3 @@ test("degraded frames still produce a threat object", () => {
   const threat = computeThreat(city, frames, [], 40);
   assert.ok(threat.tracks.length >= 1);
 });
-

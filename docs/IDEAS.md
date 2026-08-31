@@ -24,14 +24,14 @@ MVP: miasto / klik. Cel: ten sam kod pinezki na `geolocation` w PWA na telefonie
 
 ## Alerty, które nie krzyczą bez potrzeby
 
-- Browser Notification gdy `imminent` / `now` i karta otwarta — jest szkic.
-- Web Push w tle: VAPID, zgoda, ciche godziny, próg szansy.
+- ~~Browser Notification gdy `imminent` / `now` i karta otwarta — jest szkic.~~ Jest: silnik epizodów (nadciąga / nad Tobą / przeszło), próg ETA i intensywności, ciche godziny, dźwięk, baner, log. Zob. ARCHITECTURE → Alerty.
+- Web Push w tle (karta zamknięta): VAPID, service worker, subskrypcje + harmonogram po stronie serwera (Vercel cron). Silnik `evaluateAlert` jest już czysty — ten sam kod, inne miejsce wykonania.
 - Nie dublować RCB. GROM woła *minuty przed echem nad pinezką*, RCB woła *zagrożenie w powiecie*.
 - Tryb „tylko gdy tor trafia we mnie”, nie „cokolwiek w 80 km”.
 
 ## Lepszy nowcast
 
-- **RainViewer nowcast frames** (gdy API je oddaje) zamiast samej ekstrapolacji dwóch skanów past.
+- ~~**RainViewer nowcast frames** (gdy API je oddaje)~~ — wyłączone przez RainViewer 1 I 2026, nie wrócą. Własna ekstrapolacja zostaje; docelowo optical flow (pysteps-style Lucas–Kanade) na 1 km z IMGW.
 - ~~Trzy–cztery klatki i medianowy wektor, mniej jitteru centroidu.~~ Jest: 4 skany ~30 min, średnia kołowa azymutu.
 - ~~Optyczny flow na siatce zamiast nearest-cell (wolne, rozpadające się echo).~~ Jest: adwekcja pola ~10 km, kierunek z masy frontu, nie z krawędzi.
 - Osobny wektor dla rdzenia `level ≥ 3` i osobny dla stratiformu.
@@ -39,7 +39,7 @@ MVP: miasto / klik. Cel: ten sam kod pinezki na `geolocation` w PWA na telefonie
 
 ## Lepsze dane
 
-- Oficjalny dostęp do POLRAD / danepubliczne wyższej rozdzielczości niż z=5.
+- ~~Oficjalny dostęp do POLRAD / danepubliczne wyższej rozdzielczości niż z=5.~~ Jest z=6 (~3 km) z dokładną paletą. Następny krok: **kompozyt SRI IMGW z danepubliczne (5 min, 1 km, otwarte dane)** — konkrety w `docs/DATA.md`.
 - Detekcja wyładowań (Blitzortung / IMGW) jako potwierdzenie „to burza, nie tylko deszcz”.
 - Model UM/COAMPS tylko jako tło 6–12 h, nigdy zamiast radaru w oknie 90 min.
 - Satelit (EUMETSAT) na noc i w górach, gdzie radar ślepie.
@@ -81,8 +81,8 @@ MVP: miasto / klik. Cel: ten sam kod pinezki na `geolocation` w PWA na telefonie
 ## Kolejność, jeśli wracamy do kodu
 
 1. GPS na prawdziwym telefonie, ta sama pinezka.
-2. Push tylko dla toru, który *trafia*.
-3. RainViewer nowcast frames, gdy wrócą w API.
+2. ~~Alert tylko dla toru, który *trafia* (w karcie).~~ Push w tle dla tego samego toru.
+3. Kompozyt SRI IMGW (5 min, 1 km) zamiast RainViewera; potem optical flow.
 4. Wyładowania jako znacznik „to burza”.
 5. Trasa / kilka pinezek.
 

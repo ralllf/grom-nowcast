@@ -1,81 +1,45 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import {
-  ANALYSIS_COLOR_OPTIONS,
-  OVERLAY_COLOR_OPTIONS,
-  UNIVERSAL_BLUE_RAIN,
-  dbzToLevel,
-  rgbaToDbz,
-  rgbaToLevel,
-} from "./palette.ts";
+import { dbzFromRgba, HAIL_RATE, levelFromRate, rateFromDbz } from "./palette.ts";
 
-test("analysis tiles are unsmoothed; overlay stays smoothed", () => {
-  assert.equal(ANALYSIS_COLOR_OPTIONS, "2/0_0");
-  assert.equal(OVERLAY_COLOR_OPTIONS, "2/1_1");
+test("exact palette colours map to their dBZ", () => {
+  assert.equal(dbzFromRgba(0x88, 0xdd, 0xee, 255), 15);
+  assert.equal(dbzFromRgba(0x00, 0x47, 0x68, 255), 34);
+  assert.equal(dbzFromRgba(0xff, 0xee, 0x00, 255), 35);
+  assert.equal(dbzFromRgba(0xff, 0x81, 0x00, 255), 44);
+  assert.equal(dbzFromRgba(0xc1, 0x00, 0x00, 255), 50);
+  assert.equal(dbzFromRgba(0xff, 0xaa, 0xff, 255), 55);
+  assert.equal(dbzFromRgba(0xff, 0xff, 0xff, 255), 65);
 });
 
-test("transparent pixels decode to no echo", () => {
-  assert.equal(rgbaToDbz(20, 20, 20, 0), null);
-  assert.equal(rgbaToLevel(20, 20, 20, 0), 0);
+test("translucent beige (< 15 dBZ) and transparent pixels are no echo", () => {
+  assert.equal(dbzFromRgba(0, 0, 0, 0), null);
+  assert.equal(dbzFromRgba(0xde, 0xd0, 0x97, 0xbe), null);
 });
 
-test("exact Universal Blue rain colors map to their dBZ", () => {
-  for (const c of UNIVERSAL_BLUE_RAIN) {
-    if (c.a < 40) continue;
-    assert.equal(rgbaToDbz(c.r, c.g, c.b, c.a), c.dbz, `dbz ${c.dbz}`);
-  }
+test("nearest-colour fallback tolerates small drift but rejects foreign colours", () => {
+  assert.equal(dbzFromRgba(0xff, 0x83, 0x02, 255), 44);
+  assert.equal(dbzFromRgba(0x10, 0xd0, 0x10, 255), null);
 });
 
-test("20 dBZ cyan is light rain (level 1)", () => {
-  const c = UNIVERSAL_BLUE_RAIN.find((x) => x.dbz === 20);
-  assert.ok(c);
-  assert.equal(rgbaToLevel(c.r, c.g, c.b, c.a), 1);
+test("Marshall–Palmer rates and class thresholds line up with palette families", () => {
+  assert.ok(rateFromDbz(15) > 0.1 && rateFromDbz(15) < 0.5);
+  assert.equal(levelFromRate(rateFromDbz(15)), 1);
+  assert.equal(levelFromRate(rateFromDbz(23)), 1);
+  assert.equal(levelFromRate(rateFromDbz(24)), 2);
+  assert.equal(levelFromRate(rateFromDbz(32)), 2);
+  assert.equal(levelFromRate(rateFromDbz(33)), 3);
+  assert.equal(levelFromRate(rateFromDbz(39)), 3);
+  assert.equal(levelFromRate(rateFromDbz(40)), 4);
+  assert.equal(levelFromRate(rateFromDbz(44)), 4);
+  assert.equal(levelFromRate(rateFromDbz(65)), 4);
+  assert.ok(HAIL_RATE > 90 && HAIL_RATE < 110);
 });
 
-test("35 dBZ yellow is moderate (level 2)", () => {
-  const c = UNIVERSAL_BLUE_RAIN.find((x) => x.dbz === 35);
-  assert.ok(c);
-  assert.equal(rgbaToLevel(c.r, c.g, c.b, c.a), 2);
-});
-
-test("45 dBZ orange-red is heavy (level 3)", () => {
-  const c = UNIVERSAL_BLUE_RAIN.find((x) => x.dbz === 45);
-  assert.ok(c);
-  assert.equal(rgbaToLevel(c.r, c.g, c.b, c.a), 3);
-});
-
-test("50 dBZ dark red is severe (level 4)", () => {
-  const c = UNIVERSAL_BLUE_RAIN.find((x) => x.dbz === 50);
-  assert.ok(c);
-  assert.equal(rgbaToLevel(c.r, c.g, c.b, c.a), 4);
-});
-
-test("14 dBZ beige is below the rain threshold", () => {
-  const c = UNIVERSAL_BLUE_RAIN.find((x) => x.dbz === 14);
-  assert.ok(c);
-  assert.equal(rgbaToLevel(c.r, c.g, c.b, c.a), 0);
-});
-
-test("nearest-neighbor still hits 20 dBZ from a nearby RGB", () => {
-  const c = UNIVERSAL_BLUE_RAIN.find((x) => x.dbz === 20);
-  assert.ok(c);
-  assert.equal(rgbaToDbz(c.r + 2, c.g - 1, c.b, 255), 20);
-});
-
-test("dbzToLevel bins match operational 1–4", () => {
-  assert.equal(dbzToLevel(null), 0);
-  assert.equal(dbzToLevel(10), 0);
-  assert.equal(dbzToLevel(15), 1);
-  assert.equal(dbzToLevel(29), 1);
-  assert.equal(dbzToLevel(30), 2);
-  assert.equal(dbzToLevel(39), 2);
-  assert.equal(dbzToLevel(40), 3);
-  assert.equal(dbzToLevel(49), 3);
-  assert.equal(dbzToLevel(50), 4);
-  assert.equal(dbzToLevel(65), 4);
-});
-
-test("old heuristic purple is not blindly level 4 without a palette match", () => {
-  const dbz = rgbaToDbz(200, 80, 200, 255);
-  assert.ok(dbz === null || dbz >= 15);
+test("the old heuristic's inversions are gone: orange ≥ yellow, white is extreme", () => {
+  const lvl = (hex: number) =>
+    levelFromRate(rateFromDbz(dbzFromRgba(hex >> 16, (hex >> 8) & 0xff, hex & 0xff, 255)!));
+  assert.ok(lvl(0xff8100) >= lvl(0xffee00));
+  assert.equal(lvl(0xffffff), 4);
+  assert.ok(lvl(0x004768) > lvl(0x88ddee));
 });

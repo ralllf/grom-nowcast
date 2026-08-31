@@ -9,10 +9,16 @@ GROM nie produkuje obserwacji. Składa publiczne źródła i liczy nowcast **na 
 | Dostawca kafelków | [RainViewer](https://www.rainviewer.com/) Public API |
 | Endpoint map | `https://api.rainviewer.com/public/weather-maps.json` |
 | Siatka | POLRAD (IMGW-PIB), RainViewer kompozytuje i koloruje |
-| Kolorystyka | Universal Blue (`…/2/1_1.png`) |
-| Zoom analizy | 5 (wyższe poziomy często puste) |
+| Kolorystyka | Universal Blue, analiza `…/2/0_0.png` (bez wygładzania, bez palety śniegu), mapa `…/2/1_0.png` |
+| Tabela kolorów | [rainviewer_api_colors_table.csv](https://www.rainviewer.com/files/rainviewer_api_colors_table.csv) → `src/lib/weather/palette.ts` |
+| Zoom analizy | 6 (API dopuszcza ≤ 7; 9 kafelków na klatkę) |
+| Limity | ~100 żądań / IP / min; `nowcast[]` i inne palety wyłączone 1 I 2026 |
 
-RainViewer bywa używany w produktach non-commercial zgodnie z ich aktualnym regulaminem. Przed komercją: przeczytaj [rainviewer.com](https://www.rainviewer.com/) / API terms. **Nie cache’ujemy klatek na dysku ani w repo.**
+RainViewer Public API jest do użytku **osobistego / edukacyjnego** z atrybucją „Weather data by RainViewer” ([transition FAQ](https://www.rainviewer.com/api/transition-faq.html)). Przed komercją: inny dostęp albo własne źródło. **Nie cache’ujemy klatek na dysku ani w repo** (w RAM serwera: 8 ostatnich zdekodowanych klatek).
+
+### Alternatywa: IMGW bezpośrednio (do zrobienia)
+
+IMGW-PIB publikuje kompozyt POLRAD jako **dane otwarte** (ustawa o otwartych danych / HVD) w [danepubliczne.imgw.pl/datastore](https://danepubliczne.imgw.pl/datastore): `/Oper/Polrad/Produkty/POLCOMP/` → `COMPO_SRI…` (natężenie mm/h), `COMPO_CMAX_250…` (dBZ), `COMPO_ZHAIL` (prawd. gradu), **co 5 min**, 900×900 px ≈ 1 km, projekcja `+proj=aeqd +lon_0=19.0926 +lat_0=52.3469`, formaty ODIM_H5 i PNG (`_echoOnly.png`). Plus `/Oper/Perun/` (wyładowania, co 1 min). To 2× świeższe niż RainViewer, 10 radarów zamiast 8, i licencja pod produkt. Koszt: parser H5 (`h5wasm`) albo dekod PNG z własną legendą + odwrotne aeqd. Endpointy `meteo.imgw.pl/api/radars/v1/…` (PNG EPSG:3857 co 5 min) działają, ale są nieudokumentowane i ze znakiem wodnym — nie budować na nich.
 
 Sieć radarowa POLRAD należy do **Instytutu Meteorologii i Gospodarki Wodnej – Państwowego Instytutu Badawczego**. W UI jest stała atrybucja. Dane w GROM są **przetworzone** (próbkowanie, klastry, wektory) — nie wolno ich przedstawiać jako surowy produkt IMGW.
 

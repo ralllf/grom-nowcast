@@ -1,28 +1,9 @@
-import type { RadarLevel, RadarMemoryFrame, RadarScan } from "./types.ts";
+import { framesFromScan } from "./pack.ts";
+import type { RadarMemoryFrame, RadarScan } from "./types.ts";
 
+/** Oldest → newest frames with samples materialised (packed or legacy shape). */
 export function radarHistoryFromScan(radar: RadarScan): RadarMemoryFrame[] {
-  if (radar.history.length > 0) return radar.history;
-  const frames: RadarMemoryFrame[] = [];
-  if (radar.prevTime != null && radar.prevSamples.length > 0) {
-    frames.push({
-      time: radar.prevTime,
-      samples: radar.prevSamples,
-      maxLevel: radar.prevSamples.reduce<RadarLevel>(
-        (m, s) => (s.level > m ? s.level : m),
-        0,
-      ),
-      nearestKm: null,
-    });
-  }
-  if (radar.latestTime != null) {
-    frames.push({
-      time: radar.latestTime,
-      samples: radar.samples,
-      maxLevel: radar.maxLevel,
-      nearestKm: radar.nearestKm,
-    });
-  }
-  return frames;
+  return framesFromScan(radar).map((f, i) => ({ ...f, degraded: radar.history[i]?.degraded }));
 }
 
 export function historyIsDegraded(frames: RadarMemoryFrame[]): boolean {

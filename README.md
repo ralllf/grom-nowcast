@@ -24,10 +24,13 @@ GROM jest bliżej **MeteoSwiss / RainViewer nowcast** niż klasycznej prognozy:
 ## Co umie MVP
 
 - Mapa radarowa (RainViewer, kompozyt POLRAD) na jasnym podkładzie OpenFreeMap — **bez klucza API**.
+- Intensywność w **mm/h** z dokładnej tabeli kolorów RainViewera (dBZ → Marshall–Palmer), cztery klasy jak w legendzie MeteoSwiss: słaby / umiarkowany / silny / ulewny. Siatka ~3 km (zoom 6).
+- **Oś czasu opadu nad pinezką** 0–90 min co 5 min (adwekcja wsteczna z ruchu echa) — jak pasek „Niederschlag” w aplikacji MeteoSwiss.
 - Wektory ruchu: pomarańczowa strzałka wychodzi ze **środka komórki** w kierunku przesuwania się opadu.
 - **Szansa %** i **ETA** liczone dla pinezki, nie dla promienia alertu.
 - Tekst: *Idzie od… → na…* oraz *Spodziewaj się: …*
 - Ostrzeżenia IMGW dopasowane TERYT-em do wybranego miasta.
+- **Alerty na pinezkę** (karta otwarta, może być w tle): „nadciąga” gdy tor trafia w pinezkę i dojście ≤ N min, „nad Tobą”, „przeszło”. Jeden alert na etap burzy, próg intensywności, ciche godziny, dźwięk, baner + powiadomienie systemowe.
 - Miasta PL z listy, wyszukiwarka Nominatim, klik na mapie. GPS na telefonie (w iframe podglądu przeglądarka go blokuje).
 - Klatki radaru **tylko w RAM** (ostatnie skany). Ustawienia w `localStorage`. **Żadnych plików radarowych w git.**
 
@@ -45,8 +48,9 @@ TanStack Start + React 19 + Vite, MapLibre GL, Zustand, TanStack Query, `pngjs` 
 
 ## Dokumentacja
 
-- [Architektura nowcastu](docs/ARCHITECTURE.md) — radar, komórki, ETA, pinezka vs promień
+- [Architektura nowcastu](docs/ARCHITECTURE.md) — radar, komórki, ETA, pinezka vs promień, alerty
 - [Źródła danych i licencje](docs/DATA.md) — IMGW, RainViewer, co wolno, czego nie trzymamy
+- [Weryfikacja nowcastu](docs/HINDCAST.md) — `npm run hindcast`: POD / FAR / CSI na prawdziwym radarze vs persystencja
 - [Pomysły i roadmapa](docs/IDEAS.md) — GPS, push, POLRAD, pioruny, tożsamość produktu
 
 ## Uruchomienie
@@ -60,7 +64,7 @@ Aplikacja nasłuchuje na `0.0.0.0:8080`.
 
 ```bash
 npm run typecheck
-node --experimental-strip-types --test src/lib/weather/threat.test.ts
+npm test
 ```
 
 Nie potrzebujesz klucza MapTiler / Google. Radar i mapa idą z publicznych kafelków.

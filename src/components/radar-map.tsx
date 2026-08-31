@@ -366,7 +366,7 @@ function syncRadar(map: import("maplibre-gl").Map, live: Live) {
     tileSize: 256,
     scheme: "xyz",
     minzoom: 1,
-    maxzoom: 5,
+    maxzoom: 7,
   });
   map.addLayer(
     {

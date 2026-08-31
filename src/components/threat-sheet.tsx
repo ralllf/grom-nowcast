@@ -3,7 +3,16 @@ import { useEffect, useRef, useState, type PointerEvent } from "react";
 import { etaLabel, shouldAutoExpandSheet } from "@/components/threat-sheet-logic";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import type { CellTrack, OfficialWarning, Place, Threat, ThreatLevel } from "@/lib/weather/types";
+import { LEVEL_SWATCH, levelLabelPl } from "@/lib/weather/palette";
+import type {
+  CellTrack,
+  OfficialWarning,
+  Place,
+  RadarLevel,
+  Threat,
+  ThreatLevel,
+  TimelinePoint,
+} from "@/lib/weather/types";
 
 const TONE: Record<ThreatLevel, "ok" | "warn" | "danger" | "accent" | "mute"> = {
   clear: "ok",
@@ -53,6 +62,10 @@ export function ThreatSheet({
 
   const eta = etaLabel(threat);
   const echo = threat?.nearestKm != null ? `${threat.nearestKm.toFixed(0)} km` : "brak";
+  const echoFull =
+    threat?.nearestKm != null
+      ? `${echo}${threat.pinLevel > 0 ? ` · ${levelLabelPl(threat.pinLevel)}` : ""}`
+      : echo;
   const chance = threat ? `${threat.chancePct}%` : "—";
   const headline = pending && !threat ? "Skanuję radar…" : (threat?.title ?? "Brak danych");
 
@@ -185,8 +198,12 @@ export function ThreatSheet({
         <dl className="mt-4 grid grid-cols-3 gap-2 text-center">
           <Stat label="Szansa" value={chance} />
           <Stat label="ETA" value={eta} />
-          <Stat label="Echo" value={echo} />
+          <Stat label="Echo" value={echoFull} />
         </dl>
+
+        {threat && threat.timeline.length > 0 ? (
+          <Timeline points={threat.timeline} advected={threat.timelineAdvected} />
+        ) : null}
 
         {tracks.length > 0 && (threat?.nearestKm == null || threat.nearestKm > 25) ? (
           <button
@@ -229,12 +246,63 @@ export function ThreatSheet({
 
         <p className="mt-4 text-xs leading-relaxed text-faint">
           Źródłem danych ostrzeżeń i sieci POLRAD jest Instytut Meteorologii i Gospodarki Wodnej –
-          Państwowy Instytut Badawczy. Dane radarowe zostały przetworzone. Radar: RainViewer. Mapa:
-          OpenFreeMap / OSM. To nie jest oficjalny alert RCB. Komórka burzowa może powstać lokalnie
-          nawet przy czystym radarze.
+          Państwowy Instytut Badawczy. Dane radarowe zostały przetworzone (dBZ → mm/h wg
+          Marshalla–Palmera, siatka ~3 km). Radar: RainViewer. Mapa: OpenFreeMap / OSM. To nie jest
+          oficjalny alert RCB. Komórka burzowa może powstać lokalnie nawet przy czystym radarze.
         </p>
       </div>
     </article>
+  );
+}
+
+const LEGEND: Array<{ level: RadarLevel; range: string }> = [
+  { level: 1, range: "<1" },
+  { level: 2, range: "1–4" },
+  { level: 3, range: "4–10" },
+  { level: 4, range: ">10" },
+];
+
+/** MeteoSwiss-style strip: rain at the pin for the next 90 min, one bar per 5 min. */
+function Timeline({ points, advected }: { points: TimelinePoint[]; advected: boolean }) {
+  const any = points.some((p) => p.level > 0);
+  return (
+    <div className="mt-3 rounded-2xl bg-surface-2 px-3 py-2.5">
+      <div className="flex items-center justify-between gap-2 text-xs">
+        <span className="text-faint">Opad nad pinezką · 90 min · mm/h</span>
+        <span className="text-faint">{advected ? "z ruchu echa" : "bez ruchu — jak teraz"}</span>
+      </div>
+      <div className="mt-2 flex h-9 items-end gap-px" role="img" aria-label="Oś czasu opadu">
+        {points.map((p) => (
+          <div
+            key={p.t}
+            title={`+${p.t} min: ${p.level > 0 ? `${levelLabelPl(p.level)}, ~${p.rate} mm/h` : "sucho"}`}
+            className="flex-1 rounded-sm"
+            style={{
+              height: p.level > 0 ? `${25 + p.level * 18}%` : "4px",
+              backgroundColor: p.level > 0 ? LEVEL_SWATCH[p.level] : "var(--color-border)",
+            }}
+          />
+        ))}
+      </div>
+      <div className="mt-1 flex justify-between font-mono text-[10px] text-faint">
+        <span>teraz</span>
+        <span>30</span>
+        <span>60</span>
+        <span>90 min</span>
+      </div>
+      <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-faint">
+        {LEGEND.map((l) => (
+          <span key={l.level} className="inline-flex items-center gap-1">
+            <span
+              className="inline-block size-2 rounded-sm"
+              style={{ backgroundColor: LEVEL_SWATCH[l.level] }}
+            />
+            {levelLabelPl(l.level)} {l.range}
+          </span>
+        ))}
+        {!any ? <span className="ml-auto">nic w oknie 90 min</span> : null}
+      </div>
+    </div>
   );
 }
 

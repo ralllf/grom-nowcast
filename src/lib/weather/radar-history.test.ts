@@ -17,6 +17,7 @@ function scan(over: Partial<RadarScan> = {}): RadarScan {
     maxLevel: 2,
     nearestKm: 4,
     echoCount: 1,
+    cellKm: 3,
     ...over,
   };
 }

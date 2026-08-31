@@ -14,6 +14,8 @@ function threat(partial: Partial<Threat>): Threat {
     speedKmh: null,
     nearestKm: null,
     maxLevel: 0,
+    pinLevel: 0,
+    cellLevel: 0,
     chancePct: 10,
     comingFrom: null,
     toward: null,
@@ -23,6 +25,8 @@ function threat(partial: Partial<Threat>): Threat {
     track: null,
     tracks: [],
     matchedWarnings: [],
+    timeline: [],
+    timelineAdvected: false,
     ...partial,
   };
 }

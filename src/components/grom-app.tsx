@@ -1,5 +1,18 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { Bell, BellOff, Crosshair, Radar, Search, Settings2, X } from "lucide-react";
+import {
+  Bell,
+  BellOff,
+  CheckCircle2,
+  CloudLightning,
+  CloudRain,
+  Crosshair,
+  Radar,
+  Search,
+  Settings2,
+  Volume2,
+  VolumeX,
+  X,
+} from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -9,9 +22,26 @@ import { cn } from "@/lib/utils";
 import { CITIES } from "@/lib/weather/cities";
 import { haversineKm } from "@/lib/weather/geo";
 import { formatImgwWhen } from "@/lib/weather/imgw-time";
-import { historyIsDegraded, radarHistoryFromScan } from "@/lib/weather/radar-history";
+import { framesFromScan } from "@/lib/weather/pack";
+import { historyIsDegraded } from "@/lib/weather/radar-history";
 import { getSnapshot, searchPlaces, PL_RADAR_ORIGIN } from "@/lib/weather/server";
 import { computeThreat } from "@/lib/weather/threat";
+import {
+  evaluateAlert,
+  isQuietHour,
+  levelSettingLabelPl,
+  testAlertEvent,
+  type AlertEvent,
+  type AlertKind,
+} from "@/lib/weather/alerts";
+import {
+  deliverAlert,
+  notifyPermission,
+  primeSound,
+  requestNotifyPermission,
+  stopTitleFlash,
+  type NotifyPermission,
+} from "@/lib/alert-delivery";
 import type { Place } from "@/lib/weather/types";
 import { useGrom } from "@/lib/store";
 
@@ -27,6 +57,27 @@ function formatWhen(iso: string) {
   return formatImgwWhen(iso);
 }
 
+const ALERT_TONE: Record<AlertKind, string> = {
+  incoming: "border-warn/60 bg-surface/95",
+  now: "border-danger bg-surface/95",
+  allclear: "border-ok/60 bg-surface/95",
+};
+
+function AlertIcon({ kind }: { kind: AlertKind }) {
+  if (kind === "now") return <CloudLightning className="size-5 text-danger" />;
+  if (kind === "allclear") return <CheckCircle2 className="size-5 text-ok" />;
+  return <CloudRain className="size-5 text-warn" />;
+}
+
+function formatAlertTime(ms: number) {
+  return new Date(ms).toLocaleTimeString("pl-PL", { hour: "2-digit", minute: "2-digit" });
+}
+
+function shallowEqual<T extends object>(a: T, b: T) {
+  const ka = Object.keys(a) as (keyof T)[];
+  return ka.length === Object.keys(b).length && ka.every((k) => a[k] === b[k]);
+}
+
 function isEmbeddedPreview() {
   try {
     return window.self !== window.top;
@@ -38,13 +89,18 @@ function isEmbeddedPreview() {
 export function GromApp() {
   const place = useGrom((s) => s.place);
   const radiusKm = useGrom((s) => s.radiusKm);
-  const notify = useGrom((s) => s.notify);
-  const lastNotified = useGrom((s) => s.lastNotified);
+  const alerts = useGrom((s) => s.alerts);
+  const activeAlert = useGrom((s) => s.activeAlert);
+  const alertLog = useGrom((s) => s.alertLog);
   const setPlace = useGrom((s) => s.setPlace);
   const updatePlaceMeta = useGrom((s) => s.updatePlaceMeta);
   const setRadiusKm = useGrom((s) => s.setRadiusKm);
-  const setNotify = useGrom((s) => s.setNotify);
-  const markNotified = useGrom((s) => s.markNotified);
+  const setAlerts = useGrom((s) => s.setAlerts);
+  const setAlertMemory = useGrom((s) => s.setAlertMemory);
+  const recordAlert = useGrom((s) => s.recordAlert);
+  const dismissAlert = useGrom((s) => s.dismissAlert);
+  const clearAlertLog = useGrom((s) => s.clearAlertLog);
+  const [permission, setPermission] = useState<NotifyPermission>("default");
 
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -63,6 +119,7 @@ export function GromApp() {
 
   useEffect(() => {
     useGrom.getState().hydrate();
+    setPermission(notifyPermission());
   }, []);
 
   const snapshotQuery = useQuery({
@@ -81,6 +138,8 @@ export function GromApp() {
       });
     },
     refetchInterval: 90_000,
+    // Alerts only work while the tab is open — keep polling when it is in the background.
+    refetchIntervalInBackground: true,
   });
 
   const snapshot = snapshotQuery.data;
@@ -100,10 +159,7 @@ export function GromApp() {
     }
   }, [snapshot, place, updatePlaceMeta]);
 
-  const radarHistory = useMemo(
-    () => (snapshot ? radarHistoryFromScan(snapshot.radar) : []),
-    [snapshot],
-  );
+  const radarHistory = useMemo(() => (snapshot ? framesFromScan(snapshot.radar) : []), [snapshot]);
 
   const threat = useMemo(() => {
     if (!snapshot) return null;
@@ -116,16 +172,40 @@ export function GromApp() {
 
   const radarDegraded = historyIsDegraded(radarHistory);
 
+  // Coming back to the tab: fresh radar right away, stop nagging in the title.
   useEffect(() => {
-    if (!threat || !notify) return;
-    if (threat.level === "clear" || threat.level === "watch") return;
-    const key = `${threat.level}:${Math.floor(Date.now() / 3_600_000)}`;
-    if (lastNotified === key) return;
-    if (typeof window === "undefined" || !("Notification" in window)) return;
-    if (Notification.permission !== "granted") return;
-    new Notification(`GROM · ${threat.title}`, { body: threat.detail });
-    markNotified(key);
-  }, [threat, notify, lastNotified, markNotified]);
+    const onVisible = () => {
+      if (document.visibilityState !== "visible") return;
+      stopTitleFlash();
+      void refetchSnapshot();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", onVisible);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", onVisible);
+    };
+  }, [refetchSnapshot]);
+
+  // Alert engine: one step per threat snapshot. Memory is read from the store
+  // (not a dependency) so a memory update never re-triggers this effect.
+  const radarTime = snapshot?.radar.latestTime ?? null;
+  useEffect(() => {
+    if (!threat) return;
+    const memory = useGrom.getState().alertMemory;
+    const now = Date.now();
+    const result = evaluateAlert(threat, alerts, memory, now, {
+      placeLabel: place.label,
+      radarTime,
+    });
+    if (!shallowEqual(result.memory, memory)) setAlertMemory(result.memory);
+    if (!result.event) return;
+    recordAlert(result.event);
+    deliverAlert(result.event, {
+      sound: alerts.sound,
+      quiet: isQuietHour(alerts, new Date(now)),
+    });
+  }, [threat, alerts, place.label, radarTime, setAlertMemory, recordAlert]);
 
   const searchMut = useMutation({
     mutationFn: (q: string) => searchPlaces({ data: { query: q } }),
@@ -166,10 +246,19 @@ export function GromApp() {
     );
   }
 
-  async function enableNotify() {
-    if (!("Notification" in window)) return;
-    const perm = await Notification.requestPermission();
-    setNotify(perm === "granted");
+  async function enableAlerts() {
+    primeSound();
+    const perm = await requestNotifyPermission();
+    setPermission(perm);
+    // The in-app banner works without OS permission; the toggle is about alerts, not permission.
+    setAlerts({ enabled: true });
+  }
+
+  function fireTestAlert() {
+    primeSound();
+    const ev = testAlertEvent(place.label, Date.now());
+    recordAlert(ev);
+    deliverAlert(ev, { sound: alerts.sound, quiet: false });
   }
 
   function pickPlace(next: Place) {
@@ -290,8 +379,48 @@ export function GromApp() {
         </div>
       ) : null}
 
+      {activeAlert ? (
+        <div className="pointer-events-none absolute inset-x-0 top-36 z-20 flex justify-center px-3 sm:top-40">
+          <div
+            role="status"
+            aria-live="assertive"
+            className={cn(
+              "pointer-events-auto flex w-full max-w-md items-start gap-3 rounded-2xl border p-3 shadow-[0_8px_30px_rgba(0,0,0,0.35)] backdrop-blur-md",
+              ALERT_TONE[activeAlert.kind],
+            )}
+          >
+            <div className="mt-0.5 shrink-0">
+              <AlertIcon kind={activeAlert.kind} />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="font-display text-base font-semibold leading-tight">
+                {activeAlert.title}
+              </p>
+              <p className="mt-1 text-xs leading-relaxed text-muted">{activeAlert.body}</p>
+              <p className="mt-1 font-mono text-[11px] text-faint">
+                {formatAlertTime(activeAlert.at)} · {activeAlert.placeLabel}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={dismissAlert}
+              aria-label="Zamknij alert"
+              className="shrink-0 rounded-full p-1 text-faint hover:bg-surface-2 hover:text-fg"
+            >
+              <X className="size-4" />
+            </button>
+          </div>
+        </div>
+      ) : null}
+
       {tracks.length > 0 ? (
-        <div className="pointer-events-none absolute left-3 top-36 z-10 sm:left-5 sm:top-40">
+        <div
+          className={cn(
+            "pointer-events-none absolute left-3 z-10 sm:left-5",
+            // On phones the centered banner sits over the pill; on wider screens they do not touch.
+            activeAlert ? "top-64 sm:top-40" : "top-36 sm:top-40",
+          )}
+        >
           <div className="pointer-events-auto flex items-center gap-2 rounded-full bg-surface/90 px-3 py-1.5 text-xs shadow-[0_0_0_1px_rgba(255,255,255,0.08)] backdrop-blur-md">
             <span className="inline-block size-2.5 rounded-full bg-vector ring-2 ring-fg" />
             <span className="text-muted">tor komórki</span>
@@ -451,24 +580,194 @@ export function GromApp() {
               miasta, później dokładnego GPS.
             </p>
 
-            <div className="mt-5 flex items-center justify-between gap-3 rounded-xl bg-surface-2 px-3 py-3">
-              <div>
-                <p className="text-sm font-medium">Powiadomienia przeglądarki</p>
-                <p className="text-xs text-muted">
-                  Działają, gdy karta jest otwarta. Push w tle — w kolejnej wersji.
-                </p>
+            <div className="mt-5 rounded-xl bg-surface-2 px-3 py-3">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-medium">Alerty na pinezkę</p>
+                  <p className="text-xs text-muted">
+                    Wołamy, gdy tor opadu trafia w {place.label}. Działa, gdy karta GROM jest
+                    otwarta (może być w tle).
+                  </p>
+                </div>
+                <Button
+                  variant={alerts.enabled ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => {
+                    if (alerts.enabled) setAlerts({ enabled: false });
+                    else void enableAlerts();
+                  }}
+                >
+                  {alerts.enabled ? <Bell className="size-4" /> : <BellOff className="size-4" />}
+                  {alerts.enabled ? "Włączone" : "Włącz"}
+                </Button>
               </div>
-              <Button
-                variant={notify ? "default" : "outline"}
-                size="sm"
-                onClick={() => {
-                  if (notify) setNotify(false);
-                  else void enableNotify();
-                }}
-              >
-                {notify ? <Bell className="size-4" /> : <BellOff className="size-4" />}
-                {notify ? "Włączone" : "Włącz"}
-              </Button>
+
+              {alerts.enabled ? (
+                <div className="mt-4 space-y-4 border-t border-border pt-4">
+                  <p className="text-xs leading-relaxed text-muted">
+                    {permission === "granted"
+                      ? "Powiadomienia systemowe: włączone. Do tego baner w aplikacji."
+                      : permission === "denied"
+                        ? "Przeglądarka blokuje powiadomienia systemowe — zostaje baner w aplikacji. Odblokuj w ustawieniach strony, jeśli chcesz dźwięk i powiadomienie w tle."
+                        : permission === "unsupported"
+                          ? "Ta przeglądarka nie obsługuje powiadomień systemowych — zostaje baner w aplikacji."
+                          : "Powiadomienia systemowe jeszcze bez zgody — zostaje baner w aplikacji."}
+                    {permission === "default" ? (
+                      <>
+                        {" "}
+                        <button
+                          type="button"
+                          className="font-medium text-accent hover:text-fg"
+                          onClick={() => void enableAlerts()}
+                        >
+                          Zezwól
+                        </button>
+                      </>
+                    ) : null}
+                  </p>
+
+                  <label className="block text-sm">
+                    Wołaj, gdy dojście ≤{" "}
+                    <span className="font-mono tabular-nums">{alerts.leadMin} min</span>
+                    <input
+                      type="range"
+                      min={10}
+                      max={60}
+                      step={5}
+                      value={alerts.leadMin}
+                      onChange={(e) => setAlerts({ leadMin: Number(e.target.value) })}
+                      className="mt-2 w-full accent-accent"
+                      aria-label="Wyprzedzenie alertu w minutach"
+                    />
+                  </label>
+
+                  <div>
+                    <p className="text-sm">Od jakiej intensywności</p>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {([1, 2, 3] as const).map((lvl) => (
+                        <button
+                          key={lvl}
+                          type="button"
+                          onClick={() => setAlerts({ minLevel: lvl })}
+                          className={cn(
+                            "h-9 rounded-full px-3 text-xs font-medium",
+                            alerts.minLevel === lvl
+                              ? "bg-accent text-accent-fg"
+                              : "bg-surface text-fg",
+                          )}
+                        >
+                          {levelSettingLabelPl(lvl)}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        primeSound();
+                        setAlerts({ sound: !alerts.sound });
+                      }}
+                    >
+                      {alerts.sound ? (
+                        <Volume2 className="size-4" />
+                      ) : (
+                        <VolumeX className="size-4" />
+                      )}
+                      {alerts.sound ? "Dźwięk" : "Bez dźwięku"}
+                    </Button>
+                    <label className="flex h-9 items-center gap-2 rounded-full bg-surface px-3 text-xs font-medium">
+                      <input
+                        type="checkbox"
+                        checked={alerts.allClear}
+                        onChange={(e) => setAlerts({ allClear: e.target.checked })}
+                        className="accent-accent"
+                      />
+                      „Przeszło” po burzy
+                    </label>
+                    <Button variant="outline" size="sm" onClick={fireTestAlert}>
+                      Testuj alert
+                    </Button>
+                  </div>
+
+                  <div>
+                    <label className="flex items-center gap-2 text-sm">
+                      <input
+                        type="checkbox"
+                        checked={alerts.quietFrom !== null}
+                        onChange={(e) =>
+                          setAlerts(
+                            e.target.checked
+                              ? { quietFrom: 22, quietTo: 7 }
+                              : { quietFrom: null, quietTo: null },
+                          )
+                        }
+                        className="accent-accent"
+                      />
+                      Ciche godziny (tylko baner, bez dźwięku i powiadomień)
+                    </label>
+                    {alerts.quietFrom !== null ? (
+                      <div className="mt-2 flex items-center gap-2 text-xs text-muted">
+                        od
+                        <HourSelect
+                          value={alerts.quietFrom}
+                          onChange={(h) => setAlerts({ quietFrom: h })}
+                        />
+                        do
+                        <HourSelect
+                          value={alerts.quietTo ?? 7}
+                          onChange={(h) => setAlerts({ quietTo: h })}
+                        />
+                      </div>
+                    ) : null}
+                  </div>
+
+                  <div>
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-sm">Ostatnie alerty</p>
+                      {alertLog.length > 0 ? (
+                        <button
+                          type="button"
+                          className="text-xs text-faint hover:text-fg"
+                          onClick={clearAlertLog}
+                        >
+                          wyczyść
+                        </button>
+                      ) : null}
+                    </div>
+                    {alertLog.length === 0 ? (
+                      <p className="mt-1 text-xs text-faint">
+                        Jeszcze nic. Alert pojawi się, gdy radar zobaczy komórkę na kursie.
+                      </p>
+                    ) : (
+                      <ul className="mt-2 max-h-40 space-y-1.5 overflow-y-auto">
+                        {alertLog.map((ev: AlertEvent) => (
+                          <li key={ev.id} className="flex items-start gap-2 text-xs">
+                            <span className="mt-0.5 shrink-0">
+                              <AlertIcon kind={ev.kind} />
+                            </span>
+                            <span className="min-w-0 flex-1">
+                              <span className="font-medium">{ev.title}</span>
+                              <span className="text-faint">
+                                {" "}
+                                · {formatAlertTime(ev.at)} · {ev.placeLabel}
+                              </span>
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+
+                  <p className="text-xs leading-relaxed text-faint">
+                    Jeden alert na etap burzy: „nadciąga”, „nad Tobą”, „przeszło”. Bez powtórek co
+                    godzinę. Radar starszy niż 30 min nie woła. Push w tle, gdy karta jest zamknięta
+                    — w kolejnej wersji.
+                  </p>
+                </div>
+              ) : null}
             </div>
 
             <p className="mt-4 text-xs leading-relaxed text-faint">
@@ -480,5 +779,21 @@ export function GromApp() {
         </div>
       ) : null}
     </div>
+  );
+}
+
+function HourSelect({ value, onChange }: { value: number; onChange: (h: number) => void }) {
+  return (
+    <select
+      value={value}
+      onChange={(e) => onChange(Number(e.target.value))}
+      className="h-8 rounded-lg border border-border bg-surface px-2 font-mono text-xs text-fg"
+    >
+      {Array.from({ length: 24 }, (_, h) => (
+        <option key={h} value={h}>
+          {String(h).padStart(2, "0")}:00
+        </option>
+      ))}
+    </select>
   );
 }
