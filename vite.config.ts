@@ -19,6 +19,9 @@ export default defineConfig(({ command, isPreview }) => ({
   optimizeDeps: {
     exclude: ["maplibre-gl"],
   },
+  // TanStack Start SSR otherwise resolves maplibre-gl's CJS/package entry and
+  // the worker URL import never reaches Vite's ?worker&url pipeline.
+  ssr: { noExternal: ["maplibre-gl"] },
   plugins: [
     tailwindcss(),
     tanstackStart(),
