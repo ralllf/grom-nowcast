@@ -3,8 +3,8 @@
  *
  *   npm run hindcast                 # last 2 h of frames, human report
  *   npm run hindcast -- --cached     # re-score frames cached in the OS temp dir
- *   npm run hindcast -- --json       # one comparable JSON summary on stdout
- *   npm run hindcast -- --json --cached
+ *   npm run --silent hindcast -- --json          # one comparable JSON summary on stdout
+ *   npm run --silent hindcast -- --json --cached
  *
  * Downloads RainViewer frames for Poland (~117 tile requests, paced for the 100 req/min
  * limit), decodes them exactly like the server does, then for a lattice of pins runs
