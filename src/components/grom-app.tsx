@@ -1,4 +1,4 @@
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQuery } from "@tanstack/react-query";
 import {
   Bell,
   BellOff,
@@ -27,6 +27,7 @@ import { framesFromScan } from "@/lib/weather/pack";
 import { historyIsDegraded } from "@/lib/weather/radar-history";
 import { lightningCaption } from "@/lib/weather/perun";
 import { PL_RADAR_ORIGIN } from "@/lib/weather/radar-grid";
+import { overlayFallback } from "@/lib/weather/sri-overlay";
 import { getSnapshot, getSriOverlay, searchPlaces } from "@/lib/weather/server";
 import { canTrustRadar, IMGW_WARNINGS_UNAVAILABLE } from "@/lib/weather/snapshot";
 import { computeThreat } from "@/lib/weather/threat";
@@ -242,14 +243,25 @@ export function GromApp() {
     enabled: overlays.length > 0 && activeSlider?.time != null,
     queryFn: () => getSriOverlay({ data: { time: activeSlider!.time, drizzle: drizzleMap } }),
     staleTime: 5 * 60_000,
+    placeholderData: keepPreviousData,
   });
   const overlayUrl = overlayQuery.data?.png
     ? `data:image/png;base64,${overlayQuery.data.png}`
     : null;
-  const overlayCorners = overlayQuery.data?.corners ?? null;
-  const sriFailed = overlays.length > 0 && overlayQuery.isError;
-  const radarHost = overlayUrl ? null : sriFailed || overlays.length === 0 ? (snapshot?.radar.host ?? null) : null;
-  const radarPath = overlayUrl ? null : sriFailed || overlays.length === 0 ? fallbackPath : null;
+  const sliderCorners = overlays[activeIdx]?.corners ?? null;
+  const layerPick = overlayFallback({
+    overlaysAvailable: overlays.length > 0,
+    png: overlayUrl,
+    queryError: overlayQuery.isError,
+    queryFetched: overlayQuery.isFetched,
+    isPlaceholder: overlayQuery.isPlaceholderData,
+  });
+  const radarHost = layerPick.useRainviewer ? (snapshot?.radar.host ?? null) : null;
+  const radarPath = layerPick.useRainviewer ? fallbackPath : null;
+  const sriOverlayUrl = layerPick.useSri ? overlayUrl : null;
+  const sriOverlayCorners = layerPick.useSri
+    ? (overlayQuery.data?.corners ?? sliderCorners)
+    : null;
 
   function locate() {
     if (isEmbeddedPreview() || !navigator.geolocation) {
@@ -352,8 +364,8 @@ export function GromApp() {
         radiusKm={radiusKm}
         radarHost={radarHost}
         radarPath={radarPath}
-        overlayUrl={overlayUrl}
-        overlayCorners={overlayCorners}
+        overlayUrl={sriOverlayUrl}
+        overlayCorners={sriOverlayCorners}
         tracks={tracks}
         imgwOn={imgwMap}
         imgwDegrees={imgwDegrees}
@@ -415,7 +427,7 @@ export function GromApp() {
               aria-label="Czas radaru"
             />
             <span className="w-12 text-right font-mono text-xs tabular-nums text-muted">
-              {formatClock(slider[frameIndex ?? slider.length - 1]?.time ?? null)}
+              {formatClock(slider[activeIdx]?.time ?? null)}
             </span>
             {radarDegraded ? (
               <span className="text-[10px] text-faint" title="Brakowało kafelka radaru">
@@ -675,15 +687,17 @@ export function GromApp() {
               />
               Ostrzeżenia IMGW na mapie (powiat, stopień)
             </label>
-            <label className="mt-3 flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={drizzleMap}
-                onChange={(e) => setDrizzleMap(e.target.checked)}
-                className="accent-accent"
-              />
-              Pokaż mżawkę na mapie (domyślnie wyłączona — jak liczby)
-            </label>
+            {overlays.length > 0 ? (
+              <label className="mt-3 flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={drizzleMap}
+                  onChange={(e) => setDrizzleMap(e.target.checked)}
+                  className="accent-accent"
+                />
+                Pokaż mżawkę na mapie (domyślnie wyłączona — jak liczby)
+              </label>
+            ) : null}
 
             <div className="mt-5 rounded-xl bg-surface-2 px-3 py-3">
               <div className="flex items-center justify-between gap-3">

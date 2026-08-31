@@ -16,6 +16,7 @@ import {
   classesFromSriGrid,
   classFromOverlayRgba,
   overlayCorners,
+  overlayFallback,
   paintOverlayClasses,
   pickRadarLayer,
   readDrizzleToggle,
@@ -222,6 +223,31 @@ test("attachSriOverlays fills metas on SRI and clears them on RainViewer fallbac
   const rv = attachSriOverlays(scan, "rainviewer");
   assert.deepEqual(rv.overlays, []);
   assert.equal(rv.overlay, null);
+});
+
+test("overlayFallback keeps SRI when a PNG exists, RainViewer on miss/error, blank while pending", () => {
+  assert.deepEqual(
+    overlayFallback({ overlaysAvailable: true, png: "x", queryError: false, queryFetched: true, isPlaceholder: false }),
+    { useSri: true, useRainviewer: false },
+  );
+  assert.deepEqual(
+    overlayFallback({ overlaysAvailable: true, png: null, queryError: true, queryFetched: true, isPlaceholder: false }),
+    { useSri: false, useRainviewer: true },
+  );
+  assert.deepEqual(
+    overlayFallback({ overlaysAvailable: true, png: null, queryError: false, queryFetched: true, isPlaceholder: false }),
+    { useSri: false, useRainviewer: true },
+    "null PNG after a finished fetch is a fallback, not a blank map",
+  );
+  assert.deepEqual(
+    overlayFallback({ overlaysAvailable: true, png: null, queryError: false, queryFetched: false, isPlaceholder: false }),
+    { useSri: false, useRainviewer: false },
+    "first paint waits for SRI so RainViewer drizzle does not flash",
+  );
+  assert.deepEqual(
+    overlayFallback({ overlaysAvailable: false, png: null, queryError: false, queryFetched: false, isPlaceholder: false }),
+    { useSri: false, useRainviewer: true },
+  );
 });
 
 test("pickRadarLayer prefers SRI image source and falls back to RainViewer tiles", () => {

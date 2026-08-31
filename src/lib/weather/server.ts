@@ -475,11 +475,12 @@ const overlayInput = z.object({
 });
 
 async function ensureSriOverlay(time: number): Promise<void> {
-  if (sriOverlayPng(time, false) || sriOverlayMetaFor(time)) return;
+  if (sriOverlayMetaFor(time)) return;
   const files = parseSriListing(await listSriHtml());
   const file = files.find((f) => f.time === time);
   if (!file) return;
-  await sampleCached(file.time, () => decodeSriFile(file.name, file.time)).catch(() => null);
+  // Bypass sampleCached — a hit there is analysis samples only and would skip rememberSriOverlay.
+  await decodeSriFile(file.name, file.time).catch(() => null);
 }
 
 /** One 4-class PNG per SRI frame. RainViewer tiles stay the fallback overlay. */

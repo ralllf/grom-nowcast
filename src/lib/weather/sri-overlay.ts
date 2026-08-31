@@ -108,3 +108,20 @@ export function pickRadarLayer(live: {
   }
   return { kind: "none" };
 }
+
+/** Decide whether to paint the SRI PNG, RainViewer tiles, or wait. */
+export function overlayFallback(opts: {
+  overlaysAvailable: boolean;
+  png: string | null;
+  queryError: boolean;
+  queryFetched: boolean;
+  isPlaceholder: boolean;
+}): { useSri: boolean; useRainviewer: boolean } {
+  if (opts.png) return { useSri: true, useRainviewer: false };
+  if (!opts.overlaysAvailable) return { useSri: false, useRainviewer: true };
+  if (opts.queryError) return { useSri: false, useRainviewer: true };
+  if (opts.queryFetched && !opts.isPlaceholder && !opts.png) {
+    return { useSri: false, useRainviewer: true };
+  }
+  return { useSri: false, useRainviewer: false };
+}

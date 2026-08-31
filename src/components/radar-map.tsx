@@ -543,7 +543,10 @@ function syncRadar(map: import("maplibre-gl").Map, live: Live) {
       url: layer.url,
       coordinates: layer.corners,
     });
-    if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", "visible");
+    if (map.getLayer(id)) {
+      map.setLayoutProperty(id, "visibility", "visible");
+      map.setPaintProperty(id, "raster-resampling", "nearest");
+    }
     return;
   }
   if (map.getLayer(id)) map.removeLayer(id);
@@ -570,7 +573,7 @@ function syncRadar(map: import("maplibre-gl").Map, live: Live) {
       id,
       type: "raster",
       source: id,
-      paint: { "raster-opacity": 0.78, "raster-fade-duration": 0 },
+      paint: { "raster-opacity": 0.78, "raster-fade-duration": 0, "raster-resampling": "nearest" },
     },
     labelLayerId(map),
   );
