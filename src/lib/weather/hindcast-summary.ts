@@ -25,9 +25,9 @@ export const RESEARCH_ALERT_CONFIG = {
 
 export const SHIPPED_ALERT_CONFIG = {
   name: "shipped" as const,
-  leadMin: 30,
-  minLevel: 2 as const,
-  minChancePct: 50,
+  leadMin: DEFAULT_ALERT_SETTINGS.leadMin,
+  minLevel: DEFAULT_ALERT_SETTINGS.minLevel,
+  minChancePct: DEFAULT_ALERT_SETTINGS.minChancePct,
 };
 
 export type SkillCounts = { hit: number; miss: number; fa: number; cn: number };
@@ -205,10 +205,16 @@ export function scoreHindcast(opts: {
   pins: { lat: number; lon: number }[];
   origin?: { lat: number; lon: number };
   nowMs?: number;
+  /** Wall clock when the frames were fetched. Omit on a stamp-less `--cached` re-score (F2 age is then null). */
+  downloadedAtMs?: number | null;
 }): HindcastSummary {
   const frames = opts.frames;
+  if (frames.length < 10) {
+    throw new Error(`hindcast needs ≥ 10 frames (4 history + 6 leads), got ${frames.length}`);
+  }
   const origin = opts.origin ?? HINDCAST_ORIGIN;
   const nowMs = opts.nowMs ?? Date.now();
+  const downloadedAtMs = opts.downloadedAtMs;
   const thresholds = [1, 2] as const;
 
   const nowcast = new Map<RadarLevel, Map<number, SkillCounts>>();
@@ -346,7 +352,8 @@ export function scoreHindcast(opts: {
       from: iso(first.time),
       to: iso(last.time),
       frames: frames.length,
-      latestAgeSec: Math.round(nowMs / 1000 - last.time),
+      latestAgeSec:
+        downloadedAtMs != null ? Math.round(downloadedAtMs / 1000 - last.time) : null,
     },
     cellKm,
     sampleCount: {

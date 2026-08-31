@@ -33,13 +33,24 @@ const BBOX = { minLat: 48.8, maxLat: 55.15, minLon: 13.8, maxLon: 24.6 };
 const CACHE = join(tmpdir(), "grom-hindcast-frames.json");
 const json = wantsJson(process.argv);
 
+type FrameCache = { downloadedAtMs: number; frames: RadarMemoryFrame[] };
+
 function log(msg: string) {
   (json ? console.error : console.log)(msg);
 }
 
-async function loadFrames(): Promise<RadarMemoryFrame[]> {
+function readCache(): { frames: RadarMemoryFrame[]; downloadedAtMs: number | null } {
+  const raw = JSON.parse(readFileSync(CACHE, "utf8")) as FrameCache | RadarMemoryFrame[];
+  if (Array.isArray(raw)) return { frames: raw, downloadedAtMs: null };
+  if (raw && Array.isArray(raw.frames)) {
+    return { frames: raw.frames, downloadedAtMs: raw.downloadedAtMs ?? null };
+  }
+  throw new Error(`unreadable hindcast cache at ${CACHE}`);
+}
+
+async function loadFrames(): Promise<{ frames: RadarMemoryFrame[]; downloadedAtMs: number | null }> {
   if (existsSync(CACHE) && process.argv.includes("--cached")) {
-    return JSON.parse(readFileSync(CACHE, "utf8")) as RadarMemoryFrame[];
+    return readCache();
   }
   const maps = (await (
     await fetch("https://api.rainviewer.com/public/weather-maps.json")
@@ -110,8 +121,9 @@ async function loadFrames(): Promise<RadarMemoryFrame[]> {
     out.push({ time: frame.time, samples, maxLevel, nearestKm: null });
     log(`  ${new Date(frame.time * 1000).toISOString().slice(11, 16)}Z  ${samples.length} samples`);
   }
-  writeFileSync(CACHE, JSON.stringify(out));
-  return out;
+  const downloadedAtMs = Date.now();
+  writeFileSync(CACHE, JSON.stringify({ downloadedAtMs, frames: out } satisfies FrameCache));
+  return { frames: out, downloadedAtMs };
 }
 
 function printHuman(summary: ReturnType<typeof scoreHindcast>) {
@@ -157,13 +169,13 @@ function printHuman(summary: ReturnType<typeof scoreHindcast>) {
 }
 
 log("Loading frames…");
-const frames = await loadFrames();
+const { frames, downloadedAtMs } = await loadFrames();
 const pins: { lat: number; lon: number }[] = [];
 for (let lat = 49.3; lat <= 54.7; lat += 0.45) {
   for (let lon = 14.5; lon <= 23.9; lon += 0.7)
     pins.push({ lat: +lat.toFixed(2), lon: +lon.toFixed(2) });
 }
 
-const summary = scoreHindcast({ frames, pins, origin: HINDCAST_ORIGIN });
+const summary = scoreHindcast({ frames, pins, origin: HINDCAST_ORIGIN, downloadedAtMs });
 if (json) console.log(JSON.stringify(summary, null, 2));
 else printHuman(summary);
