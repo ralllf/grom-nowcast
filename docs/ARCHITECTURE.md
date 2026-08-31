@@ -74,7 +74,11 @@ W oknie 0–90 min, krok 2 min, rzutujemy komórkę po azymucie i prędkości.
 - Zbliża się i minie ≤ 12 km → ETA z adnotacją, to jeszcze o nas.
 - Minie daleko albo stoi bez kierunku → ETA `—` albo `minie`, bez udawania pewności.
 
-Szansa % jest grubą siatką (5–95, krok 5): IMGW, odległość echa, czy tor trafia, czy komórka odchodzi. To nie model MESO-NH. UI mówi „szansa”, nie „pewność”.
+Szansa % jest grubą siatką (5–95), potem **przemapowana** na częstość z dziennika
+hindcastu ([`chance.ts`](../src/lib/weather/chance.ts), Slice 8): surowy szczebel
+60 (tor trafia) → 55, 70/80 (nad pinezką / ETA ≤ 20) → 90, 55 (echo w 20 km) → 20.
+Tylko gdy echo jest ≤ 100 km — suche pinezki i samo IMGW zostają na surowym
+szczeblu. To nie model MESO-NH. UI mówi „szansa”, nie „pewność”.
 
 ## Trafi czy minie — z próbek, nie z centroidu
 
@@ -126,7 +130,11 @@ Zasady:
 - Zgoda na powiadomienia systemowe **nie jest wymagana** — baner działa zawsze. Bez zgody nie ma dźwięku w tle.
 - Karta w tle nadal odpytuje radar (`refetchIntervalInBackground`), przeglądarki dławią timery do ~1/min — wystarcza. Karta **zamknięta** = brak alertów. Push w tle (VAPID + service worker + harmonogram po stronie serwera) to osobny krok.
 
-Ustawienia: `leadMin` 10–60, `minLevel` 1–3 (słaby deszcz / deszcz / ulewa-burza), `minChancePct`, `quietFrom/To`, `sound`, `allClear`. Klucz `grom-settings-v1.alerts`; stare `notify: true` migruje na `enabled`.
+Ustawienia: presety **Czuły / Normalny / Tylko pewne** wiążą `leadMin`, `minLevel`,
+`minChancePct`. Surowy `leadMin` 10–60, `minLevel` 1–3 (słaby deszcz / deszcz /
+ulewa-burza) i `minChancePct` zostają pod **zaawansowane**. Do tego `quietFrom/To`,
+`sound`, `allClear`. Klucz `grom-settings-v1.alerts`; stare `notify: true` migruje
+na `enabled`. Normalny = wysłane defaulty (30 / 2 / 50).
 
 ## Mapa
 

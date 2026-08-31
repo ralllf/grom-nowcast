@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { bearingDeg, haversineKm } from "./geo.ts";
 import { computeThreat, TRACK_MAX_KM } from "./threat.ts";
-import type { Place, RadarLevel, RadarMemoryFrame, RadarSample } from "./types.ts";
+import type { OfficialWarning, Place, RadarLevel, RadarMemoryFrame, RadarSample } from "./types.ts";
 
 function angleDiffDeg(a: number, b: number) {
   const d = Math.abs(a - b) % 360;
@@ -659,6 +659,52 @@ test("klasa 4 incoming is Ulewa unless lightning sits on that cell", () => {
   ]);
   assert.equal(far.lightningNearCell, false);
   assert.equal(far.title, "Ulewa nadciąga");
+});
+
+test("Szansa over the pin is the calibrated 90, not the old 80 rung", () => {
+  const frames = [frame(1_000, blob(50.0, 21.0, 2), 1.2), frame(1_600, blob(50.02, 21.03, 2), 2.1)];
+  const threat = computeThreat(city, frames, [], 40);
+  assert.equal(threat.etaMin, 0);
+  assert.equal(threat.chancePct, 90);
+});
+
+test("incoming willHit Szansa uses the calibrated 55 or 90 rung", () => {
+  const frames = [frame(1_000, blob(50.0, 20.4), 43), frame(1_600, blob(50.0, 20.55), 32)];
+  const threat = computeThreat(city, frames, [], 40);
+  assert.equal(threat.willHit, true);
+  // Raw 60 (willHit+approaching) → 55; raw 70 (ETA ≤ 20) → 90.
+  if (threat.etaMin !== null && threat.etaMin > 20 && threat.etaMin <= 45) {
+    assert.equal(threat.chancePct, 55);
+  } else {
+    assert.equal(threat.chancePct, 90);
+  }
+});
+
+test("Szansa with no echo stays the dry 10 (calibration does not apply)", () => {
+  const threat = computeThreat(city, [], [], 40);
+  assert.equal(threat.nearestKm, null);
+  assert.equal(threat.chancePct, 10);
+});
+
+test("IMGW-only watch keeps the uncalibrated warning rung", () => {
+  const warning: OfficialWarning = {
+    id: "w",
+    event: "Burze",
+    degree: 2,
+    probability: 80,
+    from: "2020-01-01 00:00:00",
+    to: "2030-12-31 23:59:59",
+    published: "2020-01-01 00:00:00",
+    body: "Burze.",
+    office: "IMGW-PIB",
+    teryt: ["9999"],
+    matchesPlace: true,
+    stormRelated: true,
+  };
+  const threat = computeThreat(city, [], [warning], 40);
+  assert.equal(threat.nearestKm, null);
+  assert.equal(threat.chancePct, 35);
+  assert.equal(threat.level, "watch");
 });
 
 test("klasa 3 plus lightning near the cell earns Burza (the F4 miss)", () => {

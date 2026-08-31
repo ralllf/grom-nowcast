@@ -59,6 +59,35 @@ window and klasa ≥ 2; research uses 60 min and both thresholds.
 
 POD/FAR/CSI cells are written `P/F/C` in percent, e.g. `64/32/49`.
 
+## Slice 8 remap (2026-08-31)
+
+No SRI-era row and no held-out day exist yet. Slice 8 remaps echo-driven Szansa
+from the **one published midday row** above (`2026-08-31`, window 09:40–11:40,
+RainViewer). Observed = rain ≥ klasa 1 over the pin within 60 min, echo ≤ 100 km.
+
+Dry / IMGW-only pins are **not** in this table and keep their raw rungs.
+
+| raw rung | n | mean raw | observed | shipped | ±10 pt gate |
+|---|---|---|---|---|---|
+| 0–19 | 219 | 10.3 | 10% | **10** | yes |
+| 20–29 | 2 | 22.5 | 0% | **10** | n<20, conservative |
+| 30–39 | 0 | — | — | **15** | empty |
+| 40–49 | 1 | 40 | 0% | **15** | n<20 |
+| 50–59 | 28 | 55 | 18% | **20** | yes |
+| 60–69 | 75 | 60 | 56% | **55** | yes |
+| 70–79 | 27 | 70 | 89% | **90** | yes |
+| 80–89 | 109 | 80 | 90% | **90** | yes |
+| 90–100 | 33 | 90 | 100% | **95** | yes |
+
+The table lives in [`src/lib/weather/chance.ts`](../src/lib/weather/chance.ts) and
+is asserted by `chance.test.ts`. Re-run `npm run --silent hindcast -- --sri --json`
+on a stormy day and add a row here before tightening the bins.
+
+Alert implication at shipped defaults (`leadMin` 30, `minLevel` 2, `minChancePct` 50):
+the well-calibrated willHit+approaching rung (60 → 55) still clears the gate; the
+overconfident close-echo rung (55 → 20, obs 18%) no longer fires. That should
+not worsen POD and should cut FAR. Confirm on the next logged day.
+
 ## Log
 
 | date | regime | window UTC | age_s | cellKm | samples | advected | persist | crudeETA | n+30 ≥2 | p+30 ≥2 | n+60 ≥2 | p+60 ≥2 | alert_shipped | alert_research≥2 | ETA_shipped | ETA_research≥2 | szansa | notes |

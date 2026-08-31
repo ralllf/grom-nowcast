@@ -32,9 +32,13 @@ import { getSnapshot, getSriOverlay, searchPlaces } from "@/lib/weather/server";
 import { canTrustRadar, IMGW_WARNINGS_UNAVAILABLE } from "@/lib/weather/snapshot";
 import { computeThreat } from "@/lib/weather/threat";
 import {
+  ALERT_PRESET_ORDER,
+  ALERT_PRESETS,
+  alertPresetPatch,
   evaluateAlert,
   isQuietHour,
   levelSettingLabelPl,
+  matchAlertPreset,
   testAlertEvent,
   type AlertEvent,
   type AlertKind,
@@ -105,6 +109,7 @@ export function GromApp() {
   const recordAlert = useGrom((s) => s.recordAlert);
   const dismissAlert = useGrom((s) => s.dismissAlert);
   const clearAlertLog = useGrom((s) => s.clearAlertLog);
+  const alertPreset = matchAlertPreset(alerts);
   const [permission, setPermission] = useState<NotifyPermission>("default");
 
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -745,40 +750,34 @@ export function GromApp() {
                     ) : null}
                   </p>
 
-                  <label className="block text-sm">
-                    Wołaj, gdy dojście ≤{" "}
-                    <span className="font-mono tabular-nums">{alerts.leadMin} min</span>
-                    <input
-                      type="range"
-                      min={10}
-                      max={60}
-                      step={5}
-                      value={alerts.leadMin}
-                      onChange={(e) => setAlerts({ leadMin: Number(e.target.value) })}
-                      className="mt-2 w-full accent-accent"
-                      aria-label="Wyprzedzenie alertu w minutach"
-                    />
-                  </label>
-
                   <div>
-                    <p className="text-sm">Od jakiej intensywności</p>
+                    <p className="text-sm">Czułość alertów</p>
                     <div className="mt-2 flex flex-wrap gap-2">
-                      {([1, 2, 3] as const).map((lvl) => (
-                        <button
-                          key={lvl}
-                          type="button"
-                          onClick={() => setAlerts({ minLevel: lvl })}
-                          className={cn(
-                            "h-9 rounded-full px-3 text-xs font-medium",
-                            alerts.minLevel === lvl
-                              ? "bg-accent text-accent-fg"
-                              : "bg-surface text-fg",
-                          )}
-                        >
-                          {levelSettingLabelPl(lvl)}
-                        </button>
-                      ))}
+                      {ALERT_PRESET_ORDER.map((id) => {
+                        const preset = ALERT_PRESETS[id];
+                        const active = alertPreset === id;
+                        return (
+                          <button
+                            key={id}
+                            type="button"
+                            onClick={() => setAlerts(alertPresetPatch(id))}
+                            className={cn(
+                              "h-9 rounded-full px-3 text-xs font-medium",
+                              active
+                                ? "bg-accent text-accent-fg"
+                                : "bg-surface text-fg",
+                            )}
+                          >
+                            {preset.label}
+                          </button>
+                        );
+                      })}
                     </div>
+                    <p className="mt-2 text-xs text-muted">
+                      {alertPreset
+                        ? ALERT_PRESETS[alertPreset].hint
+                        : "własne — suwaki w zaawansowanych"}
+                    </p>
                   </div>
 
                   <div className="flex flex-wrap items-center gap-2">
@@ -842,6 +841,62 @@ export function GromApp() {
                       </div>
                     ) : null}
                   </div>
+
+                  <details className="rounded-xl bg-surface px-3 py-2">
+                    <summary className="cursor-pointer text-sm font-medium">Zaawansowane</summary>
+                    <div className="mt-3 space-y-4">
+                      <label className="block text-sm">
+                        Wołaj, gdy dojście ≤{" "}
+                        <span className="font-mono tabular-nums">{alerts.leadMin} min</span>
+                        <input
+                          type="range"
+                          min={10}
+                          max={60}
+                          step={5}
+                          value={alerts.leadMin}
+                          onChange={(e) => setAlerts({ leadMin: Number(e.target.value) })}
+                          className="mt-2 w-full accent-accent"
+                          aria-label="Wyprzedzenie alertu w minutach"
+                        />
+                      </label>
+
+                      <div>
+                        <p className="text-sm">Od jakiej intensywności</p>
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          {([1, 2, 3] as const).map((lvl) => (
+                            <button
+                              key={lvl}
+                              type="button"
+                              onClick={() => setAlerts({ minLevel: lvl })}
+                              className={cn(
+                                "h-9 rounded-full px-3 text-xs font-medium",
+                                alerts.minLevel === lvl
+                                  ? "bg-accent text-accent-fg"
+                                  : "bg-surface text-fg",
+                              )}
+                            >
+                              {levelSettingLabelPl(lvl)}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      <label className="block text-sm">
+                        Minimalna szansa{" "}
+                        <span className="font-mono tabular-nums">{alerts.minChancePct}%</span>
+                        <input
+                          type="range"
+                          min={0}
+                          max={90}
+                          step={5}
+                          value={alerts.minChancePct}
+                          onChange={(e) => setAlerts({ minChancePct: Number(e.target.value) })}
+                          className="mt-2 w-full accent-accent"
+                          aria-label="Minimalna szansa alertu"
+                        />
+                      </label>
+                    </div>
+                  </details>
 
                   <div>
                     <div className="flex items-center justify-between gap-2">
