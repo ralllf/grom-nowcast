@@ -6,7 +6,7 @@ export type RadarSample = {
   lat: number;
   lon: number;
   level: RadarLevel;
-  /** Rain rate in mm/h (Marshall–Palmer from dBZ); absent in synthetic test data. */
+  /** Rain rate in mm/h (IMGW SRI, or Marshall–Palmer from RainViewer dBZ). */
   rate?: number;
 };
 
@@ -42,6 +42,8 @@ export type RadarScan = {
   maxLevel: RadarLevel;
   nearestKm: number | null;
   echoCount: number;
+  /** Analysis decoder. Overlay tiles stay RainViewer either way. */
+  analysisSource?: "sri" | "rainviewer";
 };
 
 export type Place = {
@@ -77,7 +79,7 @@ export type Snapshot = {
   stormWarningCount: number;
   /** True when the IMGW warnings API failed; radar may still be fresh. */
   warningsUnavailable: boolean;
-  /** True when RainViewer failed; do not treat the empty scan as "Czysto". */
+  /** True when analysis radar failed; do not treat the empty scan as "Czysto". */
   radarUnavailable: boolean;
 };
 

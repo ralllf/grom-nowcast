@@ -1,17 +1,16 @@
 /**
  * Hindcast: score GROM's nowcast and alert engine against what the radar actually did.
  *
- *   npm run hindcast                 # last 2 h of frames, human report
+ *   npm run hindcast                 # last 2 h of RainViewer frames, human report
+ *   npm run hindcast -- --sri        # last 2 h of IMGW COMPO_SRI .h5 (5 min)
  *   npm run hindcast -- --cached     # re-score frames cached in the OS temp dir
  *   npm run --silent hindcast -- --json          # one comparable JSON summary on stdout
- *   npm run --silent hindcast -- --json --cached
+ *   npm run --silent hindcast -- --json --sri
  *
- * Downloads RainViewer frames for Poland (~117 tile requests, paced for the 100 req/min
- * limit), decodes them exactly like the server does, then for a lattice of pins runs
- * computeThreat on frames t−30…t and compares the 0–60 min timeline and evaluateAlert()
- * with the frames that followed. Reports POD / FAR / CSI per lead time against a
- * persistence baseline — for both shipped alert defaults and the research config.
- * Frames are cached in the OS temp dir, never in the repo.
+ * Default path downloads RainViewer tiles (paced for the 100 req/min limit).
+ * `--sri` uses the datastore listing + ODIM H5, same decoder as the server.
+ * Then for a lattice of pins runs computeThreat and evaluateAlert() against
+ * the frames that followed. Frames are cached in the OS temp dir, never in the repo.
  */
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -27,10 +26,20 @@ import {
   wantsJson,
 } from "../src/lib/weather/hindcast-summary.ts";
 import { dbzFromRgba, levelFromRate, rateFromDbz } from "../src/lib/weather/palette.ts";
+import { aggregate, maxLevelOf } from "../src/lib/weather/radar-grid.ts";
+import { decodeSriH5 } from "../src/lib/weather/sri-h5.ts";
+import {
+  hitsFromSriGrid,
+  parseSriListing,
+  SRI_DATASTORE_PATH,
+  SRI_LIST_URL,
+  sriFileUrl,
+} from "../src/lib/weather/sri.ts";
 import type { RadarLevel, RadarMemoryFrame, RadarSample } from "../src/lib/weather/types.ts";
 
 const BBOX = { minLat: 48.8, maxLat: 55.15, minLon: 13.8, maxLon: 24.6 };
-const CACHE = join(tmpdir(), "grom-hindcast-frames.json");
+const wantSri = process.argv.includes("--sri");
+const CACHE = join(tmpdir(), wantSri ? "grom-hindcast-sri-frames.json" : "grom-hindcast-frames.json");
 const json = wantsJson(process.argv);
 
 type FrameCache = { downloadedAtMs: number; frames: RadarMemoryFrame[] };
@@ -48,9 +57,43 @@ function readCache(): { frames: RadarMemoryFrame[]; downloadedAtMs: number | nul
   throw new Error(`unreadable hindcast cache at ${CACHE}`);
 }
 
+async function loadSriFrames(): Promise<RadarMemoryFrame[]> {
+  const html = await (
+    await fetch(SRI_LIST_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded", Accept: "text/html" },
+      body: `path=${encodeURIComponent(SRI_DATASTORE_PATH)}`,
+    })
+  ).text();
+  const files = parseSriListing(html);
+  const take = files.slice(-24);
+  if (take.length === 0) throw new Error("SRI listing empty");
+  const out: RadarMemoryFrame[] = [];
+  for (const file of take) {
+    const res = await fetch(sriFileUrl(file.name));
+    if (!res.ok) throw new Error(`${res.status} ${file.name}`);
+    const decoded = await decodeSriH5(new Uint8Array(await res.arrayBuffer()));
+    const { samples } = aggregate(hitsFromSriGrid(decoded.data, decoded.grid));
+    out.push({
+      time: file.time,
+      samples,
+      maxLevel: maxLevelOf(samples),
+      nearestKm: null,
+    });
+    log(`  ${new Date(file.time * 1000).toISOString().slice(11, 16)}Z  ${samples.length} samples  SRI`);
+  }
+  return out;
+}
+
 async function loadFrames(): Promise<{ frames: RadarMemoryFrame[]; downloadedAtMs: number | null }> {
   if (existsSync(CACHE) && process.argv.includes("--cached")) {
     return readCache();
+  }
+  if (wantSri) {
+    const frames = await loadSriFrames();
+    const downloadedAtMs = Date.now();
+    writeFileSync(CACHE, JSON.stringify({ downloadedAtMs, frames } satisfies FrameCache));
+    return { frames, downloadedAtMs };
   }
   const maps = (await (
     await fetch("https://api.rainviewer.com/public/weather-maps.json")

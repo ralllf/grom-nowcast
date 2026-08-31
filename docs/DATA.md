@@ -4,23 +4,33 @@ GROM nie produkuje obserwacji. Składa publiczne źródła i liczy nowcast **na 
 
 ## Radar
 
+### Analiza: IMGW COMPO_SRI (datastore)
+
 | | |
 |---|---|
-| Dostawca kafelków | [RainViewer](https://www.rainviewer.com/) Public API |
+| Produkt | POLCOMP `COMPO_SRI.comp.sri` — surface rain intensity, mm/h |
+| Listing | POST `https://danepubliczne.imgw.pl/pl/datastore/getFilesList` z `path=Oper/Polrad/Produkty/POLCOMP/COMPO_SRI.comp.sri` (HTML). **Nie** `/api/data/product/id/COMPO_SRI.comp.sri` — to lustro opóźnione o godziny. |
+| Plik | `…/datastore/getfiledown/Oper/Polrad/Produkty/POLCOMP/COMPO_SRI.comp.sri/<YYYYMMDDHHmmss>00dBR.sri.h5` |
+| Siatka | **800×800**, nie 900×900. `xscale` ≈ 1163.64 m, `yscale` ≈ 1153.65 m (~1.16 km). ODIM `where`: `+proj=aeqd +lon_0=19.0926 +lat_0=52.3469 +ellps=sphere` (R = 6 370 997 m). |
+| Wartości | `quantity=RATE`, `gain=1`, `offset=0`, `nodata=-2`, `undetect=-1` — prawdziwe mm/h, nie Marshall–Palmer z koloru. |
+| Kadencja | 5 min; retencja ~3 dni. 10 radarów POLRAD. |
+| Dekoder | `h5wasm` + odwrotne aeqd ([`aeqd.ts`](../src/lib/weather/aeqd.ts)). PNG `_echoOnly.png` (też 800×800) zostaje na później (overlay, Slice 7). |
+
+Starsze notatki (900×900 / 1 km) były zgadywaniem z dokumentacji produktu; atrybuty H5 z 31 VIII 2026 rozstrzygają: **800×800**.
+
+### Overlay i fallback: RainViewer
+
+| | |
+|---|---|
+| Dostawca kafelków | [RainViewer](https://www.rainviewer.com/) Public API — mapa i automatyczny fallback analizy |
 | Endpoint map | `https://api.rainviewer.com/public/weather-maps.json` |
-| Siatka | POLRAD (IMGW-PIB), RainViewer kompozytuje i koloruje |
-| Kolorystyka | Universal Blue, analiza `…/2/0_0.png` (bez wygładzania, bez palety śniegu), mapa `…/2/1_0.png` |
-| Tabela kolorów | [rainviewer_api_colors_table.csv](https://www.rainviewer.com/files/rainviewer_api_colors_table.csv) → `src/lib/weather/palette.ts` |
-| Zoom analizy | 6 (API dopuszcza ≤ 7; 9 kafelków na klatkę) |
-| Limity | ~100 żądań / IP / min; `nowcast[]` i inne palety wyłączone 1 I 2026 |
+| Kolorystyka | Universal Blue, overlay `…/2/1_0.png`; fallback analizy `…/2/0_0.png` |
+| Zoom fallback | 6 (9 kafelków na klatkę), stride 2 → ~3 km |
+| Limity | ~100 żądań / IP / min; `nowcast[]` wyłączone 1 I 2026 |
 
-RainViewer Public API jest do użytku **osobistego / edukacyjnego** z atrybucją „Weather data by RainViewer” ([transition FAQ](https://www.rainviewer.com/api/transition-faq.html)). Przed komercją: inny dostęp albo własne źródło. **Nie cache’ujemy klatek na dysku ani w repo** (w RAM serwera: 8 ostatnich zdekodowanych klatek).
+RainViewer Public API jest do użytku **osobistego / edukacyjnego** z atrybucją „Weather data by RainViewer” ([transition FAQ](https://www.rainviewer.com/api/transition-faq.html)). **Nie cache’ujemy klatek na dysku ani w repo** (w RAM serwera: ostatnie zdekodowane klatki).
 
-### Alternatywa: IMGW bezpośrednio (do zrobienia)
-
-IMGW-PIB publikuje kompozyt POLRAD jako **dane otwarte** (ustawa o otwartych danych / HVD) w [danepubliczne.imgw.pl/datastore](https://danepubliczne.imgw.pl/datastore): `/Oper/Polrad/Produkty/POLCOMP/` → `COMPO_SRI…` (natężenie mm/h), `COMPO_CMAX_250…` (dBZ), `COMPO_ZHAIL` (prawd. gradu), **co 5 min**, 900×900 px ≈ 1 km, projekcja `+proj=aeqd +lon_0=19.0926 +lat_0=52.3469`, formaty ODIM_H5 i PNG (`_echoOnly.png`). Plus `/Oper/Perun/` (wyładowania, co 1 min). To 2× świeższe niż RainViewer, 10 radarów zamiast 8, i licencja pod produkt. Koszt: parser H5 (`h5wasm`) albo dekod PNG z własną legendą + odwrotne aeqd. Endpointy `meteo.imgw.pl/api/radars/v1/…` (PNG EPSG:3857 co 5 min) działają, ale są nieudokumentowane i ze znakiem wodnym — nie budować na nich.
-
-Sieć radarowa POLRAD należy do **Instytutu Meteorologii i Gospodarki Wodnej – Państwowego Instytutu Badawczego**. W UI jest stała atrybucja. Dane w GROM są **przetworzone** (próbkowanie, klastry, wektory) — nie wolno ich przedstawiać jako surowy produkt IMGW.
+Sieć radarowa POLRAD należy do **Instytutu Meteorologii i Gospodarki Wodnej – Państwowego Instytutu Badawczego**. W UI jest stała atrybucja. Dane w GROM są **przetworzone** (próbkowanie, klastry, wektory) — nie wolno ich przedstawiać jako surowy produkt IMGW. Endpointy `meteo.imgw.pl/api/radars/v1/…` są nieudokumentowane i ze znakiem wodnym — nie budować na nich. CMAX / ZHAIL — po Slice 6.
 
 ## Ostrzeżenia
 
@@ -50,6 +60,6 @@ Ustawienia (pinezka, promień, notify) → `localStorage` klucz `grom-settings-v
 
 ## Atrybucja (kopia do UI)
 
-> Źródłem danych ostrzeżeń i sieci POLRAD jest Instytut Meteorologii i Gospodarki Wodnej – Państwowy Instytut Badawczy. Dane radarowe zostały przetworzone. Radar: RainViewer. Mapa: OpenFreeMap / OSM. To nie jest oficjalny alert RCB.
+> Źródłem danych ostrzeżeń i sieci POLRAD jest Instytut Meteorologii i Gospodarki Wodnej – Państwowy Instytut Badawczy. Dane radarowe zostały przetworzone (SRI mm/h IMGW, siatka ~3 km; RainViewer dBZ → Marshall–Palmer gdy SRI niedostępne). Analiza: IMGW COMPO_SRI. Mapa: RainViewer / OpenFreeMap / OSM. To nie jest oficjalny alert RCB.
 
 Przy zmianie źródła — zaktualizuj ten tekst w [`src/components/grom-app.tsx`](../src/components/grom-app.tsx) i tutaj.

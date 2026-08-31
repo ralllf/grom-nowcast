@@ -2,8 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { PNG } from "pngjs";
 import { z } from "zod";
 import { lonLatToTile, tilePixelToLonLat } from "./geo";
-import { packSamples } from "./pack";
-import { ANALYSIS_COLOR_OPTIONS, dbzFromRgba, levelFromRate, rateFromDbz } from "./palette";
+import { ANALYSIS_COLOR_OPTIONS, dbzFromRgba, rateFromDbz } from "./palette";
 import {
   LruCache,
   NOMINATIM_CACHE_MAX,
@@ -12,17 +11,21 @@ import {
   NOMINATIM_UA,
   RequestThrottle,
 } from "./nominatim";
+import { aggregate, inPolandRadar, maxLevelOf, PL_RADAR_BBOX, type RawHit } from "./radar-grid";
+import { resolveAnalysis, type RainViewerMaps, type SampledFrame } from "./radar-source";
 import { loadSnapshot } from "./snapshot";
+import {
+  hitsFromSriGrid,
+  parseSriListing,
+  SRI_DATASTORE_PATH,
+  SRI_HISTORY_FRAMES,
+  SRI_LIST_URL,
+  sriFileUrl,
+} from "./sri";
 import { applyTerytFallback } from "./teryt";
-import type {
-  OfficialWarning,
-  Place,
-  RadarFrameMeta,
-  RadarLevel,
-  RadarSample,
-  RadarScan,
-  Snapshot,
-} from "./types";
+import type { OfficialWarning, Place, RadarFrameMeta, Snapshot } from "./types";
+
+export { PL_RADAR_BBOX, PL_RADAR_ORIGIN } from "./radar-grid";
 
 const UA = NOMINATIM_UA;
 
@@ -30,13 +33,6 @@ const mapsCache: { at: number; data: RainViewerMaps | null } = { at: 0, data: nu
 const warningCache: { at: number; data: OfficialWarning[] | null } = { at: 0, data: null };
 const placeCache = new LruCache<Place>(NOMINATIM_CACHE_MAX);
 const nominatimGate = new RequestThrottle(NOMINATIM_MIN_GAP_MS);
-
-type RainViewerMaps = {
-  version: string;
-  generated: number;
-  host: string;
-  radar: { past: RadarFrameMeta[]; nowcast: RadarFrameMeta[] };
-};
 
 async function fetchJson<T>(url: string, timeoutMs = 12_000): Promise<T> {
   const ctrl = new AbortController();
@@ -60,6 +56,26 @@ async function fetchBuf(url: string, timeoutMs = 10_000): Promise<Buffer> {
     const res = await fetch(url, { signal: ctrl.signal, headers: { "User-Agent": UA } });
     if (!res.ok) throw new Error(`${res.status} ${url}`);
     return Buffer.from(await res.arrayBuffer());
+  } finally {
+    clearTimeout(t);
+  }
+}
+
+async function fetchText(
+  url: string,
+  init: RequestInit = {},
+  timeoutMs = 12_000,
+): Promise<string> {
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    const res = await fetch(url, {
+      ...init,
+      signal: ctrl.signal,
+      headers: { "User-Agent": UA, ...init.headers },
+    });
+    if (!res.ok) throw new Error(`${res.status} ${url}`);
+    return await res.text();
   } finally {
     clearTimeout(t);
   }
@@ -203,55 +219,32 @@ export async function searchNominatim(query: string): Promise<Place[]> {
   );
 }
 
-/** Poland + border strip — fixed radar domain (not pin-centered). */
-export const PL_RADAR_BBOX = {
-  minLat: 48.8,
-  maxLat: 55.15,
-  minLon: 13.8,
-  maxLon: 24.6,
-} as const;
-
-export const PL_RADAR_ORIGIN = { lat: 52.1, lon: 19.35 };
-
 /**
- * Radar tiles: zoom 6 → ~1.5 km/px at Polish latitudes; stride 2 → ~3 km samples.
- * RainViewer allows z ≤ 7 and ~100 requests / IP / min; Poland at z=6 is 9 tiles
- * per frame and frames are immutable, so with the per-frame cache below a warm
- * server fetches ~9 tiles every 10 minutes.
+ * RainViewer fallback tiles: zoom 6 → ~1.5 km/px; stride 2 → ~3 km samples.
+ * Overlay still uses these URLs even when analysis is SRI.
  */
 const RADAR_ZOOM = 6;
 const PIXEL_STRIDE = 2;
 const MAX_RADAR_TILES = 24;
-/** Cap on samples per frame; hit → coarsen the aggregation grid (never drop regions). */
-const MAX_RADAR_SAMPLES = 9_000;
-/** Aggregation cell (degrees). ~3 km at 52°N: 0.027° lat, 0.044° lon. */
-const BASE_CELL_LAT = 0.027;
-const BASE_CELL_LON = 0.044;
-const FRAME_CACHE_MAX = 8;
+const FRAME_CACHE_MAX = 12;
 
-type SampledFrame = {
-  time: number;
-  samples: RadarSample[];
-  maxLevel: RadarLevel;
-  nearestKm: null;
-  cellKm: number;
-  /** All tiles fetched and decoded — only then is the frame safe to cache. */
-  complete: boolean;
-};
+const sriListCache: { at: number; html: string | null } = { at: 0, html: null };
 
-/** Decoded frames keyed by RainViewer timestamp — frames never change once published. */
+/** Decoded frames keyed by scan timestamp — frames never change once published. */
 const frameCache = new Map<number, SampledFrame>();
 const frameInFlight = new Map<number, Promise<SampledFrame>>();
 
-let radarScanCache: { key: number; at: number; scan: RadarScan } | null = null;
+let radarScanCache: { key: string; at: number; scan: Awaited<ReturnType<typeof resolveAnalysis>>["scan"] } | null =
+  null;
 
-function inPolandRadar(lat: number, lon: number) {
-  return (
-    lat >= PL_RADAR_BBOX.minLat &&
-    lat <= PL_RADAR_BBOX.maxLat &&
-    lon >= PL_RADAR_BBOX.minLon &&
-    lon <= PL_RADAR_BBOX.maxLon
-  );
+function rememberFrame(decoded: SampledFrame) {
+  if (!decoded.complete) return;
+  frameCache.set(decoded.time, decoded);
+  while (frameCache.size > FRAME_CACHE_MAX) {
+    const oldest = frameCache.keys().next().value;
+    if (oldest === undefined) break;
+    frameCache.delete(oldest);
+  }
 }
 
 function tilesForPoland(z: number) {
@@ -264,53 +257,6 @@ function tilesForPoland(z: number) {
     }
   }
   return [...set.values()].slice(0, MAX_RADAR_TILES);
-}
-
-type RawHit = { lat: number; lon: number; rate: number };
-
-/**
- * Aggregate raw pixel hits onto a regular lat/lon grid, keeping the max rate per cell.
- * If the result is still above the cap, double the cell and try again — coverage
- * stays uniform across the country instead of silently dropping the south.
- */
-function aggregate(hits: RawHit[]): { samples: RadarSample[]; cellKm: number } {
-  let factor = 1;
-  for (;;) {
-    const dLat = BASE_CELL_LAT * factor;
-    const dLon = BASE_CELL_LON * factor;
-    const cells = new Map<number, RawHit>();
-    for (const h of hits) {
-      const i = Math.floor((h.lat - PL_RADAR_BBOX.minLat) / dLat);
-      const j = Math.floor((h.lon - PL_RADAR_BBOX.minLon) / dLon);
-      const key = i * 4096 + j;
-      const cur = cells.get(key);
-      if (!cur) {
-        cells.set(key, {
-          lat: PL_RADAR_BBOX.minLat + (i + 0.5) * dLat,
-          lon: PL_RADAR_BBOX.minLon + (j + 0.5) * dLon,
-          rate: h.rate,
-        });
-      } else if (h.rate > cur.rate) {
-        cur.rate = h.rate;
-      }
-    }
-    if (cells.size <= MAX_RADAR_SAMPLES || factor >= 8) {
-      const samples: RadarSample[] = [];
-      for (const c of cells.values()) {
-        const level = levelFromRate(c.rate);
-        if (level === 0) continue;
-        samples.push({
-          lat: Math.round(c.lat * 1000) / 1000,
-          lon: Math.round(c.lon * 1000) / 1000,
-          level,
-          rate: Math.round(c.rate * 10) / 10,
-        });
-      }
-      samples.sort((s, t) => t.level - s.level || s.lat - t.lat || s.lon - t.lon);
-      return { samples, cellKm: Math.round(3 * factor * 10) / 10 };
-    }
-    factor *= 2;
-  }
 }
 
 async function decodeFrame(host: string, frame: RadarFrameMeta): Promise<SampledFrame> {
@@ -347,100 +293,95 @@ async function decodeFrame(host: string, frame: RadarFrameMeta): Promise<Sampled
     }),
   );
   const { samples, cellKm } = aggregate(hits);
-  let maxLevel: RadarLevel = 0;
-  for (const s of samples) if (s.level > maxLevel) maxLevel = s.level;
   return {
     time: frame.time,
     samples,
-    maxLevel,
+    maxLevel: maxLevelOf(samples),
     nearestKm: null,
     cellKm,
     complete: tilesOk === tiles.length,
   };
 }
 
-function sampleFrame(host: string, frame: RadarFrameMeta): Promise<SampledFrame> {
-  const hit = frameCache.get(frame.time);
+function sampleCached(key: number, load: () => Promise<SampledFrame>): Promise<SampledFrame> {
+  const hit = frameCache.get(key);
   if (hit) return Promise.resolve(hit);
-  const pending = frameInFlight.get(frame.time);
+  const pending = frameInFlight.get(key);
   if (pending) return pending;
-  const job = decodeFrame(host, frame)
+  const job = load()
     .then((decoded) => {
-      if (decoded.complete) {
-        frameCache.set(frame.time, decoded);
-        while (frameCache.size > FRAME_CACHE_MAX) {
-          const oldest = frameCache.keys().next().value;
-          if (oldest === undefined) break;
-          frameCache.delete(oldest);
-        }
-      }
+      rememberFrame(decoded);
       return decoded;
     })
-    .finally(() => frameInFlight.delete(frame.time));
-  frameInFlight.set(frame.time, job);
+    .finally(() => frameInFlight.delete(key));
+  frameInFlight.set(key, job);
   return job;
 }
 
-async function sampleRadar(): Promise<RadarScan> {
-  const maps = await getMaps();
-  const past = maps.radar.past ?? [];
-  const nowcast = maps.radar.nowcast ?? [];
-  const take = past.slice(-4);
-  const latest = take.at(-1);
-  const empty: RadarScan = {
-    host: maps.host,
-    generated: maps.generated,
-    latestTime: latest?.time ?? null,
-    past,
-    nowcast,
-    samples: [],
-    prevSamples: [],
-    prevTime: null,
-    history: [],
-    maxLevel: 0,
+function sampleFrame(host: string, frame: RadarFrameMeta): Promise<SampledFrame> {
+  return sampleCached(frame.time, () => decodeFrame(host, frame));
+}
+
+async function listSriHtml(): Promise<string> {
+  const now = Date.now();
+  if (sriListCache.html && now - sriListCache.at < 45_000) return sriListCache.html;
+  const html = await fetchText(SRI_LIST_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded", Accept: "text/html" },
+    body: `path=${encodeURIComponent(SRI_DATASTORE_PATH)}`,
+  });
+  sriListCache.html = html;
+  sriListCache.at = now;
+  return html;
+}
+
+async function decodeSriFile(name: string, time: number): Promise<SampledFrame> {
+  const { decodeSriH5 } = await import("./sri-h5");
+  const buf = await fetchBuf(sriFileUrl(name), 15_000);
+  const decoded = await decodeSriH5(new Uint8Array(buf));
+  const { samples, cellKm } = aggregate(hitsFromSriGrid(decoded.data, decoded.grid));
+  return {
+    time,
+    samples,
+    maxLevel: maxLevelOf(samples),
     nearestKm: null,
-    echoCount: 0,
-    cellKm: 3,
+    cellKm,
+    complete: true,
   };
-  if (!latest) return empty;
+}
 
-  if (
-    radarScanCache &&
-    radarScanCache.key === latest.time &&
-    Date.now() - radarScanCache.at < 90_000
-  ) {
-    return radarScanCache.scan;
-  }
+async function sampleSriFrames(): Promise<SampledFrame[]> {
+  const files = parseSriListing(await listSriHtml()).slice(-SRI_HISTORY_FRAMES);
+  if (files.length === 0) throw new Error("SRI listing empty");
+  const sampled = await Promise.all(
+    files.map((file) =>
+      sampleCached(file.time, () => decodeSriFile(file.name, file.time)).catch(() => null),
+    ),
+  );
+  const ok = sampled.filter((f): f is SampledFrame => f != null);
+  if (ok.length === 0) throw new Error("SRI frames failed to decode");
+  return ok;
+}
 
-  const sampled = await Promise.all(take.map((frame) => sampleFrame(maps.host, frame)));
-  const now = sampled.at(-1);
-  const before = sampled.length >= 2 ? sampled.at(-2) : undefined;
-  if (!now) return empty;
+async function loadRainViewerFrames(maps: RainViewerMaps): Promise<SampledFrame[]> {
+  const take = (maps.radar.past ?? []).slice(-4);
+  if (take.length === 0) return [];
+  return Promise.all(take.map((frame) => sampleFrame(maps.host, frame)));
+}
 
-  const scan: RadarScan = {
-    host: maps.host,
-    generated: maps.generated,
-    latestTime: latest.time,
-    past,
-    nowcast,
-    samples: [],
-    prevSamples: [],
-    prevTime: before?.time ?? null,
-    history: sampled.map(({ time, samples, maxLevel, nearestKm, complete }) => ({
-      time,
-      samples: [],
-      packed: packSamples(samples),
-      maxLevel,
-      nearestKm,
-      degraded: !complete,
-    })),
-    maxLevel: now.maxLevel,
-    nearestKm: now.nearestKm,
-    echoCount: now.samples.length,
-    cellKm: now.cellKm,
+async function sampleRadar() {
+  if (radarScanCache && Date.now() - radarScanCache.at < 90_000) return radarScanCache.scan;
+  const resolved = await resolveAnalysis({
+    loadSri: sampleSriFrames,
+    getMaps,
+    loadRainViewerFrames,
+  });
+  radarScanCache = {
+    key: `${resolved.source}:${resolved.scan.latestTime ?? 0}`,
+    at: Date.now(),
+    scan: resolved.scan,
   };
-  radarScanCache = { key: latest.time, at: Date.now(), scan };
-  return scan;
+  return resolved.scan;
 }
 
 const snapshotInput = z.object({

@@ -20,11 +20,16 @@ export function formatRadarClock(unixSec: number): string {
   });
 }
 
-/** "Radar 11:15 · sprzed 6 min" — null when there is no scan. */
-export function radarAgeCaption(radarTimeSec: number | null, nowMs: number): string | null {
+/** "Radar IMGW 11:15 · sprzed 6 min" on SRI; "Radar 11:15 · …" on RainViewer fallback. */
+export function radarAgeCaption(
+  radarTimeSec: number | null,
+  nowMs: number,
+  source: "sri" | "rainviewer" = "rainviewer",
+): string | null {
   if (radarTimeSec == null) return null;
   const age = Math.round(radarAgeMin(radarTimeSec, nowMs));
-  return `Radar ${formatRadarClock(radarTimeSec)} · sprzed ${age} min`;
+  const who = source === "sri" ? "Radar IMGW" : "Radar";
+  return `${who} ${formatRadarClock(radarTimeSec)} · sprzed ${age} min`;
 }
 
 /**

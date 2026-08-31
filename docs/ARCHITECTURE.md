@@ -3,10 +3,10 @@
 Nowcast w GROM-ie to trzy warstwy: **pobranie radaru**, **zrozumienie komórek**, **zdanie na pinezkę**.
 
 ```text
-RainViewer kafelki PNG (z=5, bbox Polski + pas graniczny)
-        │  serwer dekoduje pngjs, cache krajowy na timestamp klatki
+IMGW COMPO_SRI .sri.h5 (datastore, 5 min)  ──outage──▶  RainViewer kafelki (fallback)
+        │  h5wasm + odwrotne aeqd; overlay mapy zostaje RainViewer
         ▼
-  próbki (lat, lon, level 1–4)  ×  4 skany (~30 min)
+  próbki (lat, lon, level 1–4)  ×  4 skany (SRI: 15–20 min; fallback: ~30 min)
         │
         ▼
   masy (flood-fill) → siatka km → smooth dużej skali → NCC (TREC)
@@ -30,8 +30,9 @@ Szansa i ETA **nigdy** nie są średnią z całego koła. Koło na mapie to tylk
 
 ## Radar
 
-- Źródło kafelków: `https://api.rainviewer.com/public/weather-maps.json` → host + `past[]` (13 klatek co 10 min). Pole `nowcast[]` RainViewer **wyłączył 1 I 2026** — jest puste; ekstrapolacja jest nasza.
-- **Kolor → dBZ → mm/h, bez zgadywania.** Kafelki `…/2/0_0.png` (Universal Blue, `smooth=0`, `snow=0`), więc każdy piksel ma dokładny kolor z tabeli RainViewera ([`palette.ts`](../src/lib/weather/palette.ts)). Kolor → dBZ (tabela), dBZ → mm/h (Marshall–Palmer `Z = 200·R^1.6`), mm/h → klasa:
+- **Analiza: IMGW COMPO_SRI** z datastore (listing POST `getFilesList`, plik `.sri.h5`). 800×800, ~1.16 km, aeqd, `quantity=RATE` w mm/h, kadencja 5 min. RainViewer zostaje overlayem mapy i automatycznym fallbackiem, gdy listing/H5 padnie.
+- **Fallback kafelków:** `https://api.rainviewer.com/public/weather-maps.json` → host + `past[]` (13 klatek co 10 min). Pole `nowcast[]` RainViewer **wyłączył 1 I 2026** — jest puste; ekstrapolacja jest nasza.
+- **Kolor → dBZ → mm/h (tylko fallback).** Kafelki `…/2/0_0.png` (Universal Blue, `smooth=0`, `snow=0`), więc każdy piksel ma dokładny kolor z tabeli RainViewera ([`palette.ts`](../src/lib/weather/palette.ts)). Kolor → dBZ (tabela), dBZ → mm/h (Marshall–Palmer `Z = 200·R^1.6`), mm/h → klasa. SRI pomija ten krok — IMGW już policzył Z–R.
 
   | Klasa | mm/h | dBZ | Kolor |
   |---|---|---|---|
@@ -43,7 +44,7 @@ Szansa i ETA **nigdy** nie są średnią z całego koła. Koło na mapie to tylk
   Beżowe, półprzezroczyste < 15 dBZ (mżawka / szum) = brak echa. Dawna heurystyka po odcieniu liczyła ten szum jako „deszcz”, a pomarańcz (40–44 dBZ) klasyfikowała *niżej* niż żółty — stąd fałszywe „opad w okolicy” i przegapione ulewy.
 - **Zoom 6** (RainViewer dopuszcza ≤ 7): ~1.5 km/px na szerokości Polski, stride 2 → próbka co ~3 km. Polska = 9 kafelków na klatkę.
 - **Siatka zamiast obcinania.** Piksele agregujemy do siatki ~3 km (max mm/h w komórce). Gdy próbek > 9000, siatka rośnie ×2 — pokrycie zostaje równomierne. Wcześniej próbki sortowano po poziomie i szerokości i ucinano do 5000, co przy rozległym opadzie **wyrzucało południe kraju**.
-- **Cache per klatka.** Klatka RainViewera jest niezmienna → dekodujemy ją raz (cache 8 klatek, tylko gdy wszystkie kafelki wróciły). Ciepły serwer ściąga ~9 kafelków na 10 minut, daleko od limitu 100 żądań/min. Snapshot ma dodatkowo cache 90 s na `latestTime`.
+- **Cache per klatka.** Klatka SRI / RainViewera jest niezmienna → dekodujemy ją raz (cache 12 klatek). Snapshot ma dodatkowo cache 90 s. Listing SRI cache 45 s.
 - **Format przesyłu.** TanStack Start opakowuje każdą liczbę w JSON (`{"t":0,"s":51.149}`), więc klatka jedzie jako **jeden string base64, 8 bajtów/próbka** ([`pack.ts`](../src/lib/weather/pack.ts)): u16 lat, u16 lon (tysięczne stopnia od rogu bboxu), u16 klasa, u16 mm/h×10. Deszczowy dzień: ~180 kB za 4 klatki zamiast ~2 MB.
 - Overlay na mapie: te same URL-e RainViewer (`…/2/1_0.png`, wygładzone, bez palety śniegu, żeby legenda się zgadzała), raster MapLibre `maxzoom: 7`.
 
@@ -135,7 +136,7 @@ Ustawienia: `leadMin` 10–60, `minLevel` 1–3 (słaby deszcz / deszcz / ulewa-
 
 ## Świadome ograniczenia
 
-- RainViewer to przetworzony POLRAD (8 z 10 radarów, co 10 min), nie surowy volume IMGW. Opóźnienie rzędu kilku–kilkunastu minut. IMGW publikuje własny kompozyt SRI (mm/h) **co 5 min, 1 km** — zob. `docs/DATA.md`.
+- Analiza SRI to kompozyt IMGW (10 radarów, co 5 min, ~1.16 km, 800×800). Overlay mapy nadal RainViewer (8 z 10, 10 min) — stąd F9 (mapa ≠ liczby) czeka na Slice 7. Opóźnienie SRI rzędu kilku minut. Szczegóły siatki: `docs/DATA.md`.
 - Siatka ~3 km. Dobra do wektora mezoskali i do „czy pada nad miastem”; pojedyncza komórka < 3 km może zniknąć między próbkami.
 - Marshall–Palmer to jedna relacja Z–R dla wszystkiego: w burzy konwekcyjnej zaniża, w mżawce zawyża. Klasy mm/h są orientacyjne.
 - Cztery skany ~30 min, ekstrapolacja liniowa. Nie optyczny flow, bez wzrostu/zaniku komórek.
