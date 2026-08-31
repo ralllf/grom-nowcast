@@ -1,6 +1,6 @@
 import { MapPin, X } from "lucide-react";
 import { useEffect, useRef, useState, type PointerEvent } from "react";
-import { etaLabel, shouldAutoExpandSheet } from "@/components/threat-sheet-logic";
+import { etaLabel, nowcastHeadline, shouldAutoExpandSheet } from "@/components/threat-sheet-logic";
 import { IMGW_WARNINGS_UNAVAILABLE } from "@/lib/weather/snapshot";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
@@ -14,7 +14,6 @@ import {
 } from "@/lib/weather/wall-clock";
 import type {
   CellTrack,
-  OfficialWarning,
   Place,
   RadarLevel,
   Threat,
@@ -46,7 +45,8 @@ type Props = {
   pending: boolean;
   error: boolean;
   tracks: CellTrack[];
-  shownWarnings: OfficialWarning[];
+  /** Time-boxed IMGW lane — never the nowcast headline. */
+  imgwLine?: string | null;
   warningsUnavailable?: boolean;
   geoError: string | null;
   onClearGeoError: () => void;
@@ -61,7 +61,7 @@ export function ThreatSheet({
   pending,
   error,
   tracks,
-  shownWarnings,
+  imgwLine = null,
   warningsUnavailable = false,
   geoError,
   onClearGeoError,
@@ -84,7 +84,7 @@ export function ThreatSheet({
       ? `${echo}${threat.pinLevel > 0 ? ` · ${levelLabelPl(threat.pinLevel)}` : ""}`
       : echo;
   const chance = threat ? `${threat.chancePct}%` : "—";
-  const headline = pending && !threat ? "Skanuję radar…" : (threat?.title ?? "Brak danych");
+  const headline = nowcastHeadline(threat, pending);
 
   useEffect(() => {
     const desktop = window.matchMedia(SM_UP).matches;
@@ -149,6 +149,9 @@ export function ThreatSheet({
                 {headline}
               </h2>
               <p className="mt-1.5 truncate text-sm text-muted">{place.label}</p>
+              {imgwLine ? (
+                <p className="mt-0.5 truncate text-[11px] text-warn">{imgwLine}</p>
+              ) : null}
             </div>
             <dl className="flex shrink-0 gap-3 text-center">
               <PeekStat label="Szansa" value={chance} />
@@ -244,13 +247,9 @@ export function ThreatSheet({
         </p>
 
         {warningsUnavailable ? (
-          <p className="mt-3 text-xs text-warn lg:hidden">{IMGW_WARNINGS_UNAVAILABLE}</p>
-        ) : shownWarnings[0] ? (
-          <p className="mt-3 text-xs text-muted lg:hidden">
-            IMGW: {shownWarnings[0].event}
-            {shownWarnings[0].degree ? ` · stopień ${shownWarnings[0].degree}` : ""}
-            {!shownWarnings[0].matchesPlace ? " · inny powiat" : ""}
-          </p>
+          <p className="mt-3 text-xs text-warn">{IMGW_WARNINGS_UNAVAILABLE}</p>
+        ) : imgwLine ? (
+          <p className="mt-3 text-xs leading-relaxed text-warn">{imgwLine}</p>
         ) : null}
 
         {geoError ? (

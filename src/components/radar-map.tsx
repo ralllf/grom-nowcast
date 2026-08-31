@@ -1,6 +1,12 @@
 import { useEffect, useRef } from "react";
 import type { StyleSpecification } from "maplibre-gl";
 import { shouldFallbackBasemap } from "@/components/map-boot";
+import {
+  IMGW_DEGREE_PAINT,
+  tintedPowiatCollection,
+  type ImgwGeoJSON,
+} from "@/lib/weather/imgw-lane";
+import { loadPowiatBoundaries } from "@/lib/weather/teryt";
 import type { CellTrack } from "@/lib/weather/types";
 import { circlePolygon } from "@/lib/weather/geo";
 import { OVERLAY_COLOR_OPTIONS } from "@/lib/weather/palette";
@@ -21,6 +27,8 @@ type Props = {
   radarHost: string | null;
   radarPath: string | null;
   tracks: CellTrack[];
+  imgwOn?: boolean;
+  imgwDegrees?: Record<string, number>;
   focus: Focus | null;
   onPick: (lat: number, lon: number) => void;
   className?: string;
@@ -68,6 +76,8 @@ type Live = {
   radarHost: string | null;
   radarPath: string | null;
   tracks: CellTrack[];
+  imgwOn: boolean;
+  imgwDegrees: Record<string, number>;
 };
 
 export function RadarMap({
@@ -77,6 +87,8 @@ export function RadarMap({
   radarHost,
   radarPath,
   tracks,
+  imgwOn = true,
+  imgwDegrees = {},
   focus,
   onPick,
   className,
@@ -89,8 +101,18 @@ export function RadarMap({
   const onPickRef = useRef(onPick);
   onPickRef.current = onPick;
 
-  const liveRef = useRef<Live>({ lat, lon, radiusKm, radarHost, radarPath, tracks });
-  liveRef.current = { lat, lon, radiusKm, radarHost, radarPath, tracks };
+  const liveRef = useRef<Live>({
+    lat,
+    lon,
+    radiusKm,
+    radarHost,
+    radarPath,
+    tracks,
+    imgwOn,
+    imgwDegrees,
+  });
+  liveRef.current = { lat, lon, radiusKm, radarHost, radarPath, tracks, imgwOn, imgwDegrees };
+  const imgwGenRef = useRef(0);
 
   useEffect(() => {
     const el = rootRef.current;
@@ -231,6 +253,7 @@ export function RadarMap({
         }
 
         syncRadar(instance, live);
+        void syncImgw(instance, live, imgwGenRef);
         if (!readyRef.current) {
           instance.jumpTo({ center: [live.lon, live.lat], zoom: 8.2 });
         }
@@ -303,6 +326,12 @@ export function RadarMap({
 
   useEffect(() => {
     const map = mapRef.current;
+    if (!map || !readyRef.current) return;
+    void syncImgw(map, liveRef.current, imgwGenRef);
+  }, [imgwOn, imgwDegrees]);
+
+  useEffect(() => {
+    const map = mapRef.current;
     const canvas = canvasRef.current;
     if (!map || !readyRef.current || !canvas) return;
     drawTracks(canvas, map, tracks);
@@ -347,6 +376,75 @@ function sizeCanvas(canvas: HTMLCanvasElement | null, wrap: HTMLDivElement | nul
   canvas.height = Math.round(h * dpr);
   const ctx = canvas.getContext("2d");
   if (ctx) ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+
+const IMGW_SRC = "imgw-powiat";
+const IMGW_FILL = "imgw-powiat-fill";
+const IMGW_LINE = "imgw-powiat-line";
+const IMGW_EMPTY: ImgwGeoJSON = { type: "FeatureCollection", features: [] };
+
+function imgwBeforeId(map: import("maplibre-gl").Map): string | undefined {
+  if (map.getLayer("radar")) return "radar";
+  return labelLayerId(map);
+}
+
+function ensureImgwLayers(map: import("maplibre-gl").Map) {
+  if (!map.getSource(IMGW_SRC)) {
+    map.addSource(IMGW_SRC, { type: "geojson", data: IMGW_EMPTY });
+  }
+  const before = imgwBeforeId(map);
+  if (!map.getLayer(IMGW_FILL)) {
+    map.addLayer(
+      {
+        id: IMGW_FILL,
+        type: "fill",
+        source: IMGW_SRC,
+        paint: {
+          "fill-color": IMGW_DEGREE_PAINT.color as unknown as string,
+          "fill-opacity": IMGW_DEGREE_PAINT.opacity as unknown as number,
+        },
+      },
+      before,
+    );
+  }
+  if (!map.getLayer(IMGW_LINE)) {
+    map.addLayer(
+      {
+        id: IMGW_LINE,
+        type: "line",
+        source: IMGW_SRC,
+        paint: {
+          "line-color": IMGW_DEGREE_PAINT.line as unknown as string,
+          "line-width": 0.8,
+          "line-opacity": 0.45,
+        },
+      },
+      before,
+    );
+  }
+}
+
+async function syncImgw(
+  map: import("maplibre-gl").Map,
+  live: Live,
+  genRef: { current: number },
+) {
+  const gen = ++genRef.current;
+  const empty = Object.keys(live.imgwDegrees).length === 0 || !live.imgwOn;
+  if (empty) {
+    if (!map.getStyle() || !map.getSource(IMGW_SRC)) return;
+    (map.getSource(IMGW_SRC) as import("maplibre-gl").GeoJSONSource).setData(IMGW_EMPTY);
+    if (map.getLayer(IMGW_FILL)) map.setLayoutProperty(IMGW_FILL, "visibility", "none");
+    if (map.getLayer(IMGW_LINE)) map.setLayoutProperty(IMGW_LINE, "visibility", "none");
+    return;
+  }
+  const powiaty = await loadPowiatBoundaries();
+  if (gen !== genRef.current || !map.getStyle()) return;
+  ensureImgwLayers(map);
+  const data = tintedPowiatCollection(powiaty, live.imgwDegrees);
+  (map.getSource(IMGW_SRC) as import("maplibre-gl").GeoJSONSource).setData(data);
+  map.setLayoutProperty(IMGW_FILL, "visibility", "visible");
+  map.setLayoutProperty(IMGW_LINE, "visibility", "visible");
 }
 
 function labelLayerId(map: import("maplibre-gl").Map): string | undefined {

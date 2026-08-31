@@ -56,3 +56,30 @@ test("seconds are optional", () => {
   const t = parseImgwWarsaw("2026-07-15 12:00");
   assert.equal(new Date(t).toISOString(), "2026-07-15T10:00:00.000Z");
 });
+
+test("formatImgwRange same Warsaw day is dziś HH:mm–HH:mm", async () => {
+  const { formatImgwRange } = await import("./imgw-time.ts");
+  const now = parseImgwWarsaw("2026-08-31 12:00:00");
+  assert.equal(
+    formatImgwRange("2026-08-31 14:00:00", "2026-08-31 22:00:00", now),
+    "dziś 14:00–22:00",
+  );
+});
+
+test("formatImgwRange next Warsaw day is jutro", async () => {
+  const { formatImgwRange } = await import("./imgw-time.ts");
+  const now = parseImgwWarsaw("2026-08-31 12:00:00");
+  assert.equal(
+    formatImgwRange("2026-09-01 08:00:00", "2026-09-01 16:00:00", now),
+    "jutro 08:00–16:00",
+  );
+});
+
+test("formatImgwRange overnight spans dziś and jutro", async () => {
+  const { formatImgwRange } = await import("./imgw-time.ts");
+  const now = parseImgwWarsaw("2026-08-31 20:00:00");
+  assert.equal(
+    formatImgwRange("2026-08-31 22:00:00", "2026-09-01 06:00:00", now),
+    "dziś 22:00 – jutro 06:00",
+  );
+});

@@ -49,6 +49,29 @@ describe("shouldAutoExpandSheet", () => {
   });
 });
 
+describe("nowcastHeadline", () => {
+  it("keeps radar copy in the headline slot", async () => {
+    const { nowcastHeadline } = await import("./threat-sheet-logic.ts");
+    assert.equal(nowcastHeadline(threat({ level: "imminent", title: "Ulewa nadciąga" }), false), "Ulewa nadciąga");
+    assert.equal(nowcastHeadline(threat({ level: "now", title: "Ulewa nad Tobą" }), false), "Ulewa nad Tobą");
+    assert.equal(nowcastHeadline(threat({ level: "clear", title: "Czysto" }), false), "Czysto");
+  });
+
+  it("does not put Ostrzeżenie IMGW in the nowcast headline", async () => {
+    const { nowcastHeadline } = await import("./threat-sheet-logic.ts");
+    assert.equal(
+      nowcastHeadline(threat({ level: "watch", title: "Ostrzeżenie IMGW" }), false),
+      "Czysto",
+    );
+  });
+
+  it("keeps pending / empty states", async () => {
+    const { nowcastHeadline } = await import("./threat-sheet-logic.ts");
+    assert.equal(nowcastHeadline(null, true), "Skanuję radar…");
+    assert.equal(nowcastHeadline(null, false), "Brak danych");
+  });
+});
+
 describe("etaLabel", () => {
   it("uses teraz when eta is 0", () => {
     assert.equal(etaLabel(threat({ etaMin: 0 })), "teraz");
