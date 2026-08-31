@@ -628,3 +628,45 @@ test("degraded frames still produce a threat object", () => {
   const threat = computeThreat(city, frames, [], 40);
   assert.ok(threat.tracks.length >= 1);
 });
+
+test("klasa 4 over the pin is Ulewa without lightning, Burza with a nearby strike", () => {
+  const frames = [frame(1_000, blob(50.0, 21.0, 4), 1), frame(1_600, blob(50.02, 21.03, 4), 2)];
+  const dry = computeThreat(city, frames, [], 40);
+  assert.equal(dry.lightningNearCell, false);
+  assert.equal(dry.title, "Ulewa nad Tobą");
+
+  const wet = computeThreat(city, frames, [], 40, city, [
+    { lat: 50.01, lon: 21.02, timeMs: Date.now() },
+  ]);
+  assert.equal(wet.lightningNearCell, true);
+  assert.equal(wet.title, "Burza nad Tobą");
+});
+
+test("klasa 4 incoming is Ulewa unless lightning sits on that cell", () => {
+  const frames = [frame(1_000, blob(50.0, 20.4, 4), 43), frame(1_600, blob(50.0, 20.55, 4), 32)];
+  const dry = computeThreat(city, frames, [], 40);
+  assert.match(dry.title, /Ulewa nadciąga/);
+  assert.equal(dry.lightningNearCell, false);
+
+  const onCell = computeThreat(city, frames, [], 40, city, [
+    { lat: 50.0, lon: 20.55, timeMs: Date.now() },
+  ]);
+  assert.equal(onCell.lightningNearCell, true);
+  assert.equal(onCell.title, "Burza nadciąga");
+
+  const far = computeThreat(city, frames, [], 40, city, [
+    { lat: 54.4, lon: 18.6, timeMs: Date.now() },
+  ]);
+  assert.equal(far.lightningNearCell, false);
+  assert.equal(far.title, "Ulewa nadciąga");
+});
+
+test("klasa 3 plus lightning near the cell earns Burza (the F4 miss)", () => {
+  const frames = [frame(1_000, blob(50.0, 20.4, 3), 43), frame(1_600, blob(50.0, 20.55, 3), 32)];
+  const dry = computeThreat(city, frames, [], 40);
+  assert.equal(dry.title, "Ulewa nadciąga");
+  const wet = computeThreat(city, frames, [], 40, city, [
+    { lat: 50.0, lon: 20.55, timeMs: Date.now() },
+  ]);
+  assert.equal(wet.title, "Burza nadciąga");
+});

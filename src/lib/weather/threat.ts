@@ -1,6 +1,7 @@
 import { bearingDeg, comingFromPl, destPoint, haversineKm, towardPl } from "./geo.ts";
 import type {
   CellTrack,
+  LightningStrike,
   OfficialWarning,
   Place,
   RadarLevel,
@@ -10,6 +11,7 @@ import type {
   ThreatLevel,
   TimelinePoint,
 } from "./types.ts";
+import { strikeNearCell } from "./perun.ts";
 import { isActiveWarning } from "./imgw-time.ts";
 import { LEVEL_MIN_RATE, levelFromRate } from "./palette.ts";
 
@@ -761,6 +763,13 @@ function expectPl(maxLevel: number): string | null {
   return null;
 }
 
+/** "Burza" is earned by a strike near the cell — klasa 4 alone is Ulewa. */
+export function stormNoun(level: number, lightningNearCell: boolean): string {
+  if (lightningNearCell && level >= 3) return "Burza";
+  if (level >= 3) return "Ulewa";
+  return "Deszcz";
+}
+
 /**
  * @param sampleOrigin — radar crop center. Tracks/arrows are built only from this window
  *   (and from frame updates). The user pin must NOT change which arrows are drawn.
@@ -772,6 +781,7 @@ export function computeThreat(
   warnings: OfficialWarning[],
   radiusKm: number,
   sampleOrigin: { lat: number; lon: number } = place,
+  strikes: LightningStrike[] = [],
 ): Threat {
   const matched = warnings.filter((w) => w.matchesPlace && w.stormRelated);
   // Frames are already cropped to the radar domain (Poland). Do not re-crop around the pin.
@@ -1056,8 +1066,23 @@ export function computeThreat(
   }
 
   // Headline names the intensity that is (or will be) over the pin — "Burza" is earned
-  // by a level-4 core, not by any red pixel within 25 km.
-  const noun = (lvl: number) => (lvl >= 4 ? "Burza" : lvl >= 3 ? "Ulewa" : "Deszcz");
+  // by lightning near that cell, not by a level-4 core alone.
+  let lightningCell: { lat: number; lon: number } | null = threatTrack
+    ? { lat: threatTrack.now.lat, lon: threatTrack.now.lon }
+    : null;
+  if (!lightningCell && lastSamples.length > 0) {
+    let bestD = Infinity;
+    for (const s of lastSamples) {
+      const d = haversineKm(place.lat, place.lon, s.lat, s.lon);
+      if (d < bestD) {
+        bestD = d;
+        lightningCell = { lat: s.lat, lon: s.lon };
+      }
+    }
+    if (bestD > TRACK_MAX_KM) lightningCell = null;
+  }
+  const lightningNearCell = lightningCell ? strikeNearCell(strikes, lightningCell) : false;
+  const noun = (lvl: number) => stormNoun(lvl, lightningNearCell);
   const copy: Record<ThreatLevel, string> = {
     clear: "Czysto",
     watch: "Ostrzeżenie IMGW",
@@ -1089,5 +1114,6 @@ export function computeThreat(
     matchedWarnings: matched,
     timeline,
     timelineAdvected: pinMotion !== null,
+    lightningNearCell,
   };
 }

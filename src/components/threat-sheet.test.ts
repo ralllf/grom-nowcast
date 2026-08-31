@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { etaLabel, shouldAutoExpandSheet } from "./threat-sheet-logic.ts";
+import { etaLabel, lightningCaption, shouldAutoExpandSheet } from "./threat-sheet-logic.ts";
 import type { Threat } from "@/lib/weather/types";
 
 function threat(partial: Partial<Threat>): Threat {
@@ -27,6 +27,7 @@ function threat(partial: Partial<Threat>): Threat {
     matchedWarnings: [],
     timeline: [],
     timelineAdvected: false,
+    lightningNearCell: false,
     ...partial,
   };
 }
@@ -64,6 +65,10 @@ describe("etaLabel", () => {
 
   it("floors a spent ETA at teraz", () => {
     assert.equal(etaLabel(threat({ etaMin: 8 }), 11), "teraz");
+  });
+
+  it("empty lightning session uses the no-strikes copy", () => {
+    assert.equal(lightningCaption(0, true), "Brak wyładowań w tej sesji");
   });
 
   it("says minie only when the cell misses and echo is 20–80 km", () => {

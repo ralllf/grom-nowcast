@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { DEFAULT_ALERT_SETTINGS, EMPTY_ALERT_MEMORY, evaluateAlert } from "./alerts.ts";
-import { canTrustRadar, emptyRadarScan, IMGW_WARNINGS_UNAVAILABLE, loadSnapshot } from "./snapshot.ts";
+import { canTrustRadar, emptyRadarScan, IMGW_WARNINGS_UNAVAILABLE, PERUN_NO_STRIKES, loadSnapshot } from "./snapshot.ts";
 import type { OfficialWarning, Place, RadarScan } from "./types.ts";
 
 const place: Place = {
@@ -208,6 +208,7 @@ test("radar-down snapshot is stale for alerts (existing honesty)", async () => {
     matchedWarnings: snap.warnings,
     timeline: [],
     timelineAdvected: false,
+    lightningNearCell: false,
   };
 
   const result = evaluateAlert(
@@ -230,6 +231,37 @@ test("maps-up but empty past is not a radar outage", async () => {
   assert.equal(snap.radarUnavailable, false);
   assert.equal(canTrustRadar(snap), true);
   assert.equal(snap.radar, empty);
+});
+
+test("PERUN bounce leaves radar and IMGW intact and ships no fake strikes", async () => {
+  const snap = await loadSnapshot(place, {
+    sampleRadar: async () => radar,
+    getImgwWarnings: async () => [localStorm],
+    getPerunStrikes: async () => {
+      throw new Error("307 https://danepubliczne.imgw.pl/pl/datastore/getfiledown/Oper/Perun/PERUN_Polska/x");
+    },
+  });
+  assert.equal(snap.radar, radar);
+  assert.equal(snap.warningsUnavailable, false);
+  assert.equal(snap.lightningUnavailable, true);
+  assert.deepEqual(snap.lightning, []);
+  assert.equal(PERUN_NO_STRIKES, "Brak wyładowań w tej sesji");
+});
+
+test("PERUN CSV that actually downloads is kept on the snapshot", async () => {
+  const snap = await loadSnapshot(place, {
+    sampleRadar: async () => radar,
+    getImgwWarnings: async () => [localStorm],
+    getPerunStrikes: async () => ({
+      strikes: [{ lat: 50.06, lon: 19.94, timeMs: 1_700_000_000_000 }],
+      fetchedAt: 1_700_000_000_000,
+      unavailable: false,
+      newestFile: "2026.08.31.12.51.ld.csv",
+    }),
+  });
+  assert.equal(snap.lightningUnavailable, false);
+  assert.equal(snap.lightning.length, 1);
+  assert.equal(snap.lightning[0]!.lat, 50.06);
 });
 
 test("both sources down: IMGW notice, radar untrusted, no throw", async () => {

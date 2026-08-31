@@ -1,7 +1,8 @@
 import { useEffect, useRef } from "react";
 import type { StyleSpecification } from "maplibre-gl";
 import { shouldFallbackBasemap } from "@/components/map-boot";
-import type { CellTrack } from "@/lib/weather/types";
+import type { CellTrack, LightningStrike } from "@/lib/weather/types";
+import { strikeOpacity } from "@/lib/weather/perun";
 import { circlePolygon } from "@/lib/weather/geo";
 import { OVERLAY_COLOR_OPTIONS } from "@/lib/weather/palette";
 import { cn } from "@/lib/utils";
@@ -21,6 +22,7 @@ type Props = {
   radarHost: string | null;
   radarPath: string | null;
   tracks: CellTrack[];
+  strikes: LightningStrike[];
   focus: Focus | null;
   onPick: (lat: number, lon: number) => void;
   className?: string;
@@ -60,6 +62,7 @@ const INK = "#12171f";
 const AMBER = "#e4572e";
 const AMBER_SOFT = "#f0a202";
 const CREAM = "#f8f4ee";
+const STRIKE = "#f5c518";
 
 type Live = {
   lat: number;
@@ -68,6 +71,7 @@ type Live = {
   radarHost: string | null;
   radarPath: string | null;
   tracks: CellTrack[];
+  strikes: LightningStrike[];
 };
 
 export function RadarMap({
@@ -77,6 +81,7 @@ export function RadarMap({
   radarHost,
   radarPath,
   tracks,
+  strikes,
   focus,
   onPick,
   className,
@@ -89,8 +94,8 @@ export function RadarMap({
   const onPickRef = useRef(onPick);
   onPickRef.current = onPick;
 
-  const liveRef = useRef<Live>({ lat, lon, radiusKm, radarHost, radarPath, tracks });
-  liveRef.current = { lat, lon, radiusKm, radarHost, radarPath, tracks };
+  const liveRef = useRef<Live>({ lat, lon, radiusKm, radarHost, radarPath, tracks, strikes });
+  liveRef.current = { lat, lon, radiusKm, radarHost, radarPath, tracks, strikes };
 
   useEffect(() => {
     const el = rootRef.current;
@@ -231,6 +236,7 @@ export function RadarMap({
         }
 
         syncRadar(instance, live);
+        syncStrikes(instance, live.strikes);
         if (!readyRef.current) {
           instance.jumpTo({ center: [live.lon, live.lat], zoom: 8.2 });
         }
@@ -310,6 +316,12 @@ export function RadarMap({
 
   useEffect(() => {
     const map = mapRef.current;
+    if (!map || !readyRef.current) return;
+    syncStrikes(map, strikes);
+  }, [strikes]);
+
+  useEffect(() => {
+    const map = mapRef.current;
     if (!map || !readyRef.current || !focus) return;
     map.stop();
     const minLon = Math.min(focus.pinLon, focus.lon);
@@ -357,6 +369,45 @@ function labelLayerId(map: import("maplibre-gl").Map): string | undefined {
     layers.find((l) => l.id === "labels")?.id ??
     layers.find((l) => l.type === "symbol")?.id
   );
+}
+
+function strikesGeoJSON(strikes: LightningStrike[], nowMs = Date.now()) {
+  return {
+    type: "FeatureCollection" as const,
+    features: strikes
+      .map((s) => {
+        const opacity = strikeOpacity(nowMs - s.timeMs);
+        if (opacity <= 0) return null;
+        return {
+          type: "Feature" as const,
+          properties: { opacity },
+          geometry: { type: "Point" as const, coordinates: [s.lon, s.lat] },
+        };
+      })
+      .filter((f): f is NonNullable<typeof f> => f != null),
+  };
+}
+
+function syncStrikes(map: import("maplibre-gl").Map, strikes: LightningStrike[]) {
+  const data = strikesGeoJSON(strikes);
+  const src = map.getSource("strikes") as import("maplibre-gl").GeoJSONSource | undefined;
+  if (src) {
+    src.setData(data);
+    return;
+  }
+  map.addSource("strikes", { type: "geojson", data });
+  map.addLayer({
+    id: "strikes",
+    type: "circle",
+    source: "strikes",
+    paint: {
+      "circle-radius": 3.4,
+      "circle-color": STRIKE,
+      "circle-stroke-width": 0.8,
+      "circle-stroke-color": INK,
+      "circle-opacity": ["get", "opacity"],
+    },
+  });
 }
 
 function syncRadar(map: import("maplibre-gl").Map, live: Live) {
