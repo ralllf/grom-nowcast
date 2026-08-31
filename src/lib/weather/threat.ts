@@ -14,6 +14,7 @@ import type {
 import { strikeNearCell } from "./perun.ts";
 import { isActiveWarning } from "./imgw-time.ts";
 import { LEVEL_MIN_RATE, levelFromRate } from "./palette.ts";
+import { calibrateChancePct } from "./chance.ts";
 
 /** Distance at which the cell is treated as covering the city / GPS pin. */
 const PIN_KM = 5;
@@ -1020,6 +1021,11 @@ export function computeThreat(
     chance = Math.min(chance, Math.max(15, chance - 20));
   }
   chance = roundPct(chance);
+  // Echo ≤ 100 km is the Slice-0 calibration population. Dry / IMGW-only pins
+  // are not in that table — leave their raw rungs (typically 10 / 25–45) alone.
+  if (nearestKm !== null && nearestKm <= TRACK_MAX_KM) {
+    chance = calibrateChancePct(chance);
+  }
 
   let level: ThreatLevel = "clear";
   if (activeMatch.length > 0) level = "watch";

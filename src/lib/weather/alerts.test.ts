@@ -1,12 +1,15 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  ALERT_PRESETS,
   ALL_CLEAR_DEBOUNCE_MIN,
   DEFAULT_ALERT_SETTINGS,
   EMPTY_ALERT_MEMORY,
   EPISODE_TTL_MIN,
+  alertPresetPatch,
   evaluateAlert,
   isQuietHour,
+  matchAlertPreset,
   type AlertMemory,
   type AlertSettings,
 } from "./alerts.ts";
@@ -369,6 +372,41 @@ test("klasa 4 without lightning is Ulewa, never Gwałtowna burza", () => {
   assert.ok(r.event);
   assert.equal(r.event.title, "Ulewa za ok. 18 min");
   assert.doesNotMatch(r.event.body, /wyładowania w komórce/);
+});
+
+test("Normalny preset is the shipped default triple", () => {
+  const n = ALERT_PRESETS.normalny;
+  assert.equal(n.leadMin, DEFAULT_ALERT_SETTINGS.leadMin);
+  assert.equal(n.minLevel, DEFAULT_ALERT_SETTINGS.minLevel);
+  assert.equal(n.minChancePct, DEFAULT_ALERT_SETTINGS.minChancePct);
+  assert.equal(matchAlertPreset(DEFAULT_ALERT_SETTINGS), "normalny");
+});
+
+test("Czuły is more sensitive than Normalny on every bundled axis", () => {
+  const c = ALERT_PRESETS.czuly;
+  const n = ALERT_PRESETS.normalny;
+  assert.ok(c.leadMin > n.leadMin);
+  assert.ok(c.minLevel < n.minLevel);
+  assert.ok(c.minChancePct < n.minChancePct);
+  assert.equal(c.label, "Czuły");
+});
+
+test("Tylko pewne is stricter than Normalny on every bundled axis", () => {
+  const p = ALERT_PRESETS.pewne;
+  const n = ALERT_PRESETS.normalny;
+  assert.ok(p.leadMin < n.leadMin);
+  assert.ok(p.minLevel > n.minLevel);
+  assert.ok(p.minChancePct > n.minChancePct);
+  assert.equal(p.label, "Tylko pewne");
+});
+
+test("matchAlertPreset returns null for a custom slider mix", () => {
+  assert.equal(matchAlertPreset({ leadMin: 35, minLevel: 2, minChancePct: 50 }), null);
+  assert.deepEqual(alertPresetPatch("czuly"), {
+    leadMin: ALERT_PRESETS.czuly.leadMin,
+    minLevel: ALERT_PRESETS.czuly.minLevel,
+    minChancePct: ALERT_PRESETS.czuly.minChancePct,
+  });
 });
 
 test("klasa 4 with lightning near the cell says Gwałtowna burza and names the strikes", () => {

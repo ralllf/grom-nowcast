@@ -44,6 +44,70 @@ export const DEFAULT_ALERT_SETTINGS: AlertSettings = {
   allClear: true,
 };
 
+/** Bundles for (leadMin, minLevel, minChancePct). Raw sliders stay under „zaawansowane”. */
+export type AlertPresetId = "czuly" | "normalny" | "pewne";
+
+export type AlertPreset = {
+  id: AlertPresetId;
+  label: string;
+  hint: string;
+  leadMin: number;
+  minLevel: RadarLevel;
+  minChancePct: number;
+};
+
+export const ALERT_PRESETS: Record<AlertPresetId, AlertPreset> = {
+  czuly: {
+    id: "czuly",
+    label: "Czuły",
+    hint: "wcześniej, także słaby deszcz",
+    leadMin: 45,
+    minLevel: 1,
+    minChancePct: 20,
+  },
+  normalny: {
+    id: "normalny",
+    label: "Normalny",
+    hint: "deszcz, 30 min",
+    leadMin: DEFAULT_ALERT_SETTINGS.leadMin,
+    minLevel: DEFAULT_ALERT_SETTINGS.minLevel,
+    minChancePct: DEFAULT_ALERT_SETTINGS.minChancePct,
+  },
+  pewne: {
+    id: "pewne",
+    label: "Tylko pewne",
+    hint: "ulewa, gdy prawie pewne",
+    leadMin: 20,
+    minLevel: 3,
+    minChancePct: 80,
+  },
+};
+
+export const ALERT_PRESET_ORDER: AlertPresetId[] = ["czuly", "normalny", "pewne"];
+
+export function alertPresetPatch(
+  id: AlertPresetId,
+): Pick<AlertSettings, "leadMin" | "minLevel" | "minChancePct"> {
+  const p = ALERT_PRESETS[id];
+  return { leadMin: p.leadMin, minLevel: p.minLevel, minChancePct: p.minChancePct };
+}
+
+export function matchAlertPreset(
+  settings: Pick<AlertSettings, "leadMin" | "minLevel" | "minChancePct">,
+): AlertPresetId | null {
+  for (const id of ALERT_PRESET_ORDER) {
+    const p = ALERT_PRESETS[id];
+    if (
+      settings.leadMin === p.leadMin &&
+      settings.minLevel === p.minLevel &&
+      settings.minChancePct === p.minChancePct
+    ) {
+      return id;
+    }
+  }
+  return null;
+}
+
 export type AlertEvent = {
   /** `${episode}:${kind}` — stable per episode stage, usable as Notification tag. */
   id: string;
