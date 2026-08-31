@@ -14,6 +14,10 @@ GROM radzi sobie **na prawdziwym radarze**, tak jak robią to służby meteo:
 Klatki lądują w katalogu tymczasowym systemu, nie w repo (`--cached` liczy ponownie
 bez pobierania). Skrypt szanuje limit RainViewera (100 żądań/min).
 
+`npm run --silent hindcast -- --json` drukuje ten sam przebieg jako jeden obiekt
+(stdout) — oba zestawy progów alertu (shipped i research) plus tabelę kalibracji
+Szansy. Wiersze z kolejnych dni burzowych: [`HINDCAST-LOG.md`](HINDCAST-LOG.md).
+
 ## Metryki
 
 Dla zdarzenia binarnego („nad pinezką ≥ klasa X”):
