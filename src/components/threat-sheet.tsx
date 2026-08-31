@@ -1,6 +1,7 @@
 import { MapPin, X } from "lucide-react";
 import { useEffect, useRef, useState, type PointerEvent } from "react";
 import { etaLabel, shouldAutoExpandSheet } from "@/components/threat-sheet-logic";
+import { IMGW_WARNINGS_UNAVAILABLE } from "@/lib/weather/snapshot";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { LEVEL_SWATCH, levelLabelPl } from "@/lib/weather/palette";
@@ -46,6 +47,7 @@ type Props = {
   error: boolean;
   tracks: CellTrack[];
   shownWarnings: OfficialWarning[];
+  warningsUnavailable?: boolean;
   geoError: string | null;
   onClearGeoError: () => void;
   onShowRainMotion: () => void;
@@ -60,6 +62,7 @@ export function ThreatSheet({
   error,
   tracks,
   shownWarnings,
+  warningsUnavailable = false,
   geoError,
   onClearGeoError,
   onShowRainMotion,
@@ -240,7 +243,9 @@ export function ThreatSheet({
           Promień w ustawieniach mówi tylko, jak daleko wołamy alert.
         </p>
 
-        {shownWarnings[0] ? (
+        {warningsUnavailable ? (
+          <p className="mt-3 text-xs text-warn lg:hidden">{IMGW_WARNINGS_UNAVAILABLE}</p>
+        ) : shownWarnings[0] ? (
           <p className="mt-3 text-xs text-muted lg:hidden">
             IMGW: {shownWarnings[0].event}
             {shownWarnings[0].degree ? ` · stopień ${shownWarnings[0].degree}` : ""}

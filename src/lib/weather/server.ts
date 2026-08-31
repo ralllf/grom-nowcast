@@ -12,6 +12,7 @@ import {
   NOMINATIM_UA,
   RequestThrottle,
 } from "./nominatim";
+import { loadSnapshot } from "./snapshot";
 import { applyTerytFallback } from "./teryt";
 import type {
   OfficialWarning,
@@ -198,11 +199,6 @@ export async function searchNominatim(query: string): Promise<Place[]> {
       terc,
     });
   });
-}
-
-function warningMatches(w: OfficialWarning, place: Place): boolean {
-  if (place.terc && w.teryt.includes(place.terc)) return true;
-  return false;
 }
 
 /** Poland + border strip — fixed radar domain (not pin-centered). */
@@ -467,9 +463,7 @@ export const getSnapshot = createServerFn({ method: "POST" })
   .handler(async ({ data }): Promise<Snapshot> => {
     // Radar is always the Poland domain (pin-independent). data.place = user pin for TERYT.
     const userPlace = data.place;
-    const [radar, warnings, place] = await Promise.all([
-      sampleRadar(),
-      getImgwWarnings(),
+    const placeP = (
       userPlace?.terc
         ? Promise.resolve({ ...userPlace })
         : reversePlace(userPlace?.lat ?? data.lat, userPlace?.lon ?? data.lon).catch(() =>
@@ -482,29 +476,10 @@ export const getSnapshot = createServerFn({ method: "POST" })
               county: userPlace?.county,
               state: userPlace?.state,
             }),
-          ),
-    ]);
+          )
+    ).then(applyTerytFallback);
 
-    const placed = applyTerytFallback(place);
-    const tagged = warnings.map((w) => ({
-      ...w,
-      matchesPlace: warningMatches(w, placed),
-    }));
-
-    const matched = tagged.filter((w) => w.matchesPlace);
-    const storms = tagged.filter((w) => w.stormRelated);
-
-    return {
-      fetchedAt: Date.now(),
-      place: placed,
-      radar,
-      // Enough national storms for the client to re-tag when the pin moves (radar is shared).
-      warnings:
-        matched.length > 0
-          ? [...matched, ...storms.filter((w) => !matched.includes(w))].slice(0, 40)
-          : storms.slice(0, 40),
-      stormWarningCount: storms.length,
-    };
+    return loadSnapshot(placeP, { sampleRadar, getImgwWarnings });
   });
 
 const searchInput = z.object({ query: z.string().min(2).max(80) });

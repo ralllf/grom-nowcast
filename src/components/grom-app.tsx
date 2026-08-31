@@ -25,6 +25,7 @@ import { formatImgwWhen } from "@/lib/weather/imgw-time";
 import { framesFromScan } from "@/lib/weather/pack";
 import { historyIsDegraded } from "@/lib/weather/radar-history";
 import { getSnapshot, searchPlaces, PL_RADAR_ORIGIN } from "@/lib/weather/server";
+import { canTrustRadar, IMGW_WARNINGS_UNAVAILABLE } from "@/lib/weather/snapshot";
 import { computeThreat } from "@/lib/weather/threat";
 import {
   evaluateAlert,
@@ -162,7 +163,7 @@ export function GromApp() {
   const radarHistory = useMemo(() => (snapshot ? framesFromScan(snapshot.radar) : []), [snapshot]);
 
   const threat = useMemo(() => {
-    if (!snapshot) return null;
+    if (!snapshot || !canTrustRadar(snapshot)) return null;
     const warnings = snapshot.warnings.map((w) => ({
       ...w,
       matchesPlace: place.terc ? w.teryt.includes(place.terc) : w.matchesPlace,
@@ -444,6 +445,7 @@ export function GromApp() {
             error={snapshotQuery.isError}
             tracks={tracks}
             shownWarnings={shownWarnings}
+            warningsUnavailable={snapshot?.warningsUnavailable ?? false}
             geoError={geoError}
             onClearGeoError={() => setGeoError(null)}
             onShowRainMotion={showRainMotion}
@@ -453,11 +455,15 @@ export function GromApp() {
           <aside className="pointer-events-auto hidden max-h-72 overflow-y-auto rounded-3xl bg-surface/85 p-4 shadow-[0_0_0_1px_rgba(255,255,255,0.08)] backdrop-blur-md sm:block">
             <div className="mb-3 flex items-center justify-between gap-2">
               <h3 className="text-sm font-medium">Ostrzeżenia IMGW</h3>
-              <span className="text-xs text-muted">
-                {snapshot?.stormWarningCount ?? 0} burzowych w kraju
-              </span>
+              {snapshot?.warningsUnavailable ? null : (
+                <span className="text-xs text-muted">
+                  {snapshot?.stormWarningCount ?? 0} burzowych w kraju
+                </span>
+              )}
             </div>
-            {snapshotQuery.isPending && !snapshot ? (
+            {snapshot?.warningsUnavailable ? (
+              <p className="text-sm text-warn">{IMGW_WARNINGS_UNAVAILABLE}</p>
+            ) : snapshotQuery.isPending && !snapshot ? (
               <p className="text-sm text-muted">Pobieram komunikaty…</p>
             ) : shownWarnings.length === 0 ? (
               <p className="text-sm text-muted">Brak aktywnych ostrzeżeń burzowych.</p>
