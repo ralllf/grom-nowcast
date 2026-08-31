@@ -160,7 +160,7 @@ export async function reversePlace(lat: number, lon: number): Promise<Place> {
   const state = json.address?.state;
   const terc = normalizeTerc(json.extratags?.["teryt:terc"]);
   const label = city || county || json.display_name?.split(",")[0] || "Wybrany punkt";
-  const place = applyTerytFallback({ lat, lon, label, city, county, state, terc });
+  const place = await applyTerytFallback({ lat, lon, label, city, county, state, terc });
   placeCache.set(key, place);
   return place;
 }
@@ -182,23 +182,25 @@ export async function searchNominatim(query: string): Promise<Place[]> {
     `https://nominatim.openstreetmap.org/search?format=jsonv2&q=${encodeURIComponent(q)}` +
     `&countrycodes=pl&addressdetails=1&extratags=1&limit=6&accept-language=pl`;
   const json = await fetchJson<NominatimSearch[]>(url);
-  return json.map((item) => {
-    const lat = Number(item.lat);
-    const lon = Number(item.lon);
-    const city = item.address?.city || item.address?.town || item.address?.village || item.name;
-    const county = item.address?.county;
-    const state = item.address?.state;
-    const terc = normalizeTerc(item.extratags?.["teryt:terc"]);
-    return applyTerytFallback({
-      lat,
-      lon,
-      label: city || item.display_name.split(",")[0] || q,
-      city,
-      county,
-      state,
-      terc,
-    });
-  });
+  return Promise.all(
+    json.map((item) => {
+      const lat = Number(item.lat);
+      const lon = Number(item.lon);
+      const city = item.address?.city || item.address?.town || item.address?.village || item.name;
+      const county = item.address?.county;
+      const state = item.address?.state;
+      const terc = normalizeTerc(item.extratags?.["teryt:terc"]);
+      return applyTerytFallback({
+        lat,
+        lon,
+        label: city || item.display_name.split(",")[0] || q,
+        city,
+        county,
+        state,
+        terc,
+      });
+    }),
+  );
 }
 
 /** Poland + border strip — fixed radar domain (not pin-centered). */
