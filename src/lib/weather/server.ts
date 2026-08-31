@@ -2,6 +2,8 @@ import { createServerFn } from "@tanstack/react-start";
 import { PNG } from "pngjs";
 import { z } from "zod";
 import { lonLatToTile, tilePixelToLonLat } from "./geo";
+import { packSamples } from "./pack";
+import { dbzFromRgba, levelFromRate, rateFromDbz } from "./palette";
 import type {
   OfficialWarning,
   Place,
@@ -50,21 +52,6 @@ async function fetchBuf(url: string, timeoutMs = 10_000): Promise<Buffer> {
   } finally {
     clearTimeout(t);
   }
-}
-
-function rgbaToLevel(r: number, g: number, b: number, a: number): RadarLevel {
-  if (a < 40) return 0;
-  const max = Math.max(r, g, b);
-  const min = Math.min(r, g, b);
-  const sat = max === 0 ? 0 : (max - min) / max;
-  if (max < 30 && sat < 0.15) return 0;
-  if (r > 170 && b > 150 && g < 120) return 4;
-  if (r > 190 && g < 110) return 4;
-  if (r > 180 && g > 140 && b < 90) return 3;
-  if (g > 150 && r < 160 && b < 140) return 3;
-  if (g > 120 && b < 180) return 2;
-  if (b > 90) return 1;
-  return 1;
 }
 
 async function getMaps(): Promise<RainViewerMaps> {
@@ -156,8 +143,7 @@ export async function reversePlace(lat: number, lon: number): Promise<Place> {
     `https://nominatim.openstreetmap.org/reverse?format=jsonv2` +
     `&lat=${lat}&lon=${lon}&zoom=10&addressdetails=1&extratags=1&accept-language=pl`;
   const json = await fetchJson<NominatimReverse>(url);
-  const city =
-    json.address?.city || json.address?.town || json.address?.village || json.name;
+  const city = json.address?.city || json.address?.town || json.address?.village || json.name;
   const county = json.address?.county || json.address?.municipality;
   const state = json.address?.state;
   const terc = normalizeTerc(json.extratags?.["teryt:terc"]);
@@ -186,8 +172,7 @@ export async function searchNominatim(query: string): Promise<Place[]> {
   return json.map((item) => {
     const lat = Number(item.lat);
     const lon = Number(item.lon);
-    const city =
-      item.address?.city || item.address?.town || item.address?.village || item.name;
+    const city = item.address?.city || item.address?.town || item.address?.village || item.name;
     const county = item.address?.county;
     const state = item.address?.state;
     const terc = normalizeTerc(item.extratags?.["teryt:terc"]);
@@ -218,8 +203,35 @@ export const PL_RADAR_BBOX = {
 
 export const PL_RADAR_ORIGIN = { lat: 52.1, lon: 19.35 };
 
-const MAX_RADAR_TILES = 48;
-const MAX_RADAR_SAMPLES = 5_000;
+/**
+ * Radar tiles: zoom 6 → ~1.5 km/px at Polish latitudes; stride 2 → ~3 km samples.
+ * RainViewer allows z ≤ 7 and ~100 requests / IP / min; Poland at z=6 is 9 tiles
+ * per frame and frames are immutable, so with the per-frame cache below a warm
+ * server fetches ~9 tiles every 10 minutes.
+ */
+const RADAR_ZOOM = 6;
+const PIXEL_STRIDE = 2;
+const MAX_RADAR_TILES = 24;
+/** Cap on samples per frame; hit → coarsen the aggregation grid (never drop regions). */
+const MAX_RADAR_SAMPLES = 9_000;
+/** Aggregation cell (degrees). ~3 km at 52°N: 0.027° lat, 0.044° lon. */
+const BASE_CELL_LAT = 0.027;
+const BASE_CELL_LON = 0.044;
+const FRAME_CACHE_MAX = 8;
+
+type SampledFrame = {
+  time: number;
+  samples: RadarSample[];
+  maxLevel: RadarLevel;
+  nearestKm: null;
+  cellKm: number;
+  /** All tiles fetched and decoded — only then is the frame safe to cache. */
+  complete: boolean;
+};
+
+/** Decoded frames keyed by RainViewer timestamp — frames never change once published. */
+const frameCache = new Map<number, SampledFrame>();
+const frameInFlight = new Map<number, Promise<SampledFrame>>();
 
 let radarScanCache: { key: number; at: number; scan: RadarScan } | null = null;
 
@@ -244,47 +256,119 @@ function tilesForPoland(z: number) {
   return [...set.values()].slice(0, MAX_RADAR_TILES);
 }
 
-async function sampleFrame(
-  host: string,
-  frame: RadarFrameMeta,
-): Promise<{ samples: RadarSample[]; maxLevel: RadarLevel; nearestKm: number | null }> {
-  const z = 5;
+type RawHit = { lat: number; lon: number; rate: number };
+
+/**
+ * Aggregate raw pixel hits onto a regular lat/lon grid, keeping the max rate per cell.
+ * If the result is still above the cap, double the cell and try again — coverage
+ * stays uniform across the country instead of silently dropping the south.
+ */
+function aggregate(hits: RawHit[]): { samples: RadarSample[]; cellKm: number } {
+  let factor = 1;
+  for (;;) {
+    const dLat = BASE_CELL_LAT * factor;
+    const dLon = BASE_CELL_LON * factor;
+    const cells = new Map<number, RawHit>();
+    for (const h of hits) {
+      const i = Math.floor((h.lat - PL_RADAR_BBOX.minLat) / dLat);
+      const j = Math.floor((h.lon - PL_RADAR_BBOX.minLon) / dLon);
+      const key = i * 4096 + j;
+      const cur = cells.get(key);
+      if (!cur) {
+        cells.set(key, {
+          lat: PL_RADAR_BBOX.minLat + (i + 0.5) * dLat,
+          lon: PL_RADAR_BBOX.minLon + (j + 0.5) * dLon,
+          rate: h.rate,
+        });
+      } else if (h.rate > cur.rate) {
+        cur.rate = h.rate;
+      }
+    }
+    if (cells.size <= MAX_RADAR_SAMPLES || factor >= 8) {
+      const samples: RadarSample[] = [];
+      for (const c of cells.values()) {
+        const level = levelFromRate(c.rate);
+        if (level === 0) continue;
+        samples.push({
+          lat: Math.round(c.lat * 1000) / 1000,
+          lon: Math.round(c.lon * 1000) / 1000,
+          level,
+          rate: Math.round(c.rate * 10) / 10,
+        });
+      }
+      samples.sort((s, t) => t.level - s.level || s.lat - t.lat || s.lon - t.lon);
+      return { samples, cellKm: Math.round(3 * factor * 10) / 10 };
+    }
+    factor *= 2;
+  }
+}
+
+async function decodeFrame(host: string, frame: RadarFrameMeta): Promise<SampledFrame> {
+  const z = RADAR_ZOOM;
   const tiles = tilesForPoland(z);
-  const samples: RadarSample[] = [];
+  const hits: RawHit[] = [];
+  let tilesOk = 0;
   await Promise.all(
     tiles.map(async (tile) => {
-      const url = `${host}${frame.path}/256/${z}/${tile.x}/${tile.y}/2/1_1.png`;
+      // color scheme 2 (Universal Blue), smooth=0, snow=0 → exact palette colours.
+      const url = `${host}${frame.path}/256/${z}/${tile.x}/${tile.y}/2/0_0.png`;
       try {
         const buf = await fetchBuf(url);
         const png = PNG.sync.read(buf);
-        const stride = 2;
-        for (let py = 0; py < png.height; py += stride) {
-          for (let px = 0; px < png.width; px += stride) {
+        for (let py = 0; py < png.height; py += PIXEL_STRIDE) {
+          for (let px = 0; px < png.width; px += PIXEL_STRIDE) {
             const idx = (png.width * py + px) << 2;
-            const level = rgbaToLevel(
+            const dbz = dbzFromRgba(
               png.data[idx] ?? 0,
               png.data[idx + 1] ?? 0,
               png.data[idx + 2] ?? 0,
               png.data[idx + 3] ?? 0,
             );
-            if (level === 0) continue;
+            if (dbz === null) continue;
             const ll = tilePixelToLonLat(z, tile.x, tile.y, px, py, png.width);
             if (!inPolandRadar(ll.lat, ll.lon)) continue;
-            samples.push({ lat: ll.lat, lon: ll.lon, level });
+            hits.push({ lat: ll.lat, lon: ll.lon, rate: rateFromDbz(dbz) });
           }
         }
+        tilesOk++;
       } catch {
-        // missing tile is fine
+        // missing tile: frame stays "incomplete" and is not cached
       }
     }),
   );
-  samples.sort((s, t) => t.level - s.level || s.lat - t.lat || s.lon - t.lon);
-
+  const { samples, cellKm } = aggregate(hits);
   let maxLevel: RadarLevel = 0;
-  for (const s of samples) {
-    if (s.level > maxLevel) maxLevel = s.level;
-  }
-  return { samples: samples.slice(0, MAX_RADAR_SAMPLES), maxLevel, nearestKm: null };
+  for (const s of samples) if (s.level > maxLevel) maxLevel = s.level;
+  return {
+    time: frame.time,
+    samples,
+    maxLevel,
+    nearestKm: null,
+    cellKm,
+    complete: tilesOk === tiles.length,
+  };
+}
+
+function sampleFrame(host: string, frame: RadarFrameMeta): Promise<SampledFrame> {
+  const hit = frameCache.get(frame.time);
+  if (hit) return Promise.resolve(hit);
+  const pending = frameInFlight.get(frame.time);
+  if (pending) return pending;
+  const job = decodeFrame(host, frame)
+    .then((decoded) => {
+      if (decoded.complete) {
+        frameCache.set(frame.time, decoded);
+        while (frameCache.size > FRAME_CACHE_MAX) {
+          const oldest = frameCache.keys().next().value;
+          if (oldest === undefined) break;
+          frameCache.delete(oldest);
+        }
+      }
+      return decoded;
+    })
+    .finally(() => frameInFlight.delete(frame.time));
+  frameInFlight.set(frame.time, job);
+  return job;
 }
 
 async function sampleRadar(): Promise<RadarScan> {
@@ -306,6 +390,7 @@ async function sampleRadar(): Promise<RadarScan> {
     maxLevel: 0,
     nearestKm: null,
     echoCount: 0,
+    cellKm: 3,
   };
   if (!latest) return empty;
 
@@ -317,17 +402,7 @@ async function sampleRadar(): Promise<RadarScan> {
     return radarScanCache.scan;
   }
 
-  const sampled = await Promise.all(
-    take.map(async (frame) => {
-      const part = await sampleFrame(maps.host, frame);
-      return {
-        time: frame.time,
-        samples: part.samples,
-        maxLevel: part.maxLevel,
-        nearestKm: part.nearestKm,
-      };
-    }),
-  );
+  const sampled = await Promise.all(take.map((frame) => sampleFrame(maps.host, frame)));
   const now = sampled.at(-1);
   const before = sampled.length >= 2 ? sampled.at(-2) : undefined;
   if (!now) return empty;
@@ -338,13 +413,21 @@ async function sampleRadar(): Promise<RadarScan> {
     latestTime: latest.time,
     past,
     nowcast,
-    samples: now.samples,
-    prevSamples: before?.samples ?? [],
+    // Frames travel once, packed, inside `history`; the legacy top-level copies stay empty.
+    samples: [],
+    prevSamples: [],
     prevTime: before?.time ?? null,
-    history: sampled,
+    history: sampled.map(({ time, samples, maxLevel, nearestKm }) => ({
+      time,
+      samples: [],
+      packed: packSamples(samples),
+      maxLevel,
+      nearestKm,
+    })),
     maxLevel: now.maxLevel,
     nearestKm: now.nearestKm,
     echoCount: now.samples.length,
+    cellKm: now.cellKm,
   };
   radarScanCache = { key: latest.time, at: Date.now(), scan };
   return scan;

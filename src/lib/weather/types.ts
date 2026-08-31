@@ -6,6 +6,8 @@ export type RadarSample = {
   lat: number;
   lon: number;
   level: RadarLevel;
+  /** Rain rate in mm/h (Marshall–Palmer from dBZ); absent in synthetic test data. */
+  rate?: number;
 };
 
 export type RadarFrameMeta = {
@@ -18,6 +20,8 @@ export type RadarMemoryFrame = {
   samples: RadarSample[];
   maxLevel: RadarLevel;
   nearestKm: number | null;
+  /** Wire form: base64, 8 bytes per sample — see pack.ts. `samples` is then empty. */
+  packed?: string;
 };
 
 export type RadarScan = {
@@ -26,11 +30,15 @@ export type RadarScan = {
   latestTime: number | null;
   past: RadarFrameMeta[];
   nowcast: RadarFrameMeta[];
+  /** @deprecated Legacy shape; empty when `history` is present. Use framesFromScan(). */
   samples: RadarSample[];
+  /** @deprecated See `samples`. */
   prevSamples: RadarSample[];
   prevTime: number | null;
   /** Oldest → newest sampled frames (up to 4) used for motion. */
   history: RadarMemoryFrame[];
+  /** Approximate sample spacing in km after grid aggregation. */
+  cellKm: number;
   maxLevel: RadarLevel;
   nearestKm: number | null;
   echoCount: number;
@@ -80,6 +88,15 @@ export type CellTrack = {
   confidence: number;
 };
 
+/** One step of the pin rain timeline (advection nowcast, MeteoSwiss-style strip). */
+export type TimelinePoint = {
+  /** Minutes from the latest radar scan. */
+  t: number;
+  level: RadarLevel;
+  /** mm/h */
+  rate: number;
+};
+
 export type Threat = {
   level: ThreatLevel;
   title: string;
@@ -89,7 +106,12 @@ export type Threat = {
   receding: boolean;
   speedKmh: number | null;
   nearestKm: number | null;
+  /** Strongest echo within 25 km — context, not "over you". */
   maxLevel: RadarLevel;
+  /** Strongest echo over the pin itself (within OVER_KM). */
+  pinLevel: RadarLevel;
+  /** Intensity the pin should brace for: over-pin level, or the incoming cell's core level. */
+  cellLevel: RadarLevel;
   chancePct: number;
   comingFrom: string | null;
   toward: string | null;
@@ -99,4 +121,8 @@ export type Threat = {
   track: CellTrack | null;
   tracks: CellTrack[];
   matchedWarnings: OfficialWarning[];
+  /** 0–90 min rain at the pin, 5-min steps. Empty when there is no radar. */
+  timeline: TimelinePoint[];
+  /** Whether the timeline uses a measured motion vector (else persistence). */
+  timelineAdvected: boolean;
 };

@@ -340,7 +340,7 @@ function syncRadar(map: import("maplibre-gl").Map, live: Live) {
   const id = "radar";
   const tiles =
     live.radarHost && live.radarPath
-      ? [`${live.radarHost}${live.radarPath}/256/{z}/{x}/{y}/2/1_1.png`]
+      ? [`${live.radarHost}${live.radarPath}/256/{z}/{x}/{y}/2/1_0.png`]
       : [];
   if (map.getLayer(id)) map.removeLayer(id);
   if (map.getSource(id)) map.removeSource(id);
@@ -351,7 +351,7 @@ function syncRadar(map: import("maplibre-gl").Map, live: Live) {
     tileSize: 256,
     scheme: "xyz",
     minzoom: 1,
-    maxzoom: 5,
+    maxzoom: 7,
   });
   map.addLayer(
     {

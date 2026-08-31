@@ -9,7 +9,8 @@
     "build": "vite build",
     "preview": "vite preview --host 0.0.0.0 --port 8080",
     "typecheck": "tsc --noEmit",
-    "test": "node --experimental-strip-types --test src/lib/weather/threat.test.ts"
+    "test": "node --experimental-strip-types --test src/lib/weather/threat.test.ts src/lib/weather/alerts.test.ts src/lib/weather/palette.test.ts src/lib/weather/pack.test.ts",
+    "hindcast": "node --experimental-strip-types scripts/hindcast.ts"
   },
   "dependencies": {
     "@radix-ui/react-slot": "^1.2.4",
