@@ -75,6 +75,43 @@ export function formatImgwWhen(raw: string): string {
   });
 }
 
+function pad2(n: number): string {
+  return String(n).padStart(2, "0");
+}
+
+function warsawHm(t: number): string {
+  const c = warsawClock(t);
+  return `${pad2(c.hour)}:${pad2(c.minute)}`;
+}
+
+function civilDay(c: Clock): number {
+  return Date.UTC(c.year, c.month - 1, c.day);
+}
+
+/** Relative Warsaw-day word, or null when it is neither today nor tomorrow. */
+function dayWord(when: number, now: number): "dziś" | "jutro" | null {
+  const delta = (civilDay(warsawClock(when)) - civilDay(warsawClock(now))) / 86_400_000;
+  if (delta === 0) return "dziś";
+  if (delta === 1) return "jutro";
+  return null;
+}
+
+/** Time-boxed IMGW window: "dziś 14:00–22:00", else falls back to formatImgwWhen. */
+export function formatImgwRange(fromRaw: string, toRaw: string, now = Date.now()): string {
+  const from = parseImgwWarsaw(fromRaw);
+  const to = parseImgwWarsaw(toRaw);
+  if (Number.isNaN(from) || Number.isNaN(to)) {
+    return `${formatImgwWhen(fromRaw)} – ${formatImgwWhen(toRaw)}`;
+  }
+  const fromDay = dayWord(from, now);
+  const toDay = dayWord(to, now);
+  const fromHm = warsawHm(from);
+  const toHm = warsawHm(to);
+  if (fromDay && toDay && fromDay === toDay) return `${fromDay} ${fromHm}–${toHm}`;
+  if (fromDay && toDay) return `${fromDay} ${fromHm} – ${toDay} ${toHm}`;
+  return `${formatImgwWhen(fromRaw)} – ${formatImgwWhen(toRaw)}`;
+}
+
 export function isActiveWarning(from: string, to: string, now = Date.now()): boolean {
   const start = parseImgwWarsaw(from);
   const end = parseImgwWarsaw(to);

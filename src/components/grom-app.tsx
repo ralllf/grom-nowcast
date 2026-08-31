@@ -21,7 +21,8 @@ import { ThreatSheet } from "@/components/threat-sheet";
 import { cn } from "@/lib/utils";
 import { CITIES } from "@/lib/weather/cities";
 import { haversineKm } from "@/lib/weather/geo";
-import { formatImgwWhen } from "@/lib/weather/imgw-time";
+import { formatImgwRange } from "@/lib/weather/imgw-time";
+import { localImgwLane, stormWarningDegrees } from "@/lib/weather/imgw-lane";
 import { framesFromScan } from "@/lib/weather/pack";
 import { historyIsDegraded } from "@/lib/weather/radar-history";
 import { getSnapshot, searchPlaces, PL_RADAR_ORIGIN } from "@/lib/weather/server";
@@ -52,10 +53,6 @@ function formatClock(ts: number | null) {
     hour: "2-digit",
     minute: "2-digit",
   });
-}
-
-function formatWhen(iso: string) {
-  return formatImgwWhen(iso);
 }
 
 const ALERT_TONE: Record<AlertKind, string> = {
@@ -96,6 +93,8 @@ export function GromApp() {
   const setPlace = useGrom((s) => s.setPlace);
   const updatePlaceMeta = useGrom((s) => s.updatePlaceMeta);
   const setRadiusKm = useGrom((s) => s.setRadiusKm);
+  const imgwMap = useGrom((s) => s.imgwMap);
+  const setImgwMap = useGrom((s) => s.setImgwMap);
   const setAlerts = useGrom((s) => s.setAlerts);
   const setAlertMemory = useGrom((s) => s.setAlertMemory);
   const recordAlert = useGrom((s) => s.recordAlert);
@@ -300,7 +299,13 @@ export function GromApp() {
   );
   const localWarnings = warnings.filter((w) => w.matchesPlace);
   const shownWarnings = localWarnings.length > 0 ? localWarnings : warnings;
+  const imgwDegrees = useMemo(() => stormWarningDegrees(snapshot?.warnings ?? []), [snapshot?.warnings]);
+  const imgwLine = useMemo(
+    () => localImgwLane(warnings, place.county),
+    [warnings, place.county],
+  );
   const tracks = threat?.tracks ?? [];
+  const hasImgwTint = Object.keys(imgwDegrees).length > 0;
 
   return (
     <div className="relative h-dvh overflow-hidden bg-bg text-fg">
@@ -312,6 +317,8 @@ export function GromApp() {
         radarHost={snapshot?.radar.host ?? null}
         radarPath={activePath}
         tracks={tracks}
+        imgwOn={imgwMap}
+        imgwDegrees={imgwDegrees}
         focus={focus}
         onPick={(lat, lon) => {
           if (Date.now() < ignoreMapClickUntil.current) return;
@@ -414,25 +421,41 @@ export function GromApp() {
         </div>
       ) : null}
 
-      {tracks.length > 0 ? (
+      {tracks.length > 0 || hasImgwTint ? (
         <div
           className={cn(
-            "pointer-events-none absolute left-3 z-10 sm:left-5",
+            "pointer-events-none absolute left-3 z-10 flex flex-col items-start gap-2 sm:left-5",
             // On phones the centered banner sits over the pill; on wider screens they do not touch.
             activeAlert ? "top-64 sm:top-40" : "top-36 sm:top-40",
           )}
         >
-          <div className="pointer-events-auto flex items-center gap-2 rounded-full bg-surface/90 px-3 py-1.5 text-xs shadow-[0_0_0_1px_rgba(255,255,255,0.08)] backdrop-blur-md">
-            <span className="inline-block size-2.5 rounded-full bg-vector ring-2 ring-fg" />
-            <span className="text-muted">tor komórki</span>
+          {tracks.length > 0 ? (
+            <div className="pointer-events-auto flex items-center gap-2 rounded-full bg-surface/90 px-3 py-1.5 text-xs shadow-[0_0_0_1px_rgba(255,255,255,0.08)] backdrop-blur-md">
+              <span className="inline-block size-2.5 rounded-full bg-vector ring-2 ring-fg" />
+              <span className="text-muted">tor komórki</span>
+              <button
+                type="button"
+                className="font-medium text-accent hover:text-fg"
+                onClick={showRainMotion}
+              >
+                pokaż
+              </button>
+            </div>
+          ) : null}
+          {hasImgwTint ? (
             <button
               type="button"
-              className="font-medium text-accent hover:text-fg"
-              onClick={showRainMotion}
+              aria-pressed={imgwMap}
+              onClick={() => setImgwMap(!imgwMap)}
+              className="pointer-events-auto flex items-center gap-2 rounded-full bg-surface/90 px-3 py-1.5 text-xs shadow-[0_0_0_1px_rgba(255,255,255,0.08)] backdrop-blur-md"
             >
-              pokaż
+              <span
+                className="inline-block size-2.5 rounded-sm ring-2 ring-fg"
+                style={{ backgroundColor: imgwMap ? "#e4572e" : "#5c6570" }}
+              />
+              <span className={imgwMap ? "text-fg" : "text-muted"}>IMGW</span>
             </button>
-          </div>
+          ) : null}
         </div>
       ) : null}
 
@@ -444,7 +467,7 @@ export function GromApp() {
             pending={snapshotQuery.isPending}
             error={snapshotQuery.isError}
             tracks={tracks}
-            shownWarnings={shownWarnings}
+            imgwLine={imgwLine}
             warningsUnavailable={snapshot?.warningsUnavailable ?? false}
             geoError={geoError}
             onClearGeoError={() => setGeoError(null)}
@@ -475,9 +498,7 @@ export function GromApp() {
                       <p className="text-sm font-medium">{w.event}</p>
                       <Badge tone={w.degree >= 2 ? "danger" : "warn"}>stopień {w.degree}</Badge>
                     </div>
-                    <p className="mt-1 text-xs text-muted">
-                      {formatWhen(w.from)} — {formatWhen(w.to)}
-                    </p>
+                    <p className="mt-1 text-xs text-muted">{formatImgwRange(w.from, w.to)}</p>
                     <p className="mt-2 text-xs leading-relaxed text-fg/80">{w.body}</p>
                     {!w.matchesPlace ? (
                       <p className="mt-2 text-xs text-faint">Inny powiat — podgląd krajowy.</p>
@@ -586,6 +607,16 @@ export function GromApp() {
               Promień to zasięg alertu. Szansa, ETA i strzałka są liczone dla pinezki — teraz
               miasta, później dokładnego GPS.
             </p>
+
+            <label className="mt-4 flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={imgwMap}
+                onChange={(e) => setImgwMap(e.target.checked)}
+                className="accent-accent"
+              />
+              Ostrzeżenia IMGW na mapie (powiat, stopień)
+            </label>
 
             <div className="mt-5 rounded-xl bg-surface-2 px-3 py-3">
               <div className="flex items-center justify-between gap-3">

@@ -25,3 +25,11 @@ export function shouldAutoExpandSheet(level: ThreatLevel | undefined, desktop: b
   if (desktop) return false;
   return level === "imminent" || level === "now";
 }
+
+/** Nowcast lane only — IMGW never occupies the "nadciąga za 18 min" headline. */
+export function nowcastHeadline(threat: Threat | null, pending: boolean): string {
+  if (pending && !threat) return "Skanuję radar…";
+  if (!threat) return "Brak danych";
+  if (threat.level === "watch") return "Czysto";
+  return threat.title;
+}

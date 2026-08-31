@@ -8,6 +8,7 @@ import {
   type AlertSettings,
 } from "./weather/alerts";
 import { DEFAULT_PLACE } from "./weather/cities";
+import { IMGW_MAP_DEFAULT, readImgwMapToggle } from "./weather/imgw-lane";
 import type { Place } from "./weather/types";
 
 const STORAGE_KEY = "grom-settings-v1";
@@ -19,12 +20,15 @@ type Persisted = {
   place: Place;
   radiusKm: number;
   alerts: AlertSettings;
+  /** Choropleth of powiats with an active storm warning. */
+  imgwMap: boolean;
 };
 
 const DEFAULTS: Persisted = {
   place: DEFAULT_PLACE,
   radiusKm: 25,
   alerts: DEFAULT_ALERT_SETTINGS,
+  imgwMap: IMGW_MAP_DEFAULT,
 };
 
 function sanitizeAlerts(raw: unknown, legacyNotify: unknown): AlertSettings {
@@ -59,6 +63,7 @@ export function loadSettings(): Persisted {
       place: parsed.place ?? DEFAULT_PLACE,
       radiusKm: parsed.radiusKm ?? 25,
       alerts: sanitizeAlerts(parsed.alerts, parsed.notify),
+      imgwMap: readImgwMapToggle(parsed.imgwMap),
     };
   } catch {
     return DEFAULTS;
@@ -136,6 +141,7 @@ type GromState = Persisted & {
   setPlace: (place: Place) => void;
   updatePlaceMeta: (place: Place) => void;
   setRadiusKm: (radiusKm: number) => void;
+  setImgwMap: (imgwMap: boolean) => void;
   setAlerts: (patch: Partial<AlertSettings>) => void;
   setAlertMemory: (memory: AlertMemory) => void;
   recordAlert: (event: AlertEvent) => void;
@@ -149,7 +155,12 @@ function persist(s: Persisted) {
   try {
     window.localStorage.setItem(
       STORAGE_KEY,
-      JSON.stringify({ place: s.place, radiusKm: s.radiusKm, alerts: s.alerts }),
+      JSON.stringify({
+        place: s.place,
+        radiusKm: s.radiusKm,
+        alerts: s.alerts,
+        imgwMap: s.imgwMap,
+      }),
     );
   } catch {
     /* ignore */
@@ -177,6 +188,10 @@ export const useGrom = create<GromState>((set, get) => ({
   },
   setRadiusKm: (radiusKm) => {
     set({ radiusKm });
+    persist(get());
+  },
+  setImgwMap: (imgwMap) => {
+    set({ imgwMap });
     persist(get());
   },
   setAlerts: (patch) => {
