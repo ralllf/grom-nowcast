@@ -58,6 +58,14 @@ describe("etaLabel", () => {
     assert.equal(etaLabel(threat({ etaMin: 18 })), "18 min");
   });
 
+  it("subtracts radar age: frame-time 18 min, age 11 min → 7 min", () => {
+    assert.equal(etaLabel(threat({ etaMin: 18 }), 11), "7 min");
+  });
+
+  it("floors a spent ETA at teraz", () => {
+    assert.equal(etaLabel(threat({ etaMin: 8 }), 11), "teraz");
+  });
+
   it("says minie only when the cell misses and echo is 20–80 km", () => {
     assert.equal(etaLabel(threat({ willHit: false, missKm: 12, nearestKm: 40 })), "minie");
     assert.equal(etaLabel(threat({ willHit: false, missKm: 12, nearestKm: 10 })), "—");

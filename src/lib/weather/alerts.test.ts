@@ -120,13 +120,52 @@ test("incoming copy reads like a sentence", () => {
   const now = T0;
   const r = evaluateAlert(incoming(18), on, EMPTY_ALERT_MEMORY, now, {
     placeLabel: "Kraków",
-    radarTime: Math.floor(now / 1000) - 120,
+    radarTime: Math.floor(now / 1000),
   });
   assert.ok(r.event);
   assert.equal(r.event.title, "Ulewa i wiatr za ok. 18 min");
   assert.match(r.event.body, /^Idzie od zachodu \(~40 km\/h\) na Kraków\. Szansa ~70%\./);
   assert.match(r.event.body, /Spodziewaj się: ulewę i porywisty wiatr\./);
   assert.equal(r.event.id.endsWith(":incoming"), true);
+});
+
+test("incoming title and etaMin subtract radar age (18 − 11 → 7)", () => {
+  const now = T0;
+  const r = evaluateAlert(incoming(18), on, EMPTY_ALERT_MEMORY, now, {
+    placeLabel: "Kraków",
+    radarTime: Math.floor(now / 1000) - 11 * 60,
+  });
+  assert.ok(r.event);
+  assert.equal(r.event.title, "Ulewa i wiatr za ok. 7 min");
+  assert.equal(r.event.etaMin, 7);
+  assert.match(r.event.body, /sprzed 11 min/);
+});
+
+test("wall-clock ETA at 0 titles the incoming alert teraz, not za ok. 0", () => {
+  const now = T0;
+  const r = evaluateAlert(incoming(8), on, EMPTY_ALERT_MEMORY, now, {
+    placeLabel: "Kraków",
+    radarTime: Math.floor(now / 1000) - 11 * 60,
+  });
+  assert.ok(r.event);
+  assert.equal(r.event.kind, "incoming");
+  assert.equal(r.event.title, "Ulewa i wiatr teraz");
+  assert.equal(r.event.etaMin, 0);
+});
+
+test("leadMin compares wall-clock minutes so a 35 frame-min cell fires after 11 min of age", () => {
+  const now = T0;
+  const fresh = evaluateAlert(incoming(35), on, EMPTY_ALERT_MEMORY, now, {
+    placeLabel: "Kraków",
+    radarTime: Math.floor(now / 1000),
+  });
+  assert.equal(fresh.event, null);
+  const aged = evaluateAlert(incoming(35), on, EMPTY_ALERT_MEMORY, now, {
+    placeLabel: "Kraków",
+    radarTime: Math.floor(now / 1000) - 11 * 60,
+  });
+  assert.equal(aged.event?.kind, "incoming");
+  assert.equal(aged.event?.etaMin, 24);
 });
 
 test("a fresh cell after an all-clear starts a new episode and alerts again", () => {
