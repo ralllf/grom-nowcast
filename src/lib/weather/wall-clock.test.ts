@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  formatRadarClock,
   radarAgeCaption,
   radarAgeMin,
   rewriteArrivalMinutes,
@@ -32,16 +33,19 @@ test("radarAgeMin is minutes since the scan, floored at 0", () => {
   assert.equal(radarAgeMin(radar + 60, radar * 1000), 0);
 });
 
+test("formatRadarClock is Europe/Warsaw, not the process TZ", () => {
+  const cest = Date.UTC(2026, 8, 1, 15, 15, 0) / 1000;
+  const cet = Date.UTC(2026, 0, 15, 15, 15, 0) / 1000;
+  assert.equal(formatRadarClock(cest), "17:15");
+  assert.equal(formatRadarClock(cet), "16:15");
+});
+
 test("sheet caption prints the radar clock and its age", () => {
   const radar = Date.UTC(2026, 7, 31, 9, 15, 0) / 1000;
   const now = Date.UTC(2026, 7, 31, 9, 21, 0);
-  const clock = new Date(radar * 1000).toLocaleTimeString("pl-PL", {
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-  assert.equal(radarAgeCaption(radar, now), `Radar ${clock} · sprzed 6 min`);
-  assert.equal(radarAgeCaption(radar, now, "rainviewer"), `Radar ${clock} · sprzed 6 min`);
-  assert.equal(radarAgeCaption(radar, now, "sri"), `Radar IMGW ${clock} · sprzed 6 min`);
+  assert.equal(radarAgeCaption(radar, now), "Radar 11:15 · sprzed 6 min");
+  assert.equal(radarAgeCaption(radar, now, "rainviewer"), "Radar 11:15 · sprzed 6 min");
+  assert.equal(radarAgeCaption(radar, now, "sri"), "Radar IMGW 11:15 · sprzed 6 min");
   assert.equal(radarAgeCaption(null, now), null);
 });
 
