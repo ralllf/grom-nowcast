@@ -1,74 +1,67 @@
 # Next slices (after 0–9 + pin-only)
 
-*2026-09-01 against `main` (`cbafda2`, post [#18](https://github.com/ralllf/grom-nowcast/pull/18) / [#16](https://github.com/ralllf/grom-nowcast/pull/16) / [#15](https://github.com/ralllf/grom-nowcast/pull/15)). English; product words stay Polish. This is the pick list. Do not re-implement [ACCURACY-PLAN](ACCURACY-PLAN.md) slices 0–9.*
+*2026-09-01, live [grom-nowcast.vercel.app](https://grom-nowcast.vercel.app/) 17:11–17:19 CEST, against `main` (`cbafda2`, post [#18](https://github.com/ralllf/grom-nowcast/pull/18) / [#16](https://github.com/ralllf/grom-nowcast/pull/16) / [#15](https://github.com/ralllf/grom-nowcast/pull/15)). English; product words stay Polish. Pick **#1** without reading the rest of the repo. Do not re-implement [ACCURACY-PLAN](ACCURACY-PLAN.md) 0–9.*
 
-Pick **#1**. It is one helper and one test. A human can ship it without reading the rest of the repo.
+Already on `main` (code, not a guess):
 
-Already on `main` (verified in code, not guessed):
+- Slices 0–9 shipped. Slice 9 **copy only** (`GROWTH_MATH_ENABLED` false). Ledger: 2 `front` rows, **0** `konwekcja`.
+- Pin-only (#18): no `radiusKm`, no Promień, no map circle; `CLOSE_KM` / `IMMINENT_KM` gone.
+- PERUN point CSVs still **307**. Not a code slice. LTS2005 GIFs are maps, not lat/lon.
+- `DEFAULT_ALERT_SETTINGS.enabled` is **false**. Hindcast force-enables. Live users toggle. Not a slice unless Rafał wants alerts on by default.
+- Live SRI today was **fresh** (~3 min). `resolveAnalysis` still keeps any non-empty SRI even if the newest H5 is hours old; `canTrustRadar` still ignores age; alerts already no-op at `STALE_RADAR_MIN` 30. Real hole — **not this week’s #1**, because today’s feed was not stale. [DATA.md](DATA.md) already warns the product-API mirror lags hours.
 
-- Accuracy 0–9 shipped. Slice 9 is **copy only** (`GROWTH_MATH_ENABLED` is `false` in [`trend.ts`](../src/lib/weather/trend.ts)). Ledger: 2 `front` rows, **0** `konwekcja` ([HINDCAST-LOG](HINDCAST-LOG.md)).
-- Pin-only (#18): `computeThreat` has no `radiusKm`; Promień slider and map circle are gone; `CLOSE_KM` / `IMMINENT_KM` are gone and must not come back.
-- PERUN point CSVs still **307** (re-probed 2026-09-01 15:17 UTC: `2026.09.01.15.15.ld.csv` → `Location: /datastore`). LTS2005 GIFs remain maps, not lat/lon. Sheet already says „Wyładowania chwilowo niedostępne”.
-- Live [grom-nowcast.vercel.app](https://grom-nowcast.vercel.app/) HTML already has the pin-only footer (including the `leadMin` leftover below). Newest datastore SRI `2026090115150000dBR.sri.h5` was ~2 min old at the probe — filenames are **UTC**, cadence 5 min.
-
-Do not pick: growth math, optical flow, GPS-as-platform, Web Push, a second backend, ML, Blitzortung, inventing strikes from GIFs.
-
----
-
-## 1. Radar clock is Europe/Warsaw
-
-Leftover of Slice 1 (F2). [`formatRadarClock`](../src/lib/weather/wall-clock.ts) does `toLocaleTimeString("pl-PL")` with **no** `timeZone`. IMGW warning times already pin `Europe/Warsaw` ([`imgw-time.ts`](../src/lib/weather/imgw-time.ts)). Age (`radarAgeMin`) uses unix seconds and is fine.
-
-**Hunch from live 2026-09-01 ~16:37 Warsaw — caption “IMGW 07:30 · sprzed 6 min”:** **clock TZ, not a hours-stale frame.** A frame ~6 min old at 16:37 CEST is 14:31 UTC. Same instant formats as `16:31` in Warsaw, `14:31` in UTC, **`07:31` in America/Los_Angeles**. Age “6 min” is the truth; the printed clock followed the host. Live SRI at 15:17 UTC was minutes old, not 9 hours old.
-
-- **Who sees what:** the sheet caption and the alert suffix (`Radar IMGW HH:MM · sprzed N min`) always mean Poland time — US laptop, Vercel/agent Chrome, or a phone that travelled. Optional same-PR: the collapsed mobile peek today hides the caption; put one short line there so the jacket decision sees the age.
-- **Success check:** `TZ=America/Los_Angeles npm test` (or a unit that freezes 14:31 UTC) prints **`16:31`**, never `07:31`. On live, at 16:37 Warsaw a minutes-old frame says `16:3x`, not `07:3x`.
-- **Out:** interpolating frames; polling faster than 90 s; motion math; treating SRI filenames as Warsaw local (they are UTC).
+Parked: GPS-as-platform, Web Push, ML, second backend, Blitzortung, growth math, inventing strikes from GIFs.
 
 ---
 
-## 2. Stale radar refuses the sheet, not only alerts
+## 1. Pin the radar clock to Europe/Warsaw
 
-[`evaluateAlert`](../src/lib/weather/alerts.ts) already no-ops when the scan is > 30 min old. [`canTrustRadar`](../src/lib/weather/snapshot.ts) only checks `radarUnavailable`. A listing/cache that handed over a morning file would still run `computeThreat` and sell “nadciąga za 18 min” with a faint “sprzed 400 min”.
+[`formatRadarClock`](../src/lib/weather/wall-clock.ts) is `toLocaleTimeString("pl-PL")` with **no** `timeZone`. [`radarAgeCaption`](../src/lib/weather/wall-clock.ts) shares the same unix seconds for the clock and for `sprzed N min`. IMGW warning times already pin `Europe/Warsaw` ([`imgw-time.ts`](../src/lib/weather/imgw-time.ts)).
 
-**Hunch:** rare. The hole is real; alerts already know.
+**Live, not a hunch:** 17:18 CEST the sheet said `Radar IMGW 08:15 · sprzed 3 min`. Relative age was right. Feed ~3 min old. A Pacific browser prints 08:15 for a 15:15 UTC / 17:15 Warsaw frame — same **9 h** offset as the earlier `07:30` at ~16:37 Warsaw. A 07:30 *frame* at 16:37 would have printed ~547 min. It did not.
 
-- **Who sees what:** next stale scan — headline „Radar nieaktualny” (or the existing honesty line), ETA `—`, no incoming copy. Fresh scans unchanged.
-- **Success check:** fixture `latestTime = now − 45 min` → no incoming (already true) **and** the sheet does not show a numeric ETA / `imminent` headline. `latestTime = now − 6 min` unchanged.
-- **Out:** retry queues; changing the 30 min constant; interpolating; a status page.
-
----
-
-## 3. Stop promising hail from reflectivity
-
-[`expectPl`](../src/lib/weather/threat.ts) still says „możliwy grad” at klasa 4. That is the HAIL_RATE / ≥ 55 dBZ guess from F4. „Burza” is already strike-gated (and strikes never arrive). Hail is the leftover lie.
-
-- **Who sees what:** a pin under a red core. „Spodziewaj się” is ulewa / wiatr, not grad, unless the IMGW lane already wrote „Burze z gradem”.
-- **Success check:** unit — klasa 4, no strikes, no IMGW grad warning → `expect` / detail have no „grad”. IMGW time-boxed lane unchanged.
-- **Out:** ZHAIL / CMAX decode; PERUN access; flipping `GROWTH_MATH_ENABLED`; new POLCOMP products.
+- **Who sees what:** anyone whose browser is not Warsaw, including our screenshots. A Warsaw browser is unchanged.
+- **Success check:** at 17:18 CEST the caption is `Radar IMGW ~17:15 · sprzed N min`, N still 3–8. `TZ=America/Los_Angeles` unit: 15:15 UTC → **17:15**, never 08:15.
+- **Out:** converting ETA to clock-of-day; 12-hour format; interpolating frames.
 
 ---
 
-## 4. The sheet still speaks engineer
+## 2. Cadence-aware hindcast scorer, then one SRI log row
 
-Leftover of #18, **on live today.** Footer: *„leadMin to czas, nie dystans.”* Badge: raw English `{threat.level}` (`clear` / `watch` / `nearby` / `imminent` / `now`) next to the Polish headline ([`threat-sheet.tsx`](../src/components/threat-sheet.tsx)).
+[`firstObsLead`](../src/lib/weather/hindcast-summary.ts) / nowcast scoring uses `frames[i + lead / 10]`. Fine for RainViewer 10 min. On SRI 5 min, lead 30 looks **three** frames ahead (~15 min) and would overstate skill. **Do not** `hindcast --sri` a ledger row before this ships.
 
-- **Who sees what:** every desktop sheet. One human sentence instead of `leadMin`. Badge is Polish or gone (colour can stay).
-- **Success check:** view-source / phone / desktop — no user-visible `leadMin`, `imminent`, `nearby`, `clear`, `watch` as tokens. Settings can keep the Polish „wyprzedzenie” slider they already have.
-- **Out:** renaming the TypeScript union; changing presets; bringing a radius back.
-
----
-
-## 5. One convective hindcast row (the Slice 9 gate)
-
-Not product code. F1 is still the biggest miss class; the plan will not move timeline / ETA for growing cells until **≥ 3 `konwekcja` days** beat POD/FAR/bias. Today: 0.
-
-- **Who sees what:** Rafał sees a new row in [HINDCAST-LOG](HINDCAST-LOG.md). The live sheet already has „Komórka rośnie” / „słabnie”. Numbers do not change.
-- **Success check:** after the next storm afternoon, `npm run --silent hindcast -- --sri --json`, regime typed `konwekcja`, one complete row (age_s, cellKm, shipped alerts). `GROWTH_MATH_ENABLED` stays **false**. Repeat until three such rows exist — *then* a later slice may open the math.
-- **Out:** flipping the flag in this slice; optical flow; NWP; committing radar frames.
+- **Who sees what:** Rafał in [HINDCAST-LOG.md](HINDCAST-LOG.md), not users. Live sheet unchanged.
+- **Success check:** unit with 5 min `dt`; `+30` compares the frame ~30 min later, not ~15. RainViewer 10 min path unchanged. After that, one `--sri --json` row. `GROWTH_MATH_ENABLED` stays false. `konwekcja` rows only after the SRI row is honest.
+- **Out:** remapping [`chance.ts`](../src/lib/weather/chance.ts) in the same PR; CI hindcast; frames in git.
 
 ---
 
-## Not a slice (blocked)
+## 3. Hail and 90 % on a weak echo
 
-PERUN CSVs are gated on the datastore subtree. Same `getfiledown` scheme serves POLCOMP `.sri.h5` and (when present) LTS2005 GIFs at 200. One email to IMGW open-data is out-of-band, not a screen change. Keep the warn line; do not demote it to a quiet sky.
+**Live Gdańsk 17:18 CEST:** Echo `5 km · słaby` still said **możliwy grad**; headline **Opad nadciąga** vs detail **nad Gdańsk teraz**; Szansa **90 %**, ETA **teraz**.
+
+Mechanism (code): [`expectPl`](../src/lib/weather/threat.ts) says hail at `expectLevel >= 4` — and `expectLevel` can be the approaching cell’s klasa, not the pin’s. Headline `nearby` + approaching → „Opad nadciąga”; `level === "now"` needs `pinLevel >= 2`, so słaby over the pin never gets „nad Tobą” while detail uses `etaMin === 0` → „nad … teraz”. Raw 70 (`OVER_KM` + any pin echo) remaps to **90** in [`chance.ts`](../src/lib/weather/chance.ts).
+
+- **Who sees what:** a pin in weak rain next to a stronger cell — Gdańsk today.
+- **Success check:** Echo `5 km · słaby` no longer says możliwy grad (gate hail on `HAIL_RATE` at the pin, not a distant klasa 4). Headline and detail agree: **nad Tobą** or **nadciąga**, not both. 90 % stays only if the pin is actually under that cell.
+- **Out:** recalibrating Szansa from one new day; PERUN; growth math.
+
+---
+
+## 4. IMGW loading zero + radar-down copy
+
+Aside ([`grom-app.tsx`](../src/components/grom-app.tsx)): `{snapshot?.stormWarningCount ?? 0} burzowych w kraju` while the body still says **Pobieram komunikaty…** (count is hidden only when `warningsUnavailable`). Sheet error string is still „Nie udało się pobrać radaru **albo** ostrzeżeń” even though Slice 2 already settles sources.
+
+- **Who sees what:** first 10–20 s of every load (SSR/live already showed `0 burzowych` + Pobieram). A radar-only outage must not blame IMGW, and the reverse.
+- **Success check:** never print `0 burzowych w kraju` while Pobieram or niedostępne. Radar down → radar honesty; IMGW down → the existing warn line; not the combined „albo”.
+- **Out:** status page; retry queues; fetching warnings from the browser.
+
+---
+
+## 5. Sheet vs map chips, plus drop `leadMin` from user copy
+
+Map pills **tor komórki** / **Pokaż mżawkę** sit `absolute` top-left (`z-10`); the sheet is the same `z-10` and grows without a desktop max-height, so at ~1280 px the left column covers the pills. Footer still says *„leadMin to czas, nie dystans”* (live HTML).
+
+- **Who sees what:** desktop ~1280 px — chips that look clickable and are not; every sheet, an identifier in the honesty paragraph.
+- **Success check:** **tor komórki** and **Pokaż mżawkę** both click at ~1280 px; no `leadMin` in the sheet. Declension table can wait.
+- **Out:** new basemap; English tiles; GPS watch.
