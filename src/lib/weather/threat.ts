@@ -15,7 +15,7 @@ import type {
 import { cellTrendCopy, cellTrendFromSnaps, type TrailSnap } from "./trend.ts";
 import { strikeNearCell } from "./perun.ts";
 import { isActiveWarning } from "./imgw-time.ts";
-import { LEVEL_MIN_RATE, levelFromRate } from "./palette.ts";
+import { HAIL_RATE, LEVEL_MIN_RATE, levelFromRate } from "./palette.ts";
 import { calibrateChancePct } from "./chance.ts";
 
 /** Distance at which the cell is treated as covering the city / GPS pin. */
@@ -763,8 +763,12 @@ function roundPct(n: number) {
   return Math.max(5, Math.min(95, Math.round(n / 5) * 5));
 }
 
-function expectPl(maxLevel: number): string | null {
-  if (maxLevel >= 4) return "silną ulewę, porywy wiatru, możliwy grad";
+function expectPl(maxLevel: number, hailAtPin = false): string | null {
+  if (maxLevel >= 4) {
+    return hailAtPin
+      ? "silną ulewę, porywy wiatru, możliwy grad"
+      : "silną ulewę, porywy wiatru";
+  }
   if (maxLevel >= 3) return "ulewę i porywisty wiatr";
   if (maxLevel >= 2) return "deszcz i mokrą jezdnię";
   if (maxLevel >= 1) return "słaby deszcz";
@@ -1001,7 +1005,8 @@ export function computeThreat(
     willHit || approaching ? threatCellLevel : 0,
     willHit ? tlMaxLevel : 0,
   );
-  let expect = expectPl(expectLevel);
+  const hailAtPin = maxRateWithin(lastSamples, place.lat, place.lon, OVER_KM) >= HAIL_RATE;
+  let expect = expectPl(expectLevel, hailAtPin);
 
   const aboutPin =
     (nearestKm !== null && nearestKm <= 80) ||
@@ -1019,8 +1024,9 @@ export function computeThreat(
     chance = Math.max(chance, 15 + degree * 10);
   }
   if (willHit && approaching && expectLevel >= 2) chance = Math.max(chance, 60);
-  if (nearestKm !== null && nearestKm <= OVER_KM && pinLevel >= 1) chance = Math.max(chance, 70);
-  if (etaMin !== null && etaMin === 0 && pinLevel >= 1) chance = Math.max(chance, 80);
+  // Raw 70/80 remap to shipped 90. That rung is "under this cell", not any pin echo.
+  if (nearestKm !== null && nearestKm <= OVER_KM && pinLevel >= 2) chance = Math.max(chance, 70);
+  if (etaMin !== null && etaMin === 0 && pinLevel >= 2) chance = Math.max(chance, 80);
   if (etaMin !== null && etaMin > 0 && etaMin <= 20 && willHit) chance = Math.max(chance, 70);
   if (etaMin !== null && etaMin > 20 && etaMin <= 45 && willHit) chance = Math.max(chance, 50);
   if (nearestKm !== null && nearestKm <= PIN_KM && pinLevel >= 3) chance = Math.max(chance, 90);
@@ -1100,7 +1106,11 @@ export function computeThreat(
   const copy: Record<ThreatLevel, string> = {
     clear: "Czysto",
     watch: "Ostrzeżenie IMGW",
-    nearby: receding ? "Opad oddala się" : approaching ? "Opad nadciąga" : "Opad w okolicy",
+    nearby: receding
+      ? "Opad oddala się"
+      : approaching && etaMin !== 0
+        ? "Opad nadciąga"
+        : "Opad w okolicy",
     imminent: `${noun(expectLevel)} nadciąga`,
     now: `${noun(Math.max(pinLevel, 2))} nad Tobą`,
   };
