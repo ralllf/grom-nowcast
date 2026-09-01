@@ -28,9 +28,6 @@ const OVER_KM = 8;
 /** Pin timeline: horizon and step (minutes). */
 const TIMELINE_MIN = 90;
 const TIMELINE_STEP = 5;
-const CLOSE_KM = 20;
-/** A level-3+ echo within this distance is "imminent" regardless of tracking. */
-const IMMINENT_KM = 15;
 /** Friends-of-friends link for connected echo (z=5 spacing ~12 km; allow one gap). */
 const LINK_KM = 16;
 const MATCH_KM = 45;
@@ -790,7 +787,6 @@ export function computeThreat(
   place: Place,
   frames: RadarMemoryFrame[],
   warnings: OfficialWarning[],
-  radiusKm: number,
   sampleOrigin: { lat: number; lon: number } = place,
   strikes: LightningStrike[] = [],
 ): Threat {
@@ -804,8 +800,6 @@ export function computeThreat(
   const lastSamples = last?.samples ?? [];
   const maxLevel = maxLevelWithin(lastSamples, place.lat, place.lon, LOCAL_MAX_KM);
   const pinLevel = maxLevelWithin(lastSamples, place.lat, place.lon, OVER_KM);
-  /** Strongest echo close enough to count as "imminent" even without a motion vector. */
-  const closeLevel = maxLevelWithin(lastSamples, place.lat, place.lon, IMMINENT_KM);
   const nearestKm = nearestWithin(lastSamples, place.lat, place.lon, TRACK_MAX_KM);
   const who = place.label;
 
@@ -996,22 +990,16 @@ export function computeThreat(
       willHit = false;
       etaMin = null;
     }
-  } else if (nearestKm !== null && nearestKm <= CLOSE_KM) {
-    // No motion at all: echo this close is treated as coming, with a crude ETA.
-    willHit = true;
-    receding = false;
-    etaMin = Math.max(1, Math.round(nearestKm * 1.5));
   }
 
   const activeMatch = matched.filter((w) => isActive(w));
   const upcoming = matched.filter((w) => !isActive(w));
-  // Brace for: what is over the pin, what is about to arrive, or what sits right next door.
+  // Brace for: what is over the pin or about to arrive on the pin.
   // Not the strongest echo 25 km away — that is context for the map, not for the copy.
   const expectLevel = Math.max(
     pinLevel,
     willHit || approaching ? threatCellLevel : 0,
     willHit ? tlMaxLevel : 0,
-    closeLevel >= 3 ? closeLevel : 0,
   );
   let expect = expectPl(expectLevel);
 
@@ -1030,22 +1018,14 @@ export function computeThreat(
     const degree = Math.max(...activeMatch.map((w) => w.degree), 1);
     chance = Math.max(chance, 15 + degree * 10);
   }
-  if (maxLevel >= 1 && nearestKm !== null && nearestKm <= radiusKm) chance = Math.max(chance, 25);
-  if (maxLevel >= 2 && nearestKm !== null && nearestKm <= radiusKm) chance = Math.max(chance, 40);
   if (willHit && approaching && expectLevel >= 2) chance = Math.max(chance, 60);
-  if (nearestKm !== null && nearestKm <= CLOSE_KM && maxLevel >= 1) chance = Math.max(chance, 55);
   if (nearestKm !== null && nearestKm <= OVER_KM && pinLevel >= 1) chance = Math.max(chance, 70);
   if (etaMin !== null && etaMin === 0 && pinLevel >= 1) chance = Math.max(chance, 80);
   if (etaMin !== null && etaMin > 0 && etaMin <= 20 && willHit) chance = Math.max(chance, 70);
   if (etaMin !== null && etaMin > 20 && etaMin <= 45 && willHit) chance = Math.max(chance, 50);
   if (nearestKm !== null && nearestKm <= PIN_KM && pinLevel >= 3) chance = Math.max(chance, 90);
-  if (receding && (nearestKm === null || nearestKm > CLOSE_KM)) chance = Math.min(chance, 20);
-  if (
-    missKm !== null &&
-    missKm > PIN_KM + 8 &&
-    !willHit &&
-    (nearestKm === null || nearestKm > CLOSE_KM)
-  ) {
+  if (receding && (nearestKm === null || nearestKm > OVER_KM)) chance = Math.min(chance, 20);
+  if (missKm !== null && missKm > PIN_KM + 8 && !willHit) {
     chance = Math.min(chance, Math.max(15, chance - 20));
   }
   chance = roundPct(chance);
@@ -1057,12 +1037,8 @@ export function computeThreat(
 
   let level: ThreatLevel = "clear";
   if (activeMatch.length > 0) level = "watch";
-  if (maxLevel >= 2 && nearestKm !== null && nearestKm <= radiusKm) level = "nearby";
   if (willHit && expectLevel >= 2) level = "nearby";
-  if (
-    (etaMin !== null && etaMin > 0 && etaMin <= 25 && willHit && expectLevel >= 2) ||
-    closeLevel >= 3
-  ) {
+  if (etaMin !== null && etaMin > 0 && etaMin <= 25 && willHit && expectLevel >= 2) {
     level = "imminent";
   }
   // "Nad Tobą" means over the pin — never a strong cell 20 km away plus drizzle here.
@@ -1088,7 +1064,7 @@ export function computeThreat(
     comingFrom &&
     missKm !== null &&
     missKm > PIN_KM &&
-    (nearestKm === null || nearestKm > CLOSE_KM)
+    (nearestKm === null || nearestKm > OVER_KM)
   ) {
     detail = `Idzie od ${comingFrom}, echo ${dist}. Tor minie ${who} ok. ${missKm.toFixed(0)} km obok${etaMin ? ` za ~${etaMin} min` : ""}.${expect ? ` Spodziewaj się w okolicy: ${expect}.` : ""} Nad samym punktem szansa ~${chance}%.${trendNote} ${formNote}`;
   } else if (nearestKm !== null) {

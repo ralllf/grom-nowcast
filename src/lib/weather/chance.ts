@@ -1,10 +1,11 @@
 /**
  * Slice 8 — Szansa remapped to the Slice-0 calibration table.
  *
- * The raw ladder in `threat.ts` still produces the old rungs (10 / 25 / 40 / 50 /
- * 55 / 60 / 70 / 80 / 90). This module maps those rungs to the observed rain
- * frequency from `docs/HINDCAST-LOG.md` (2026-08-31 midday, RainViewer, echo ≤
- * 100 km, rain ≥ klasa 1 over the pin within 60 min).
+ * The raw ladder in `threat.ts` produces pin rungs (10 / 50 / 60 / 70 / 80 / 90).
+ * Older area rungs (25 / 40 / 55) stay in the table for leftover values. This
+ * module maps those rungs to the observed rain frequency from
+ * `docs/HINDCAST-LOG.md` (2026-08-31 midday, RainViewer, echo ≤ 100 km, rain ≥
+ * klasa 1 over the pin within 60 min).
  *
  * There is no SRI-era log row and no held-out day yet — the table is the one
  * published row. Bins with n < 20 are mapped conservatively and are not held

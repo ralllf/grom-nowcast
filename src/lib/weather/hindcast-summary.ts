@@ -243,7 +243,6 @@ export function scoreHindcast(opts: {
         { lat: pin.lat, lon: pin.lon, label: "pin" },
         hist,
         [],
-        40,
         origin,
       );
       allCases++;

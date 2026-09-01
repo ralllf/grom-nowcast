@@ -27,7 +27,7 @@ GROM jest bliżej **MeteoSwiss / RainViewer nowcast** niż klasycznej prognozy:
 - Intensywność w **mm/h** z dokładnej tabeli kolorów RainViewera (dBZ → Marshall–Palmer), cztery klasy jak w legendzie MeteoSwiss: słaby / umiarkowany / silny / ulewny. Siatka ~3 km (zoom 6).
 - **Oś czasu opadu nad pinezką** 0–90 min co 5 min (adwekcja wsteczna z ruchu echa) — jak pasek „Niederschlag” w aplikacji MeteoSwiss.
 - Wektory ruchu: pomarańczowa strzałka wychodzi ze **środka komórki** w kierunku przesuwania się opadu.
-- **Szansa %** (skalibrowana z dziennika hindcastu) i **ETA** liczone dla pinezki, nie dla promienia alertu.
+- **Szansa %** (skalibrowana z dziennika hindcastu) i **ETA** liczone dla pinezki, nie dla okolicy.
 - Tekst: *Idzie od… → na…*, *Spodziewaj się: …*, oraz *Komórka rośnie / słabnie* (trend z 4 klatek; bez korekty ETA, bramka Slice 0 nie przepuszcza).
 - Ostrzeżenia IMGW dopasowane TERYT-em do wybranego miasta.
 - **Alerty na pinezkę** (karta otwarta, może być w tle): „nadciąga” gdy tor trafia w pinezkę i dojście ≤ N min, „nad Tobą”, „przeszło”. Presety **Czuły / Normalny / Tylko pewne**; suwaki pod zaawansowanymi. Jeden alert na etap burzy, próg intensywności, ciche godziny, dźwięk, baner + powiadomienie systemowe.
@@ -48,7 +48,7 @@ TanStack Start + React 19 + Vite, MapLibre GL, Zustand, TanStack Query, `pngjs` 
 
 ## Dokumentacja
 
-- [Architektura nowcastu](docs/ARCHITECTURE.md) — radar, komórki, ETA, pinezka vs promień, alerty
+- [Architektura nowcastu](docs/ARCHITECTURE.md) — radar, komórki, ETA, pinezka, alerty
 - [Źródła danych i licencje](docs/DATA.md) — IMGW, RainViewer, co wolno, czego nie trzymamy
 - [Weryfikacja nowcastu](docs/HINDCAST.md) — `npm run hindcast`: POD / FAR / CSI na prawdziwym radarze vs persystencja
 - [Dziennik błędów (Slice 0)](docs/HINDCAST-LOG.md) — jeden wiersz na dzień burzowy; `--json` + Szansa
@@ -73,7 +73,7 @@ Nie potrzebujesz klucza MapTiler / Google. Radar i mapa idą z publicznych kafel
 
 ## Zasady, których nie łamiemy
 
-1. **Pinezka, nie powiat.** Szansa, ETA i strzałka są dla miasta / GPS. Promień w ustawieniach to tylko zasięg „wołania” alertu.
+1. **Pinezka, nie powiat.** Szansa, ETA i alert są dla miasta / punktu na mapie. `leadMin` to czas, nie dystans.
 2. **Radar nie wróżki.** Nowcast to ekstrapolacja echa. Komórka może powstać lokalnie przy czystym radarze — UI o tym mówi.
 3. **Nie commitujemy klatek radaru.** Skan żyje w pamięci procesu / przeglądarki.
 4. **To nie jest oficjalny alert RCB.** Źródłem ostrzeżeń i sieci POLRAD jest IMGW-PIB. Dane radarowe są przetworzone.

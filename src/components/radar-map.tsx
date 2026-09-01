@@ -9,7 +9,6 @@ import {
 import { loadPowiatBoundaries } from "@/lib/weather/teryt";
 import type { CellTrack, LightningStrike } from "@/lib/weather/types";
 import { strikeOpacity } from "@/lib/weather/perun";
-import { circlePolygon } from "@/lib/weather/geo";
 import { pickRadarLayer, type OverlayCorners } from "@/lib/weather/sri-overlay";
 import { cn } from "@/lib/utils";
 
@@ -24,7 +23,6 @@ type Focus = {
 type Props = {
   lat: number;
   lon: number;
-  radiusKm: number;
   radarHost: string | null;
   radarPath: string | null;
   overlayUrl?: string | null;
@@ -77,7 +75,6 @@ const STRIKE = "#f5c518";
 type Live = {
   lat: number;
   lon: number;
-  radiusKm: number;
   radarHost: string | null;
   radarPath: string | null;
   overlayUrl: string | null;
@@ -91,7 +88,6 @@ type Live = {
 export function RadarMap({
   lat,
   lon,
-  radiusKm,
   radarHost,
   radarPath,
   overlayUrl = null,
@@ -115,7 +111,6 @@ export function RadarMap({
   const liveRef = useRef<Live>({
     lat,
     lon,
-    radiusKm,
     radarHost,
     radarPath,
     overlayUrl,
@@ -128,7 +123,6 @@ export function RadarMap({
   liveRef.current = {
     lat,
     lon,
-    radiusKm,
     radarHost,
     radarPath,
     overlayUrl,
@@ -209,36 +203,6 @@ export function RadarMap({
       const paintOverlays = () => {
         if (cancelled) return;
         const live = liveRef.current;
-        if (!instance.getSource("radius")) {
-          instance.addSource("radius", {
-            type: "geojson",
-            data: {
-              type: "Feature",
-              properties: {},
-              geometry: circlePolygon(live.lat, live.lon, live.radiusKm),
-            },
-          });
-          instance.addLayer({
-            id: "radius-fill",
-            type: "fill",
-            source: "radius",
-            paint: { "fill-color": "#0e7490", "fill-opacity": 0.08 },
-          });
-          instance.addLayer({
-            id: "radius-line",
-            type: "line",
-            source: "radius",
-            paint: { "line-color": "#0e7490", "line-width": 1.4, "line-opacity": 0.7 },
-          });
-        } else {
-          const radiusSrc = instance.getSource("radius") as import("maplibre-gl").GeoJSONSource;
-          radiusSrc.setData({
-            type: "Feature",
-            properties: {},
-            geometry: circlePolygon(live.lat, live.lon, live.radiusKm),
-          });
-        }
-
         if (!instance.getSource("you")) {
           instance.addSource("you", {
             type: "geojson",
@@ -330,20 +294,14 @@ export function RadarMap({
     const map = mapRef.current;
     if (!map || !readyRef.current) return;
     const live = liveRef.current;
-    const radiusSrc = map.getSource("radius") as import("maplibre-gl").GeoJSONSource | undefined;
     const youSrc = map.getSource("you") as import("maplibre-gl").GeoJSONSource | undefined;
-    radiusSrc?.setData({
-      type: "Feature",
-      properties: {},
-      geometry: circlePolygon(live.lat, live.lon, live.radiusKm),
-    });
     youSrc?.setData({
       type: "Feature",
       properties: {},
       geometry: { type: "Point", coordinates: [live.lon, live.lat] },
     });
     map.easeTo({ center: [live.lon, live.lat], duration: 700 });
-  }, [lat, lon, radiusKm]);
+  }, [lat, lon]);
 
   useEffect(() => {
     const map = mapRef.current;

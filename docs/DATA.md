@@ -83,7 +83,7 @@ So the Slice 5 “same URL scheme, therefore a typo” hunch is **wrong for the 
 - Kont użytkowników, bazy, telemetrii lokalizacji (MVP)
 - Kluczy API map (nie są potrzebne)
 
-Ustawienia (pinezka, promień, notify) → `localStorage` klucz `grom-settings-v1`.
+Ustawienia (pinezka, alerty) → `localStorage` klucz `grom-settings-v1`.
 
 ## Atrybucja (kopia do UI)
 
