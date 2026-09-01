@@ -9,8 +9,9 @@ Full-viewport MapLibre map: OpenFreeMap Positron (Esri Light Gray fallback after
 - Time scrub `aria-label="Czas radaru"` + `HH:MM` (appears when `overlays` or `past` length > 1)
 - `niepełne` label when a RainViewer tile was missing
 - `Pokaż mżawkę` (`aria-pressed`) — off by default; only mounted when SRI overlays exist
-- `tor komórki` pill + `pokaż` (fits bounds to nearest threatening track)
-- Track arrows on the overlay canvas (`aria-hidden`, `pointer-events-none`) — not hit-testable
+- `tor komórki` pill (`aria-pressed`) — **off by default**; turning it on draws amber cell-track arrows
+- `pokaż` on that pill (fits bounds to nearest threatening track) — camera only; does not force arrows on
+- Track arrows on the overlay canvas (`aria-hidden`, `pointer-events-none`) — not hit-testable; empty until the chip is on
 - `focus` fly-to after `Pokaż ruch opadu na mapie`
 
 ## How to get to it (user POV)
@@ -22,7 +23,7 @@ Full-viewport MapLibre map: OpenFreeMap Positron (Esri Light Gray fallback after
 1. After a passing doctor with `analysisSource: sri` and `overlayCount > 0`, wait for `input[aria-label="Czas radaru"]`.
 2. Read `input.value` / `max`. Set value to `0` via `Runtime.evaluate` (dispatch `input` + `change`) and assert the clock `<span>` text changes from the latest frame.
 3. If `button` text `Pokaż mżawkę` exists: click it, assert `aria-pressed` flipped (`false` → `true`). Default is off (`drizzleMap` false).
-4. If `tor komórki` is present, click `pokaż` and screenshot — you cannot query canvas pixels reliably; the proof is “pill clicked, map still up, no error overlay”.
+4. If `tor komórki` is present: the chip button (text `tor komórki`, not `pokaż`) must have `aria-pressed="false"` on a fresh load. Screenshot — no orange track arrows. Optional: click the chip on (`aria-pressed` true) and screenshot to prove arrows still draw. `pokaż` still pans; it is not the overlay toggle.
 5. Do not click the `aria-hidden` track canvas expecting a DOM event.
 
 ## Gotchas

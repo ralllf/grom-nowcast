@@ -86,7 +86,7 @@ Recipes. Prefer ARIA / ids / visible Polish copy. There are almost no `data-*` h
 | Radar time | `input[aria-label="Czas radaru"]` (only after ≥2 overlay/past frames) |
 | Drizzle | button whose text is `Pokaż mżawkę` (`aria-pressed`) — only if SRI overlays exist |
 | IMGW tint | button whose text is `IMGW` (`aria-pressed`) — only if any live storm warning has a TERYT |
-| Rain motion | `pokaż` on the `tor komórki` pill, or `Pokaż ruch opadu na mapie` in the sheet |
+| Rain motion | `tor komórki` chip (`aria-pressed`, **false** on fresh load) draws arrows when on; `pokaż` on that pill, or `Pokaż ruch opadu na mapie` in the sheet, pans |
 | IMGW list | `aside` `h3` `Ostrzeżenia IMGW` (desktop only) |
 | Map pick | MapLibre canvas (not the `aria-hidden` overlay canvas). Click → place label `Punkt na mapie` |
 

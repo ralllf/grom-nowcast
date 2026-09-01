@@ -10,6 +10,7 @@ import {
 import { DEFAULT_PLACE } from "./weather/cities";
 import { IMGW_MAP_DEFAULT, readImgwMapToggle } from "./weather/imgw-lane";
 import { DRIZZLE_MAP_DEFAULT, readDrizzleToggle } from "./weather/sri-overlay";
+import { TRACKS_MAP_DEFAULT, readTracksMapToggle } from "./weather/tracks-map";
 import type { Place } from "./weather/types";
 
 const STORAGE_KEY = "grom-settings-v1";
@@ -24,6 +25,8 @@ type Persisted = {
   imgwMap: boolean;
   /** Map drizzle (below klasa 1). Default off — map matches the numbers. */
   drizzleMap: boolean;
+  /** Amber cell-track arrows. Default off — they clutter a dry pin. */
+  tracksMap: boolean;
 };
 
 const DEFAULTS: Persisted = {
@@ -31,6 +34,7 @@ const DEFAULTS: Persisted = {
   alerts: DEFAULT_ALERT_SETTINGS,
   imgwMap: IMGW_MAP_DEFAULT,
   drizzleMap: DRIZZLE_MAP_DEFAULT,
+  tracksMap: TRACKS_MAP_DEFAULT,
 };
 
 function sanitizeAlerts(raw: unknown, legacyNotify: unknown): AlertSettings {
@@ -66,6 +70,7 @@ export function loadSettings(): Persisted {
       alerts: sanitizeAlerts(parsed.alerts, parsed.notify),
       imgwMap: readImgwMapToggle(parsed.imgwMap),
       drizzleMap: readDrizzleToggle(parsed.drizzleMap),
+      tracksMap: readTracksMapToggle(parsed.tracksMap),
     };
   } catch {
     return DEFAULTS;
@@ -144,6 +149,7 @@ type GromState = Persisted & {
   updatePlaceMeta: (place: Place) => void;
   setImgwMap: (imgwMap: boolean) => void;
   setDrizzleMap: (drizzleMap: boolean) => void;
+  setTracksMap: (tracksMap: boolean) => void;
   setAlerts: (patch: Partial<AlertSettings>) => void;
   setAlertMemory: (memory: AlertMemory) => void;
   recordAlert: (event: AlertEvent) => void;
@@ -162,6 +168,7 @@ function persist(s: Persisted) {
         alerts: s.alerts,
         imgwMap: s.imgwMap,
         drizzleMap: s.drizzleMap,
+        tracksMap: s.tracksMap,
       }),
     );
   } catch {
@@ -194,6 +201,10 @@ export const useGrom = create<GromState>((set, get) => ({
   },
   setDrizzleMap: (drizzleMap) => {
     set({ drizzleMap });
+    persist(get());
+  },
+  setTracksMap: (tracksMap) => {
+    set({ tracksMap });
     persist(get());
   },
   setAlerts: (patch) => {
