@@ -17,6 +17,7 @@ export function formatRadarClock(unixSec: number): string {
   return new Date(unixSec * 1000).toLocaleTimeString("pl-PL", {
     hour: "2-digit",
     minute: "2-digit",
+    timeZone: "Europe/Warsaw",
   });
 }
 
