@@ -50,6 +50,7 @@ TanStack Start + React 19 + Vite, MapLibre GL, Zustand, TanStack Query, `pngjs` 
 
 - [Architektura nowcastu](docs/ARCHITECTURE.md) — radar, komórki, ETA, pinezka, alerty
 - [Źródła danych i licencje](docs/DATA.md) — IMGW, RainViewer, co wolno, czego nie trzymamy
+- [Sondaże źródeł (keep / try / refuse)](docs/DATA-PROBES.md) — live GET/POST vs SRI + adwekcja, 2026-09-01
 - [Weryfikacja nowcastu](docs/HINDCAST.md) — `npm run hindcast`: POD / FAR / CSI na prawdziwym radarze vs persystencja
 - [Dziennik błędów (Slice 0)](docs/HINDCAST-LOG.md) — jeden wiersz na dzień burzowy; `--json` + Szansa
 - [Plan dokładności i niezawodności](docs/ACCURACY-PLAN.md) — ranking błędów, źródła danych (SRI, PERUN), warstwy, taksonomia alertów, kolejność małych kroków

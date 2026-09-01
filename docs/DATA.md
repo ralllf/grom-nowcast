@@ -40,7 +40,7 @@ Starsze notatki (900×900 / 1 km) były zgadywaniem z dokumentacji produktu; atr
 
 RainViewer Public API jest do użytku **osobistego / edukacyjnego** z atrybucją „Weather data by RainViewer” ([transition FAQ](https://www.rainviewer.com/api/transition-faq.html)). **Nie cache’ujemy klatek na dysku ani w repo** (w RAM serwera: ostatnie zdekodowane klatki + overlay PNG).
 
-Sieć radarowa POLRAD należy do **Instytutu Meteorologii i Gospodarki Wodnej – Państwowego Instytutu Badawczego**. W UI jest stała atrybucja. Dane w GROM są **przetworzone** (próbkowanie, klastry, wektory) — nie wolno ich przedstawiać jako surowy produkt IMGW. Endpointy `meteo.imgw.pl/api/radars/v1/…` są nieudokumentowane i ze znakiem wodnym — nie budować na nich. CMAX / ZHAIL — po Slice 6.
+Sieć radarowa POLRAD należy do **Instytutu Meteorologii i Gospodarki Wodnej – Państwowego Instytutu Badawczego**. W UI jest stała atrybucja. Dane w GROM są **przetworzone** (próbkowanie, klastry, wektory) — nie wolno ich przedstawiać jako surowy produkt IMGW. Endpointy `meteo.imgw.pl/api/radars/v1/…` są nieudokumentowane i ze znakiem wodnym — nie budować na nich. CMAX / ZHAIL / inne POLCOMP: live keep/try/refuse w [`DATA-PROBES.md`](DATA-PROBES.md) (2026-09-01).
 
 ## Ostrzeżenia
 
