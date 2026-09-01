@@ -109,6 +109,19 @@ test("fetchPerunPolska: HTML bounce on the POLCOMP-style URL yields no strikes",
   assert.match(listBody ?? "", /path=%2FOper%2FPerun%2FPERUN_Polska/);
 });
 
+test("fetchPerunPolska: followed 307 (200 HTML datastore page) is gated, not a quiet sky", async () => {
+  const listing = `<a href="x">2026.08.31.12.51.ld.csv</a>`;
+  const bounce = `<!doctype html>\n<html lang="en"><body>Dane publiczne datastore</body></html>`;
+  const scan = await fetchPerunPolska(NOW, async (url) => {
+    if (url.includes("getFilesList")) {
+      return { url, status: 200, contentType: "text/html", body: listing };
+    }
+    return { url, status: 200, contentType: "text/html; charset=UTF-8", body: bounce };
+  });
+  assert.equal(scan.unavailable, true);
+  assert.deepEqual(scan.strikes, []);
+});
+
 test("fetchPerunPolska: a real CSV is parsed and kept", async () => {
   const listing = `<a href="x">2026.08.31.12.51.ld.csv</a>`;
   const scan = await fetchPerunPolska(NOW, async (url) => {
