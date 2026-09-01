@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   NEAR_CELL_KM,
   PERUN_NO_STRIKES,
+  PERUN_UNAVAILABLE,
   STRIKE_WINDOW_MS,
   csvTimeMs,
   fetchPerunPolska,
@@ -80,18 +81,21 @@ test("strikeOpacity fades from fresh to the 15-min window", () => {
 });
 
 test("lightningCaption is the empty-state copy when no strikes shipped", () => {
-  assert.equal(lightningCaption(0, true), PERUN_NO_STRIKES);
+  assert.equal(lightningCaption(0, true), PERUN_UNAVAILABLE);
   assert.equal(lightningCaption(0, false), PERUN_NO_STRIKES);
   assert.match(lightningCaption(4, false) ?? "", /4/);
   assert.equal(PERUN_NO_STRIKES, "Brak wyładowań w tej sesji");
+  assert.equal(PERUN_UNAVAILABLE, "Wyładowania chwilowo niedostępne");
 });
 
 test("fetchPerunPolska: HTML bounce on the POLCOMP-style URL yields no strikes", async () => {
   const listing = `<a href="x">2026.08.31.12.51.ld.csv</a>`;
   const bounce = `<!doctype html><html><body>datastore</body></html>`;
   const seen: string[] = [];
-  const scan = await fetchPerunPolska(NOW, async (url) => {
+  const posts: Array<string | undefined> = [];
+  const scan = await fetchPerunPolska(NOW, async (url, init) => {
     seen.push(url);
+    posts.push(typeof init?.body === "string" ? init.body : undefined);
     if (url.includes("getFilesList")) {
       return { url, status: 200, contentType: "text/html", body: listing };
     }
@@ -100,6 +104,9 @@ test("fetchPerunPolska: HTML bounce on the POLCOMP-style URL yields no strikes",
   assert.equal(scan.unavailable, true);
   assert.deepEqual(scan.strikes, []);
   assert.ok(seen.some((u) => u.includes("getfiledown/Oper/Perun/PERUN_Polska/")));
+  const listBody = posts.find((b) => b?.includes("path="));
+  assert.match(listBody ?? "", /productType=oper/);
+  assert.match(listBody ?? "", /path=%2FOper%2FPerun%2FPERUN_Polska/);
 });
 
 test("fetchPerunPolska: a real CSV is parsed and kept", async () => {

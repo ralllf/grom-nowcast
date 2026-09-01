@@ -544,10 +544,14 @@ export function GromApp() {
             onShowRainMotion={showRainMotion}
             radarTime={radarTime}
             analysisSource={snapshot?.radar.analysisSource}
-            lightningNote={lightningCaption(
-              snapshot?.lightning.length ?? 0,
-              snapshot?.lightningUnavailable ?? true,
-            )}
+            lightningNote={
+              snapshot
+                ? lightningCaption(snapshot.lightning.length, snapshot.lightningUnavailable)
+                : snapshotQuery.isPending
+                  ? undefined
+                  : lightningCaption(0, true)
+            }
+            lightningUnavailable={snapshot?.lightningUnavailable ?? !snapshot}
           />
 
           <aside className="pointer-events-auto hidden max-h-72 overflow-y-auto rounded-3xl bg-surface/85 p-4 shadow-[0_0_0_1px_rgba(255,255,255,0.08)] backdrop-blur-md sm:block">

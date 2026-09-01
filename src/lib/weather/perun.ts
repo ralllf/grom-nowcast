@@ -7,10 +7,16 @@ export const STRIKE_WINDOW_MS = 15 * 60_000;
 export const NEAR_CELL_KM = 20;
 
 export const PERUN_NO_STRIKES = "Brak wyładowań w tej sesji";
+/** Same register as IMGW warnings: a bounce is not a quiet sky. */
+export const PERUN_UNAVAILABLE = "Wyładowania chwilowo niedostępne";
 
-export const PERUN_LIST_PATH = "Oper/Perun/PERUN_Polska";
+/** Official catalog path uses the leading slash; without it listing hrefs lose the slash after getfiledown. */
+export const PERUN_LIST_PATH = "/Oper/Perun/PERUN_Polska";
 export const PERUN_LIST_URL = "https://danepubliczne.imgw.pl/pl/datastore/getFilesList";
-/** Same scheme that serves POLCOMP PNGs. Perun currently 307-bounces to the datastore HTML. */
+/**
+ * Same getfiledown scheme as POLCOMP and as LTS2005 GIFs (those 200).
+ * PERUN_Polska `.ld.csv` still 307-bounces — do not invent strikes from the HTML.
+ */
 export const PERUN_FILE_URL_PREFIX =
   "https://danepubliczne.imgw.pl/pl/datastore/getfiledown/Oper/Perun/PERUN_Polska/";
 
@@ -167,7 +173,8 @@ export function strikeOpacity(ageMs: number, windowMs = STRIKE_WINDOW_MS): numbe
   return 0.95 - (0.8 * ageMs) / windowMs;
 }
 
-export function lightningCaption(count: number, _unavailable: boolean): string {
+export function lightningCaption(count: number, unavailable: boolean): string {
+  if (unavailable) return PERUN_UNAVAILABLE;
   if (count === 0) return PERUN_NO_STRIKES;
   return `${count} wyładowań · 15 min`;
 }
@@ -188,7 +195,7 @@ export async function fetchPerunPolska(nowMs: number, fetchText: FetchText): Pro
   const listed = await fetchText(PERUN_LIST_URL, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded", Accept: "text/html" },
-    body: `path=${PERUN_LIST_PATH}`,
+    body: `productType=oper&path=${encodeURIComponent(PERUN_LIST_PATH)}`,
   });
   const names = listPerunCsvNames(listed.body);
   const want = filesInWindow(names, nowMs).sort().reverse();

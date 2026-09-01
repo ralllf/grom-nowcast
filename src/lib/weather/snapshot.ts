@@ -1,8 +1,8 @@
-import { PERUN_NO_STRIKES, emptyLightningScan, type LightningScan } from "./perun.ts";
+import { PERUN_NO_STRIKES, PERUN_UNAVAILABLE, emptyLightningScan, type LightningScan } from "./perun.ts";
 import type { OfficialWarning, Place, RadarScan, Snapshot } from "./types.ts";
 
 export const IMGW_WARNINGS_UNAVAILABLE = "Ostrzeżenia IMGW chwilowo niedostępne";
-export { PERUN_NO_STRIKES };
+export { PERUN_NO_STRIKES, PERUN_UNAVAILABLE };
 
 export function warningMatches(w: OfficialWarning, place: Place): boolean {
   if (place.terc && w.teryt.includes(place.terc)) return true;
