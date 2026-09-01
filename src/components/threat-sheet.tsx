@@ -147,7 +147,7 @@ export function ThreatSheet({
         "pointer-events-auto border bg-surface/90 shadow-[0_0_0_1px_rgba(255,255,255,0.08)] backdrop-blur-md",
         "flex flex-col rounded-t-3xl pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:block sm:rounded-3xl sm:p-5 sm:pb-5",
         open ? "max-h-[70dvh] overflow-hidden" : "min-h-24",
-        "sm:min-h-0 sm:max-h-none sm:overflow-visible",
+        "sm:min-h-0 sm:max-h-[calc(100dvh-20rem)] sm:overflow-y-auto",
         threat ? PANEL[threat.level] : "border-transparent",
       )}
     >
@@ -187,7 +187,7 @@ export function ThreatSheet({
         className={cn(
           "min-h-0 flex-1 overflow-y-auto overscroll-contain p-4",
           !open && "hidden",
-          "sm:block sm:overflow-visible sm:p-0",
+          "sm:block sm:overflow-y-auto sm:p-0",
         )}
       >
         <div className="flex items-start justify-between gap-3">
@@ -278,8 +278,8 @@ export function ThreatSheet({
 
         <p className="mt-3 text-xs leading-relaxed text-faint">
           Szansa, ETA i alert są dla pinezki ({place.label}) — miasta albo punktu na mapie — nie
-          dla koła w okolicy. leadMin to czas, nie dystans. Na mapie strzałki to pole ruchu; te,
-          które dotyczą pinezki, mówią czy opad dojdzie.
+          dla koła w okolicy. Próg alertu to czas, nie dystans. Na mapie strzałki to pole ruchu;
+          te, które dotyczą pinezki, mówią czy opad dojdzie.
         </p>
 
         {honesty.imgw ? (

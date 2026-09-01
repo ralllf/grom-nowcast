@@ -1,0 +1,27 @@
+{
+  "ok": true,
+  "base": "http://127.0.0.1:8080",
+  "checkedAt": "2026-09-01T16:15:38.716Z",
+  "html": {
+    "status": 200,
+    "hasTitle": true,
+    "hasSheet": true,
+    "hasErrorPage": false
+  },
+  "snapshot": {
+    "ms": 10781,
+    "radarUnavailable": false,
+    "warningsUnavailable": true,
+    "lightningUnavailable": true,
+    "analysisSource": "sri",
+    "latestTime": 1788279000,
+    "latestAgeMin": 5.8,
+    "overlayCount": 4,
+    "pastCount": 11,
+    "echoCount": 3757,
+    "stormWarningCount": 0,
+    "place": "Warszawa",
+    "terc": "1465"
+  },
+  "reason": "worth driving (IMGW warnings unavailable — skip imgw-warnings assertions) (PERUN unavailable — expect Wyładowania chwilowo niedostępne)"
+}
