@@ -591,6 +591,31 @@ test("a strong cell 20 km away plus drizzle over the pin is not 'nad Tobą'", ()
   assert.equal(threat.expect, "słaby deszcz");
 });
 
+test("weak pin echo + approaching klasa-4 cell: no hail, one story, not Szansa 90", () => {
+  // Live 2026-09-01 Gdańsk: Echo ~5 km · słaby, stronger klasa-4 cell inbound.
+  // Hail / 90% / "Opad nadciąga" + "nad … teraz" must not leak from the distant cell.
+  const drizzle: RadarSample[] = [
+    { lat: 50.045, lon: 21.0, level: 1 },
+    { lat: 50.048, lon: 21.01, level: 1 },
+  ];
+  const frames = [
+    frame(1_000, [...blob(50.0, 20.4, 4), ...drizzle], 5),
+    frame(1_600, [...blob(50.0, 20.55, 4), ...drizzle], 5),
+  ];
+  const threat = computeThreat(city, frames, []);
+  assert.equal(threat.pinLevel, 1);
+  assert.ok(threat.nearestKm !== null && threat.nearestKm <= 8, `echo ${threat.nearestKm}`);
+  assert.doesNotMatch(threat.expect ?? "", /grad/);
+  assert.doesNotMatch(threat.detail, /grad/);
+  const nadciaga = /nadciąga/.test(threat.title);
+  const teraz = /teraz/.test(threat.detail) || /nad Tobą/.test(threat.title);
+  assert.ok(
+    nadciaga !== teraz,
+    `headline+detail must be one story: title=${threat.title} detail=${threat.detail}`,
+  );
+  assert.notEqual(threat.chancePct, 90, `Szansa ${threat.chancePct} is the 90 rung for a weak pin`);
+});
+
 test("pin timeline: dry now, rain arrives when the advected cell reaches the pin", () => {
   const frames = [frame(1_000, blob(50.0, 20.4), 43), frame(1_600, blob(50.0, 20.55), 32)];
   const threat = computeThreat(city, frames, []);
