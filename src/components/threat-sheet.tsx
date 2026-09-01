@@ -4,9 +4,9 @@ import {
   cellTrendLine,
   etaLabel,
   nowcastHeadline,
+  sheetSourceHonesty,
   shouldAutoExpandSheet,
 } from "@/components/threat-sheet-logic";
-import { IMGW_WARNINGS_UNAVAILABLE } from "@/lib/weather/snapshot";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { LEVEL_SWATCH, levelLabelPl } from "@/lib/weather/palette";
@@ -53,6 +53,7 @@ type Props = {
   /** Time-boxed IMGW lane — never the nowcast headline. */
   imgwLine?: string | null;
   warningsUnavailable?: boolean;
+  radarUnavailable?: boolean;
   geoError: string | null;
   onClearGeoError: () => void;
   onShowRainMotion: () => void;
@@ -73,6 +74,7 @@ export function ThreatSheet({
   tracks,
   imgwLine = null,
   warningsUnavailable = false,
+  radarUnavailable = false,
   geoError,
   onClearGeoError,
   onShowRainMotion,
@@ -99,6 +101,11 @@ export function ThreatSheet({
   const chance = threat ? `${threat.chancePct}%` : "—";
   const headline = nowcastHeadline(threat, pending);
   const trendLine = cellTrendLine(threat?.cellTrend);
+  const honesty = sheetSourceHonesty({
+    queryError: error,
+    radarUnavailable,
+    warningsUnavailable,
+  });
 
   useEffect(() => {
     const desktop = window.matchMedia(SM_UP).matches;
@@ -229,9 +236,7 @@ export function ThreatSheet({
         ) : null}
 
         <p className="mt-3 max-w-prose text-sm leading-relaxed text-muted text-pretty">
-          {error
-            ? "Nie udało się pobrać radaru albo ostrzeżeń. Spróbuj za chwilę."
-            : (detail ?? threat?.detail)}
+          {honesty.radar ?? detail ?? threat?.detail}
         </p>
 
         <dl className="mt-4 grid grid-cols-3 gap-2 text-center">
@@ -277,8 +282,8 @@ export function ThreatSheet({
           które dotyczą pinezki, mówią czy opad dojdzie.
         </p>
 
-        {warningsUnavailable ? (
-          <p className="mt-3 text-xs text-warn">{IMGW_WARNINGS_UNAVAILABLE}</p>
+        {honesty.imgw ? (
+          <p className="mt-3 text-xs text-warn">{honesty.imgw}</p>
         ) : imgwLine ? (
           <p className="mt-3 text-xs leading-relaxed text-warn">{imgwLine}</p>
         ) : null}

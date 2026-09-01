@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { DEFAULT_ALERT_SETTINGS, EMPTY_ALERT_MEMORY, evaluateAlert } from "./alerts.ts";
-import { canTrustRadar, emptyRadarScan, IMGW_WARNINGS_UNAVAILABLE, PERUN_NO_STRIKES, PERUN_UNAVAILABLE, loadSnapshot } from "./snapshot.ts";
+import { canTrustRadar, emptyRadarScan, IMGW_WARNINGS_UNAVAILABLE, RADAR_UNAVAILABLE, PERUN_NO_STRIKES, PERUN_UNAVAILABLE, loadSnapshot } from "./snapshot.ts";
 import type { OfficialWarning, Place, RadarScan } from "./types.ts";
 
 const place: Place = {
@@ -122,6 +122,8 @@ test("IMGW 404 leaves radar fully functional and shows the notice", async () => 
   assert.equal(snap.radarUnavailable, false);
   assert.equal(canTrustRadar(snap), true);
   assert.equal(IMGW_WARNINGS_UNAVAILABLE, "Ostrzeżenia IMGW chwilowo niedostępne");
+  assert.equal(RADAR_UNAVAILABLE, "Nie udało się pobrać radaru. Spróbuj za chwilę.");
+  assert.doesNotMatch(RADAR_UNAVAILABLE, /albo|ostrzeżeń/);
 });
 
 test("IMGW timeout leaves radar fully functional and shows the notice", async () => {

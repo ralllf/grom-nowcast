@@ -1,6 +1,13 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { etaLabel, lightningCaption, shouldAutoExpandSheet } from "./threat-sheet-logic.ts";
+import {
+  etaLabel,
+  imgwAsideCountLine,
+  lightningCaption,
+  sheetSourceHonesty,
+  shouldAutoExpandSheet,
+} from "./threat-sheet-logic.ts";
+import { IMGW_WARNINGS_UNAVAILABLE, RADAR_UNAVAILABLE } from "../lib/weather/snapshot.ts";
 import type { Threat } from "@/lib/weather/types";
 
 function threat(partial: Partial<Threat>): Threat {
@@ -111,5 +118,58 @@ describe("etaLabel", () => {
   it("says minie only when the cell misses and echo is 20–80 km", () => {
     assert.equal(etaLabel(threat({ willHit: false, missKm: 12, nearestKm: 40 })), "minie");
     assert.equal(etaLabel(threat({ willHit: false, missKm: 12, nearestKm: 10 })), "—");
+  });
+});
+
+describe("imgwAsideCountLine", () => {
+  it("does not print 0 burzowych while snapshot is missing", () => {
+    const line = imgwAsideCountLine(undefined);
+    assert.equal(line, null);
+    assert.equal(line?.includes("0 burzowych"), undefined);
+  });
+
+  it("does not print a fake zero-count when warningsUnavailable", () => {
+    const line = imgwAsideCountLine({ stormWarningCount: 0, warningsUnavailable: true });
+    assert.equal(line, null);
+    assert.ok(!String(line).includes("0 burzowych"));
+  });
+
+  it("prints the real count only after IMGW settled", () => {
+    assert.equal(imgwAsideCountLine({ stormWarningCount: 0, warningsUnavailable: false }), "0 burzowych w kraju");
+    assert.equal(imgwAsideCountLine({ stormWarningCount: 3, warningsUnavailable: false }), "3 burzowych w kraju");
+  });
+});
+
+describe("sheetSourceHonesty", () => {
+  it("names radar only when radar is down", () => {
+    const h = sheetSourceHonesty({ radarUnavailable: true });
+    assert.equal(h.radar, RADAR_UNAVAILABLE);
+    assert.match(h.radar ?? "", /radaru/);
+    assert.doesNotMatch(h.radar ?? "", /albo|ostrzeżeń/);
+    assert.equal(h.imgw, null);
+  });
+
+  it("names ostrzeżenia only when IMGW is down", () => {
+    const h = sheetSourceHonesty({ warningsUnavailable: true });
+    assert.equal(h.imgw, IMGW_WARNINGS_UNAVAILABLE);
+    assert.match(h.imgw ?? "", /ostrzeż/i);
+    assert.doesNotMatch(h.imgw ?? "", /albo|radaru/);
+    assert.equal(h.radar, null);
+  });
+
+  it("keeps sources on separate lines when both are down — no albo", () => {
+    const h = sheetSourceHonesty({ radarUnavailable: true, warningsUnavailable: true });
+    assert.equal(h.radar, RADAR_UNAVAILABLE);
+    assert.equal(h.imgw, IMGW_WARNINGS_UNAVAILABLE);
+    const combined = `${h.radar} ${h.imgw}`;
+    assert.doesNotMatch(combined, /albo/);
+    assert.doesNotMatch(combined, /radaru albo ostrzeżeń/);
+  });
+
+  it("query error names radar, not ostrzeżenia", () => {
+    const h = sheetSourceHonesty({ queryError: true });
+    assert.equal(h.radar, RADAR_UNAVAILABLE);
+    assert.doesNotMatch(h.radar ?? "", /albo|ostrzeżeń/);
+    assert.equal(h.imgw, null);
   });
 });

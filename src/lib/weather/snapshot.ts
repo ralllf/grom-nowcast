@@ -2,6 +2,7 @@ import { PERUN_NO_STRIKES, PERUN_UNAVAILABLE, emptyLightningScan, type Lightning
 import type { OfficialWarning, Place, RadarScan, Snapshot } from "./types.ts";
 
 export const IMGW_WARNINGS_UNAVAILABLE = "Ostrzeżenia IMGW chwilowo niedostępne";
+export const RADAR_UNAVAILABLE = "Nie udało się pobrać radaru. Spróbuj za chwilę.";
 export { PERUN_NO_STRIKES, PERUN_UNAVAILABLE };
 
 export function warningMatches(w: OfficialWarning, place: Place): boolean {
