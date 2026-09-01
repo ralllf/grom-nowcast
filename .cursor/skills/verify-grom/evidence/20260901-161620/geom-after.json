@@ -1,0 +1,42 @@
+{
+  "viewport": {
+    "w": 1280,
+    "h": 800
+  },
+  "sheet": {
+    "top": 300,
+    "left": 64,
+    "right": 480,
+    "bottom": 780,
+    "height": 480,
+    "width": 416
+  },
+  "pills": [
+    {
+      "label": "pokaż",
+      "ariaPressed": null,
+      "rect": {
+        "top": 166,
+        "left": 128.90625,
+        "right": 165.328125,
+        "bottom": 182
+      },
+      "hit": "pokaż",
+      "hitIsSelf": true,
+      "overlapsSheet": false
+    },
+    {
+      "label": "Pokaż mżawkę",
+      "ariaPressed": "true",
+      "rect": {
+        "top": 196,
+        "left": 20,
+        "right": 148.75,
+        "bottom": 224
+      },
+      "hit": "Pokaż mżawkę",
+      "hitIsSelf": true,
+      "overlapsSheet": false
+    }
+  ]
+}

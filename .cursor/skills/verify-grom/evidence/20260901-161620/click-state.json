@@ -1,0 +1,20 @@
+{
+  "camBefore": {
+    "canvasCount": 1
+  },
+  "camAfter": {
+    "mapPresent": true,
+    "canvas": {
+      "w": 1280,
+      "h": 800
+    },
+    "errorOverlay": false
+  },
+  "drizzle0": "false",
+  "drizzle1": {
+    "ariaPressed": "true",
+    "text": "Pokaż mżawkę"
+  },
+  "honesty": "Szansa, ETA i alert są dla pinezki (Warszawa) — miasta albo punktu na mapie — nie dla koła w okolicy. Próg alertu to czas, nie dystans. Na mapie strzałki to pole ruchu; te, które dotyczą pinezki, mówią czy opad dojdzie.",
+  "hasLeadMin": false
+}
