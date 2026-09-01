@@ -170,3 +170,43 @@ test("shipped 30 min window ignores rain that research 60 min still scores", () 
   );
   assert.equal(summary.nowcast["2"]!["30"]!.obs, 0);
 });
+
+function scoreCadence(opts: { dtSec: number; rainAtOffset: number; frameCount: number }) {
+  const pin = { lat: 50.0, lon: 21.0 };
+  const west = blob(50.0, 20.45, 3);
+  const over = blob(50.0, 21.0, 3);
+  const t0 = 1_777_900_000;
+  const frames: RadarMemoryFrame[] = [];
+  for (let i = 0; i < opts.frameCount; i++) {
+    frames.push(frame(t0 + i * opts.dtSec, i === 3 + opts.rainAtOffset ? over : west));
+  }
+  return scoreHindcast({
+    frames,
+    pins: [pin],
+    origin: { lat: 50.0, lon: 21.0 },
+    downloadedAtMs: (t0 + (opts.frameCount - 1) * opts.dtSec) * 1000,
+  });
+}
+
+test("nowcast +30 compares the frame lead minutes later, not lead/10 frames", () => {
+  // RainViewer 10 min: +30 is 3 frames. Rain on that frame must still score.
+  const rv = scoreCadence({ dtSec: 600, rainAtOffset: 3, frameCount: 10 });
+  assert.ok(rv.nowcast["2"]!["30"]!.obs >= 1, "10-min +30 must see rain 3 frames later");
+  assert.equal(rv.nowcast["2"]!["20"]!.obs, 0);
+
+  // SRI 5 min: 3 frames is +15, not +30. Rain only at +15 must not count as +30.
+  const sriEarly = scoreCadence({ dtSec: 300, rainAtOffset: 3, frameCount: 16 });
+  assert.equal(
+    sriEarly.nowcast["2"]!["30"]!.obs,
+    0,
+    "5-min +30 must not treat 3 frames (+15 min) as the observation",
+  );
+  assert.equal(sriEarly.alerts.shipped.skill.obs, 0);
+
+  // Same 5-min grid: rain 6 frames later is +30 min and must count.
+  const sriOnTime = scoreCadence({ dtSec: 300, rainAtOffset: 6, frameCount: 16 });
+  assert.ok(
+    sriOnTime.nowcast["2"]!["30"]!.obs >= 1,
+    "5-min +30 must see rain 6 frames / 30 min later",
+  );
+});
