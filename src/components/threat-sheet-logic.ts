@@ -1,9 +1,30 @@
 import type { CellTrend, Threat, ThreatLevel } from "@/lib/weather/types";
 import { lightningCaption } from "../lib/weather/perun.ts";
+import { IMGW_WARNINGS_UNAVAILABLE, RADAR_UNAVAILABLE } from "../lib/weather/snapshot.ts";
 import { cellTrendCopy } from "../lib/weather/trend.ts";
 import { wallClockMin } from "../lib/weather/wall-clock.ts";
 
 export { lightningCaption };
+
+/** Count line for the IMGW aside — never a fake zero while fetching or when IMGW is down. */
+export function imgwAsideCountLine(
+  snapshot: { stormWarningCount: number; warningsUnavailable: boolean } | null | undefined,
+): string | null {
+  if (!snapshot || snapshot.warningsUnavailable) return null;
+  return `${snapshot.stormWarningCount} burzowych w kraju`;
+}
+
+/** Source-specific sheet honesty. Radar and IMGW are never blamed in one „albo” string. */
+export function sheetSourceHonesty(opts: {
+  queryError?: boolean;
+  radarUnavailable?: boolean;
+  warningsUnavailable?: boolean;
+}): { radar: string | null; imgw: string | null } {
+  return {
+    radar: opts.queryError || opts.radarUnavailable ? RADAR_UNAVAILABLE : null,
+    imgw: opts.warningsUnavailable ? IMGW_WARNINGS_UNAVAILABLE : null,
+  };
+}
 
 export function cellTrendLine(trend: CellTrend | undefined): string | null {
   return cellTrendCopy(trend ?? null);

@@ -18,6 +18,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { RadarMap } from "@/components/radar-map";
 import { ThreatSheet } from "@/components/threat-sheet";
+import { imgwAsideCountLine } from "@/components/threat-sheet-logic";
 import { cn } from "@/lib/utils";
 import { CITIES } from "@/lib/weather/cities";
 import { haversineKm } from "@/lib/weather/geo";
@@ -347,6 +348,7 @@ export function GromApp() {
   );
   const localWarnings = warnings.filter((w) => w.matchesPlace);
   const shownWarnings = localWarnings.length > 0 ? localWarnings : warnings;
+  const imgwCountLine = imgwAsideCountLine(snapshot);
   const imgwDegrees = useMemo(() => stormWarningDegrees(snapshot?.warnings ?? []), [snapshot?.warnings]);
   const imgwLine = useMemo(
     () => localImgwLane(warnings, place.county),
@@ -533,6 +535,7 @@ export function GromApp() {
             tracks={tracks}
             imgwLine={imgwLine}
             warningsUnavailable={snapshot?.warningsUnavailable ?? false}
+            radarUnavailable={snapshot?.radarUnavailable ?? false}
             geoError={geoError}
             onClearGeoError={() => setGeoError(null)}
             onShowRainMotion={showRainMotion}
@@ -551,11 +554,7 @@ export function GromApp() {
           <aside className="pointer-events-auto hidden max-h-72 overflow-y-auto rounded-3xl bg-surface/85 p-4 shadow-[0_0_0_1px_rgba(255,255,255,0.08)] backdrop-blur-md sm:block">
             <div className="mb-3 flex items-center justify-between gap-2">
               <h3 className="text-sm font-medium">Ostrzeżenia IMGW</h3>
-              {snapshot?.warningsUnavailable ? null : (
-                <span className="text-xs text-muted">
-                  {snapshot?.stormWarningCount ?? 0} burzowych w kraju
-                </span>
-              )}
+              {imgwCountLine ? <span className="text-xs text-muted">{imgwCountLine}</span> : null}
             </div>
             {snapshot?.warningsUnavailable ? (
               <p className="text-sm text-warn">{IMGW_WARNINGS_UNAVAILABLE}</p>
