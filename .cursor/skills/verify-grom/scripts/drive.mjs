@@ -285,7 +285,7 @@ try {
     }
     await screenshot(cdp, join(OUT, "01-tracks-off.png"));
 
-    const toggled = await evalExpr(
+    const clicked = await evalExpr(
       cdp,
       `(() => {
         const btn = [...document.querySelectorAll("button")].find((b) =>
@@ -294,9 +294,29 @@ try {
         );
         if (!btn) return "missing";
         btn.click();
-        return btn.getAttribute("aria-pressed");
+        return "clicked";
       })()`,
     );
+    if (clicked !== "clicked") {
+      await screenshot(cdp, join(OUT, "00-failed-toggle.png"));
+      throw new Error("tor komórki chip missing at click");
+    }
+    let toggled = null;
+    const tToggle = Date.now();
+    while (Date.now() - tToggle < 4000) {
+      toggled = await evalExpr(
+        cdp,
+        `(() => {
+          const btn = [...document.querySelectorAll("button")].find((b) =>
+            b.textContent.trim() === "tor komórki" ||
+            (b.textContent.includes("tor komórki") && !b.textContent.includes("pokaż"))
+          );
+          return btn ? btn.getAttribute("aria-pressed") : null;
+        })()`,
+      );
+      if (toggled === "true") break;
+      await sleep(150);
+    }
     if (toggled !== "true") {
       await screenshot(cdp, join(OUT, "00-failed-toggle.png"));
       throw new Error(`clicking tor komórki did not press it on (aria-pressed=${toggled})`);
