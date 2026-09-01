@@ -1,6 +1,11 @@
 import { MapPin, X } from "lucide-react";
 import { useEffect, useRef, useState, type PointerEvent } from "react";
-import { etaLabel, nowcastHeadline, shouldAutoExpandSheet } from "@/components/threat-sheet-logic";
+import {
+  cellTrendLine,
+  etaLabel,
+  nowcastHeadline,
+  shouldAutoExpandSheet,
+} from "@/components/threat-sheet-logic";
 import { IMGW_WARNINGS_UNAVAILABLE } from "@/lib/weather/snapshot";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
@@ -90,6 +95,7 @@ export function ThreatSheet({
       : echo;
   const chance = threat ? `${threat.chancePct}%` : "—";
   const headline = nowcastHeadline(threat, pending);
+  const trendLine = cellTrendLine(threat?.cellTrend);
 
   useEffect(() => {
     const desktop = window.matchMedia(SM_UP).matches;
@@ -190,7 +196,7 @@ export function ThreatSheet({
           {threat ? <Badge tone={TONE[threat.level]}>{threat.level}</Badge> : null}
         </div>
 
-        {threat?.comingFrom || threat?.expect ? (
+        {threat && (threat.comingFrom || threat.expect || trendLine) ? (
           <div className="mt-3 space-y-1.5 rounded-2xl bg-surface-2 px-3 py-3 text-sm leading-relaxed">
             {threat.comingFrom ? (
               <p>
@@ -209,6 +215,11 @@ export function ThreatSheet({
               <p>
                 <span className="text-faint">Spodziewaj się: </span>
                 <span className="font-medium">{threat.expect}</span>
+              </p>
+            ) : null}
+            {trendLine ? (
+              <p>
+                <span className="font-medium">{trendLine}</span>
               </p>
             ) : null}
           </div>

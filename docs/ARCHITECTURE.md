@@ -101,6 +101,7 @@ Gdy sprawa dotyczy pinezki:
 
 - `Idzie od zachodu → na wschód · 48 km/h`
 - `Spodziewaj się: deszcz i mokrą jezdnię` (z poziomu echa, nie z jutrzejszego ostrzeżenia z słowem „grad”)
+- `Komórka rośnie` / `Komórka słabnie` — trend intensywności/powierzchni tej samej masy na 4-klatkowym tropie (`buildMassTrail`). **Tylko copy:** bramka Slice 0 nie przepuszcza korekty osi czasu / ETA (za mało dni konwekcyjnych w [`HINDCAST-LOG.md`](HINDCAST-LOG.md)).
 - `Dojście nad Kraków: ok. 18 min`
 
 Gdy echo jest 127 km stąd i nie idzie na nas: **Czysto** + przycisk **Pokaż ruch opadu**, żeby zobaczyć strzałki na komórce bez kłamania, że burza jest nad miastem.

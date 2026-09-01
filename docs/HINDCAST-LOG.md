@@ -88,6 +88,20 @@ the well-calibrated willHit+approaching rung (60 → 55) still clears the gate; 
 overconfident close-echo rung (55 → 20, obs 18%) no longer fires. That should
 not worsen POD and should cut FAR. Confirm on the next logged day.
 
+## Slice 9 gate (2026-08-31) — copy only, math off
+
+The plan lets timeline / ETA move for growing cells only on **≥ 3 convective
+log days**, with POD at +20…+40 min up, FAR up by < 3 pts, and ETA median bias
+toward 0.
+
+Published rows today: **2**, both `front`. Convective days: **0**. Slice 0's
+own success check (≥ 5 days including ≥ 2 convective) is also unmet.
+
+`GROWTH_MATH_ENABLED` in [`src/lib/weather/trend.ts`](../src/lib/weather/trend.ts)
+stays **false**. The sheet ships **Komórka rośnie / słabnie** from the 4-frame
+trail; nowcast numbers do not change. Re-open the math only after three
+`konwekcja` rows exist and the numbers above hold.
+
 ## Log
 
 | date | regime | window UTC | age_s | cellKm | samples | advected | persist | crudeETA | n+30 ≥2 | p+30 ≥2 | n+60 ≥2 | p+60 ≥2 | alert_shipped | alert_research≥2 | ETA_shipped | ETA_research≥2 | szansa | notes |
