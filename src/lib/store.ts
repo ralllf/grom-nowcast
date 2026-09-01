@@ -19,7 +19,6 @@ const ALERT_LOG_MAX = 12;
 
 type Persisted = {
   place: Place;
-  radiusKm: number;
   alerts: AlertSettings;
   /** Choropleth of powiats with an active storm warning. */
   imgwMap: boolean;
@@ -29,7 +28,6 @@ type Persisted = {
 
 const DEFAULTS: Persisted = {
   place: DEFAULT_PLACE,
-  radiusKm: 25,
   alerts: DEFAULT_ALERT_SETTINGS,
   imgwMap: IMGW_MAP_DEFAULT,
   drizzleMap: DRIZZLE_MAP_DEFAULT,
@@ -65,7 +63,6 @@ export function loadSettings(): Persisted {
     const parsed = JSON.parse(raw) as Partial<Persisted> & { notify?: boolean };
     return {
       place: parsed.place ?? DEFAULT_PLACE,
-      radiusKm: parsed.radiusKm ?? 25,
       alerts: sanitizeAlerts(parsed.alerts, parsed.notify),
       imgwMap: readImgwMapToggle(parsed.imgwMap),
       drizzleMap: readDrizzleToggle(parsed.drizzleMap),
@@ -145,7 +142,6 @@ type GromState = Persisted & {
   activeAlert: AlertEvent | null;
   setPlace: (place: Place) => void;
   updatePlaceMeta: (place: Place) => void;
-  setRadiusKm: (radiusKm: number) => void;
   setImgwMap: (imgwMap: boolean) => void;
   setDrizzleMap: (drizzleMap: boolean) => void;
   setAlerts: (patch: Partial<AlertSettings>) => void;
@@ -163,7 +159,6 @@ function persist(s: Persisted) {
       STORAGE_KEY,
       JSON.stringify({
         place: s.place,
-        radiusKm: s.radiusKm,
         alerts: s.alerts,
         imgwMap: s.imgwMap,
         drizzleMap: s.drizzleMap,
@@ -191,10 +186,6 @@ export const useGrom = create<GromState>((set, get) => ({
   },
   updatePlaceMeta: (place) => {
     set({ place });
-    persist(get());
-  },
-  setRadiusKm: (radiusKm) => {
-    set({ radiusKm });
     persist(get());
   },
   setImgwMap: (imgwMap) => {

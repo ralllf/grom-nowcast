@@ -93,13 +93,11 @@ function isEmbeddedPreview() {
 
 export function GromApp() {
   const place = useGrom((s) => s.place);
-  const radiusKm = useGrom((s) => s.radiusKm);
   const alerts = useGrom((s) => s.alerts);
   const activeAlert = useGrom((s) => s.activeAlert);
   const alertLog = useGrom((s) => s.alertLog);
   const setPlace = useGrom((s) => s.setPlace);
   const updatePlaceMeta = useGrom((s) => s.updatePlaceMeta);
-  const setRadiusKm = useGrom((s) => s.setRadiusKm);
   const imgwMap = useGrom((s) => s.imgwMap);
   const setImgwMap = useGrom((s) => s.setImgwMap);
   const drizzleMap = useGrom((s) => s.drizzleMap);
@@ -137,12 +135,10 @@ export function GromApp() {
     queryKey: ["snapshot"],
     queryFn: () => {
       const p = useGrom.getState().place;
-      const r = useGrom.getState().radiusKm;
       return getSnapshot({
         data: {
           lat: p.lat,
           lon: p.lon,
-          radiusKm: r,
           place: p,
         },
       });
@@ -181,11 +177,10 @@ export function GromApp() {
       place,
       radarHistory,
       warnings,
-      radiusKm,
       PL_RADAR_ORIGIN,
       snapshot.lightning,
     );
-  }, [snapshot, radarHistory, radiusKm, place]);
+  }, [snapshot, radarHistory, place]);
 
   const radarDegraded = historyIsDegraded(radarHistory);
 
@@ -366,7 +361,6 @@ export function GromApp() {
         className="absolute inset-0"
         lat={place.lat}
         lon={place.lon}
-        radiusKm={radiusKm}
         radarHost={radarHost}
         radarPath={radarPath}
         overlayUrl={sriOverlayUrl}
@@ -670,24 +664,7 @@ export function GromApp() {
               ))}
             </div>
 
-            <label className="mt-5 block text-sm">
-              Promień alertu: <span className="font-mono tabular-nums">{radiusKm} km</span>
-              <input
-                type="range"
-                min={15}
-                max={80}
-                step={5}
-                value={radiusKm}
-                onChange={(e) => setRadiusKm(Number(e.target.value))}
-                className="mt-2 w-full accent-accent"
-              />
-            </label>
-            <p className="mt-2 text-xs leading-relaxed text-muted">
-              Promień to zasięg alertu. Szansa, ETA i strzałka są liczone dla pinezki — teraz
-              miasta, później dokładnego GPS.
-            </p>
-
-            <label className="mt-4 flex items-center gap-2 text-sm">
+            <label className="mt-5 flex items-center gap-2 text-sm">
               <input
                 type="checkbox"
                 checked={imgwMap}

@@ -272,9 +272,9 @@ export function ThreatSheet({
         ) : null}
 
         <p className="mt-3 text-xs leading-relaxed text-faint">
-          Szansa i ETA są dla pinezki ({place.label}) — miasta albo punktu GPS — nie dla całego
-          promienia. Na mapie jedna albo dwie strzałki — te, które dotyczą pinezki, nie cały front.
-          Promień w ustawieniach mówi tylko, jak daleko wołamy alert.
+          Szansa, ETA i alert są dla pinezki ({place.label}) — miasta albo punktu na mapie — nie
+          dla koła w okolicy. leadMin to czas, nie dystans. Na mapie strzałki to pole ruchu; te,
+          które dotyczą pinezki, mówią czy opad dojdzie.
         </p>
 
         {warningsUnavailable ? (

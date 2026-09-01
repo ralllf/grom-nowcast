@@ -425,7 +425,6 @@ async function sampleRadar() {
 const snapshotInput = z.object({
   lat: z.number().min(48).max(56),
   lon: z.number().min(13).max(25),
-  radiusKm: z.number().min(10).max(80),
   place: z
     .object({
       lat: z.number(),

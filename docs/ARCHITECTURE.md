@@ -16,17 +16,17 @@ IMGW COMPO_SRI .sri.h5 (datastore, 5 min)  ──outage──▶  RainViewer kaf
         └── pinezka: ETA / szansa / ostrzeżenia IMGW z tego samego pola
 ```
 
-## Pinezka vs promień
+## Pinezka vs okolica
 
 | Pojęcie | Dystans | Po co |
 |---|---|---|
 | **Pinezka** | 5 km (`PIN_KM`) | miasto z listy, punkt z mapy, później dokładny GPS |
-| **Lokalny max** | 25 km | „czy nad Tobą jest już echo” |
-| **Promień alertu** | 15–80 km, suwak | jak daleko wołamy „opad w okolicy” |
+| **Nad pinezką** | 8 km (`OVER_KM`) | echo już nad punktem (siatka ~3 km) |
+| **Lokalny max** | 25 km | kontekst mapy (`maxLevel`), nie Szansa / alert |
 | **Horyzont ETA** | 100 km (`TRACK_MAX_KM`) | dalej niż to nie budujemy narracji „nad Tobą” |
 | **Domena radaru** | bbox PL + granica | stałe próbkowanie; nie od pinu, nie cały świat |
 
-Szansa i ETA **nigdy** nie są średnią z całego koła. Koło na mapie to tylko zasięg czujności.
+Szansa, ETA i alert (nadciąga / nad Tobą / przeszło) są **tylko dla pinezki**. `leadMin` to czas, nie dystans. Echo obok, które minie punkt, nie podbija Szansy i nie woła incoming. Nie ma koła „promień alertu”.
 
 ## Radar
 
@@ -48,7 +48,7 @@ Szansa i ETA **nigdy** nie są średnią z całego koła. Koło na mapie to tylk
 - **Format przesyłu.** TanStack Start opakowuje każdą liczbę w JSON (`{"t":0,"s":51.149}`), więc klatka jedzie jako **jeden string base64, 8 bajtów/próbka** ([`pack.ts`](../src/lib/weather/pack.ts)): u16 lat, u16 lon (tysięczne stopnia od rogu bboxu), u16 klasa, u16 mm/h×10. Deszczowy dzień: ~180 kB za 4 klatki zamiast ~2 MB.
 - Overlay na mapie: jedno PNG 800×800 z tego samego pola SRI, pokolorowane 4 klasami legendy, źródło `image` MapLibre z narożnikami aeqd. Domyślnie klasa ≥ 1 (jak liczby); „Pokaż mżawkę” jest wyłączona. RainViewer `…/2/1_0.png` zostaje fallbackiem.
 
-Klatki **nie idą do gita ani bazy**. Klient trzyma ostatnie skany w Zustand (RAM). `localStorage` ma tylko miasto, promień, ustawienia alertów.
+Klatki **nie idą do gita ani bazy**. Klient trzyma ostatnie skany w Zustand (RAM). `localStorage` ma tylko miasto i ustawienia alertów.
 
 ## Komórki i wektory
 
@@ -61,7 +61,7 @@ Klatki **nie idą do gita ani bazy**. Klient trzyma ostatnie skany w Zustand (RA
 7. `threat.track` = narracja pinu; `threat.tracks` = pole ruchu (może zawierać burze daleko od pinu).
 8. Pinezka: ETA / trafi-minie / szansa / copy; ostrzeżenia po TERYT.
 
-Echo ≤ 8 km (`OVER_KM`, siatka ~3 km) = **teraz**, nie „minie”. „Minie” tylko gdy najbliższe echo jest dalej niż 20 km i tor naprawdę omija pinezkę.
+Echo ≤ 8 km (`OVER_KM`, siatka ~3 km) = **teraz**, nie „minie”. „Minie” gdy tor omija pinezkę i echo nie jest już nad punktem.
 
 **Nad Tobą znaczy nad Tobą.** `pinLevel` = najsilniejsze echo w 8 km od pinezki; `maxLevel` (25 km) to kontekst dla mapy. Tytuł „nad Tobą” / „nadciąga” nazywa intensywność nad pinezką (*Deszcz* / *Ulewa* / *Burza* = klasa 4), a nie najczerwieńszy piksel w powiecie. Dawniej rdzeń 20 km obok plus mżawka nad miastem dawały „Burza nad Tobą”.
 
@@ -76,7 +76,8 @@ W oknie 0–90 min, krok 2 min, rzutujemy komórkę po azymucie i prędkości.
 
 Szansa % jest grubą siatką (5–95), potem **przemapowana** na częstość z dziennika
 hindcastu ([`chance.ts`](../src/lib/weather/chance.ts), Slice 8): surowy szczebel
-60 (tor trafia) → 55, 70/80 (nad pinezką / ETA ≤ 20) → 90, 55 (echo w 20 km) → 20.
+60 (tor trafia) → 55, 70/80 (nad pinezką / ETA ≤ 20) → 90. Echo w okolicy, które
+minie pinezkę, zostaje na surowym 10 → 10 — bez starych szczebli 25/40/55 z koła.
 Tylko gdy echo jest ≤ 100 km — suche pinezki i samo IMGW zostają na surowym
 szczeblu. To nie model MESO-NH. UI mówi „szansa”, nie „pewność”.
 

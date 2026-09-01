@@ -152,20 +152,6 @@ export function bboxForRadius(
   };
 }
 
-export function circlePolygon(
-  lat: number,
-  lon: number,
-  radiusKm: number,
-  steps = 64,
-): { type: "Polygon"; coordinates: number[][][] } {
-  const ring: [number, number][] = [];
-  for (let i = 0; i <= steps; i++) {
-    const p = destPoint(lat, lon, (i / steps) * 360, radiusKm);
-    ring.push([p.lon, p.lat]);
-  }
-  return { type: "Polygon", coordinates: [ring] };
-}
-
 export function clamp(n: number, min: number, max: number) {
   return Math.max(min, Math.min(max, n));
 }
