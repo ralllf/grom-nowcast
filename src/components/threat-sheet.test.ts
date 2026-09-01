@@ -7,7 +7,7 @@ import {
   sheetSourceHonesty,
   shouldAutoExpandSheet,
 } from "./threat-sheet-logic.ts";
-import { IMGW_WARNINGS_UNAVAILABLE, RADAR_UNAVAILABLE } from "@/lib/weather/snapshot";
+import { IMGW_WARNINGS_UNAVAILABLE, RADAR_UNAVAILABLE } from "../lib/weather/snapshot.ts";
 import type { Threat } from "@/lib/weather/types";
 
 function threat(partial: Partial<Threat>): Threat {
