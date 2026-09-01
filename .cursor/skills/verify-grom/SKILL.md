@@ -60,7 +60,7 @@ It does `GET /` then POSTs the live `getSnapshot` server function (Warszawa pin:
 
 ## Drive
 
-Harness: **Chrome CDP** via the shipped script (system `google-chrome`, no Playwright package). Desktop **1280×800** — below `640px` the sheet collapses (`sm:hidden` handle) and the IMGW aside hides.
+Harness: **Chrome CDP** via the shipped script (system `google-chrome`, no Playwright package). Desktop **1280×800** — below `640px` the sheet collapses (`sm:hidden` handle) and the IMGW aside hides. Chrome must be `--headless=new` plus `--remote-allow-origins=*` (without the latter, `/json/new` returns `Using unsafely HTTP…` instead of JSON).
 
 ```bash
 .cursor/skills/verify-grom/scripts/drive.mjs --feature location-pin

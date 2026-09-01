@@ -4,7 +4,7 @@
  * Usage: drive.mjs --feature location-pin [--base http://127.0.0.1:8080] [--out DIR]
  */
 import { spawn } from "node:child_process";
-import { mkdirSync, writeFileSync, readFileSync, existsSync } from "node:fs";
+import { mkdirSync, writeFileSync, readFileSync, existsSync, openSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -145,7 +145,9 @@ mkdirSync(profile, { recursive: true });
 const port = Number(process.env.CDP_PORT || 9333);
 
 const chromeArgs = [
+  "--headless=new",
   `--remote-debugging-port=${port}`,
+  "--remote-allow-origins=*",
   `--user-data-dir=${profile}`,
   "--no-first-run",
   "--no-default-browser-check",
@@ -157,7 +159,12 @@ const chromeArgs = [
   "about:blank",
 ];
 
-const chrome = spawn(CHROME, chromeArgs, { stdio: "ignore" });
+mkdirSync(RUN_DIR, { recursive: true });
+const chromeLog = join(RUN_DIR, "chrome.log");
+const chromeFd = openSync(chromeLog, "w");
+const chrome = spawn(CHROME, chromeArgs, {
+  stdio: ["ignore", chromeFd, chromeFd],
+});
 recordChromePid(chrome.pid, profile);
 
 let notes = {
@@ -177,9 +184,19 @@ function step(s) {
 
 try {
   await chromeReady(port);
-  const created = await fetch(`http://127.0.0.1:${port}/json/new?${encodeURIComponent("about:blank")}`).then((r) =>
-    r.json(),
+  const createdText = await fetch(`http://127.0.0.1:${port}/json/new?${encodeURIComponent("about:blank")}`).then((r) =>
+    r.text(),
   );
+  let created;
+  try {
+    created = JSON.parse(createdText);
+  } catch {
+    const list = await fetch(`http://127.0.0.1:${port}/json/list`).then((r) => r.json());
+    created = (list || []).find((t) => t.type === "page" && t.webSocketDebuggerUrl);
+  }
+  if (!created?.webSocketDebuggerUrl) {
+    throw new Error(`no CDP page websocket; /json/new was: ${createdText.slice(0, 200)}`);
+  }
   const ws = await waitWs(created.webSocketDebuggerUrl);
   const cdp = new Cdp(ws);
   await cdp.send("Page.enable");

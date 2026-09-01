@@ -14,12 +14,6 @@ python3 - "$META" "$RUN_DIR" <<'PY'
 import json, os, signal, sys, time, shutil
 meta_path, run_dir = sys.argv[1:]
 meta = json.load(open(meta_path))
-pids = []
-for key in ("vitePid", "chromePid"):
-    pid = meta.get(key)
-    if isinstance(pid, int) and pid > 1:
-        pids.append((key, pid))
-
 def alive(pid):
     try:
         os.kill(pid, 0)
@@ -27,26 +21,42 @@ def alive(pid):
     except OSError:
         return False
 
-for name, pid in pids:
-    if not alive(pid):
-        print(f"{name} {pid} already gone")
-        continue
-    print(f"SIGTERM {name} {pid}")
+def stop(name, pid, group=False):
+    if pid is None or pid <= 1:
+        return
     try:
-        os.kill(pid, signal.SIGTERM)
+        if group:
+            os.killpg(pid, 0)
+        else:
+            os.kill(pid, 0)
+    except OSError:
+        print(f"{name} {pid} already gone")
+        return
+    sig_term = signal.SIGTERM
+    print(f"SIGTERM {name} {pid}{' (group)' if group else ''}")
+    try:
+        (os.killpg if group else os.kill)(pid, sig_term)
     except OSError as e:
         print(f"  {e}")
-        continue
-    for _ in range(40):
-        if not alive(pid):
-            break
-        time.sleep(0.1)
-    if alive(pid):
-        print(f"SIGKILL {name} {pid}")
+        return
+    for _ in range(50):
         try:
-            os.kill(pid, signal.SIGKILL)
+            (os.killpg if group else os.kill)(pid, 0)
         except OSError:
-            pass
+            return
+        time.sleep(0.1)
+    print(f"SIGKILL {name} {pid}")
+    try:
+        (os.killpg if group else os.kill)(pid, signal.SIGKILL)
+    except OSError:
+        pass
+
+pgid = meta.get("vitePgid")
+if isinstance(pgid, int):
+    stop("vitePgid", pgid, group=True)
+else:
+    stop("vitePid", meta.get("vitePid"))
+stop("chromePid", meta.get("chromePid"))
 
 profile = meta.get("chromeProfile") or os.path.join(run_dir, "chrome-profile")
 if os.path.isdir(profile):

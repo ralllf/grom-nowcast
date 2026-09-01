@@ -21,8 +21,8 @@ fi
 
 LOG="$RUN_DIR/vite.log"
 cd "$ROOT"
-# npm run dev stays in the foreground of this process group.
-npm run dev >"$LOG" 2>&1 &
+# New session so cleanup can SIGTERM the whole group (npm + vite child), not just the wrapper.
+setsid npm run dev >"$LOG" 2>&1 < /dev/null &
 VITE_PID=$!
 
 # Wait until Vite prints ready or GET / is 200.
@@ -51,10 +51,16 @@ if [[ "$ready" -ne 1 ]]; then
 fi
 
 python3 - "$RUN_DIR/launch.json" "$VITE_PID" "$BASE" "$LOG" <<'PY'
-import json, sys, time
-path, pid, base, log = sys.argv[1:]
+import json, os, sys, time
+path, pid_s, base, log = sys.argv[1:]
+pid = int(pid_s)
+try:
+    pgid = os.getpgid(pid)
+except OSError:
+    pgid = pid
 json.dump({
-    "vitePid": int(pid),
+    "vitePid": pid,
+    "vitePgid": pgid,
     "base": base,
     "log": log,
     "startedAt": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
