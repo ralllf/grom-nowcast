@@ -61,6 +61,8 @@ type Props = {
   analysisSource?: "sri" | "rainviewer";
   /** PERUN line — empty-state copy when this session has no strikes. */
   lightningNote?: string;
+  /** True when the PERUN download bounced — warn, do not look like a quiet sky. */
+  lightningUnavailable?: boolean;
 };
 
 export function ThreatSheet({
@@ -77,6 +79,7 @@ export function ThreatSheet({
   radarTime,
   analysisSource = "rainviewer",
   lightningNote,
+  lightningUnavailable = false,
 }: Props) {
   const [open, setOpen] = useState(false);
   const autoKey = useRef<string | null>(null);
@@ -242,7 +245,15 @@ export function ThreatSheet({
         ) : null}
 
         {lightningNote ? (
-          <p className="mt-2 text-center text-[11px] text-faint">{lightningNote}</p>
+          <p
+            className={
+              lightningUnavailable
+                ? "mt-2 text-center text-[11px] text-warn"
+                : "mt-2 text-center text-[11px] text-faint"
+            }
+          >
+            {lightningNote}
+          </p>
         ) : null}
 
         {threat && threat.timeline.length > 0 ? (

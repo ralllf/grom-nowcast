@@ -54,18 +54,20 @@ To ostrzeżenia **oficjalne, powiatowe**. GROM pokazuje je obok nowcastu, nie za
 
 ## Wyładowania (PERUN)
 
-IMGW publishes PERUN on the same datastore: listing `POST /pl/datastore/getFilesList` with `path=Oper/Perun/PERUN_Polska` (form-urlencoded) is public. Files are 1-min `YYYY.MM.DD.HH.MM.ld` + `.ld.csv` (plus `1min_secondaire` / `10min_secondaire`).
+IMGW publishes PERUN on the same datastore. Listing is `POST /pl/datastore/getFilesList` with `productType=oper` and a **leading-slash** path (that is how `datastore.js` calls it; without the slash the HTML hrefs become `getfiledownOper/…` and 404).
 
-**Access, 2026-08-31 (this slice):** every download of a Perun file bounced. POLCOMP on the same `getfiledown` scheme still served a PNG. Failed URLs (do not invent strikes from these):
+The official oper product is **LTS2005** (`/Oper/Perun/LTS2005`) — 1-min `CELLS_` / `DENS_` / `DISCH_` GIFs. Those download unauthenticated, same `getfiledown` scheme as POLCOMP. They are maps, not strike points; GROM does not invent lat/lon from pixels.
 
-- `https://danepubliczne.imgw.pl/pl/datastore/getfiledown/Oper/Perun/PERUN_Polska/<file>.ld.csv` → **307** `Location: /datastore` (HTML)
-- `https://danepubliczne.imgw.pl/datastore/getfiledown/Oper/Perun/PERUN_Polska/<file>.ld.csv` → same 307
-- `https://danepubliczne.imgw.pl/pl/datastore/getfiledown?path=…` / `?file=…` → 307
-- `POST /pl/datastore/getfiledown` with `path=` → 303 `/datastore`
-- listing href `…/pl/datastore/getfiledownOper/Perun/…` (no slash) → **404**
-- `1min_secondaire` / `10min_secondaire` on the slash scheme → 307
+Point files (`PERUN_Polska` `.ld` / `.ld.csv`, `1min_secondaire`, `TLP/ld/*`) **list** but **do not download**. Live probe **2026-09-01** (not a guess; POLCOMP `.sri.h5` and LTS2005 GIF controls were 200 on the same host):
 
-The client lists, then tries the POLCOMP-style URL. A bounce ships **no strikes** and the sheet says „Brak wyładowań w tej sesji”. One email to IMGW open-data support is still needed (out of scope for the Slice 5 agent). No Blitzortung.
+- `GET …/pl/datastore/getfiledown/Oper/Perun/LTS2005/DISCH_<stamp>.gif` → **200** `image/gif`
+- `GET …/pl/datastore/getfiledown/Oper/Polrad/Produkty/POLCOMP/COMPO_SRI.comp.sri/<file>.sri.h5` → **200**
+- `GET …/pl/datastore/getfiledown/Oper/Perun/PERUN_Polska/<file>.ld.csv` → **307** `Location: /datastore` (empty HTML)
+- same 307 for `1min_secondaire` `.txt` / `.Secondaire` and `TLP/ld/{combined,lf_stroke,vhf_event}` `.ld`
+- query/POST `getfiledown`, no-`/pl/` host, session cookie + Referer: still 307
+- listing href without the slash after `getfiledown` → **404** (listing-URL quirk; not why the CSVs bounce)
+
+So the Slice 5 “same URL scheme, therefore a typo” hunch is **wrong for the point files**: the scheme works for the published Perun GIFs and for POLCOMP; the strike CSVs are blocked on that subtree. The client still lists `/Oper/Perun/PERUN_Polska` and GETs the slash URL. A bounce ships **no strikes** and the sheet says „Wyładowania chwilowo niedostępne” (not a quiet-sky line). A real CSV is parsed and drawn. No Blitzortung.
 
 ## Geokodowanie i mapa
 

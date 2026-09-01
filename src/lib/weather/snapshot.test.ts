@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { DEFAULT_ALERT_SETTINGS, EMPTY_ALERT_MEMORY, evaluateAlert } from "./alerts.ts";
-import { canTrustRadar, emptyRadarScan, IMGW_WARNINGS_UNAVAILABLE, PERUN_NO_STRIKES, loadSnapshot } from "./snapshot.ts";
+import { canTrustRadar, emptyRadarScan, IMGW_WARNINGS_UNAVAILABLE, PERUN_NO_STRIKES, PERUN_UNAVAILABLE, loadSnapshot } from "./snapshot.ts";
 import type { OfficialWarning, Place, RadarScan } from "./types.ts";
 
 const place: Place = {
@@ -247,6 +247,7 @@ test("PERUN bounce leaves radar and IMGW intact and ships no fake strikes", asyn
   assert.equal(snap.lightningUnavailable, true);
   assert.deepEqual(snap.lightning, []);
   assert.equal(PERUN_NO_STRIKES, "Brak wyładowań w tej sesji");
+  assert.equal(PERUN_UNAVAILABLE, "Wyładowania chwilowo niedostępne");
 });
 
 test("PERUN CSV that actually downloads is kept on the snapshot", async () => {

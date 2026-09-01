@@ -101,7 +101,11 @@ describe("etaLabel", () => {
   });
 
   it("empty lightning session uses the no-strikes copy", () => {
-    assert.equal(lightningCaption(0, true), "Brak wyładowań w tej sesji");
+    assert.equal(lightningCaption(0, false), "Brak wyładowań w tej sesji");
+  });
+
+  it("gated PERUN fetch uses the IMGW-style unavailable line", () => {
+    assert.equal(lightningCaption(0, true), "Wyładowania chwilowo niedostępne");
   });
 
   it("says minie only when the cell misses and echo is 20–80 km", () => {
