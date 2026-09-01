@@ -152,6 +152,14 @@ function iso(unixSec: number): string {
   return new Date(unixSec * 1000).toISOString();
 }
 
+/** Observation frame at `t + lead` minutes. Cadence-aware: 10-min RainViewer and 5-min SRI. */
+function frameAtLead(frames: RadarMemoryFrame[], i: number, leadMin: number): RadarMemoryFrame {
+  const target = frames[i]!.time + leadMin * 60;
+  const found = frames.find((f) => f.time === target);
+  if (!found) throw new Error(`no frame at +${leadMin} min (unix ${target})`);
+  return found;
+}
+
 function firstObsLead(
   frames: RadarMemoryFrame[],
   i: number,
@@ -163,7 +171,9 @@ function firstObsLead(
   let first: number | null = null;
   for (const lead of HINDCAST_LEADS) {
     if (lead > maxLead) break;
-    if (obsLevel(frames[i + lead / 10]!.samples, lat, lon) >= thr && first === null) first = lead;
+    if (obsLevel(frameAtLead(frames, i, lead).samples, lat, lon) >= thr && first === null) {
+      first = lead;
+    }
   }
   return first;
 }
@@ -209,8 +219,14 @@ export function scoreHindcast(opts: {
   downloadedAtMs?: number | null;
 }): HindcastSummary {
   const frames = opts.frames;
-  if (frames.length < 10) {
-    throw new Error(`hindcast needs ≥ 10 frames (4 history + 6 leads), got ${frames.length}`);
+  if (frames.length < 4) {
+    throw new Error(`hindcast needs ≥ 4 history frames, got ${frames.length}`);
+  }
+  const maxLeadSec = HINDCAST_LEADS[HINDCAST_LEADS.length - 1]! * 60;
+  if (frames[3]!.time + maxLeadSec > frames[frames.length - 1]!.time) {
+    throw new Error(
+      `hindcast needs ≥ ${maxLeadSec / 60} min after the first scored frame (4 history + lead window)`,
+    );
   }
   const origin = opts.origin ?? HINDCAST_ORIGIN;
   const nowMs = opts.nowMs ?? Date.now();
@@ -235,7 +251,8 @@ export function scoreHindcast(opts: {
   let persistMotion = 0;
   let crudeEta = 0;
 
-  for (let i = 3; i + 6 < frames.length; i++) {
+  for (let i = 3; i < frames.length; i++) {
+    if (frames[i]!.time + maxLeadSec > frames[frames.length - 1]!.time) break;
     const hist = frames.slice(i - 3, i + 1);
     const now = frames[i]!;
     for (const pin of opts.pins) {
@@ -263,7 +280,7 @@ export function scoreHindcast(opts: {
 
       for (const thr of thresholds) {
         for (const lead of HINDCAST_LEADS) {
-          const obs = obsLevel(frames[i + lead / 10]!.samples, pin.lat, pin.lon) >= thr;
+          const obs = obsLevel(frameAtLead(frames, i, lead).samples, pin.lat, pin.lon) >= thr;
           score(nowcast.get(thr)!.get(lead)!, th.timeline.find((p) => p.t === lead)!.level >= thr, obs);
           score(persist.get(thr)!.get(lead)!, th.pinLevel >= thr, obs);
         }
