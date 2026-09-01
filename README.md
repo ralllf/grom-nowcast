@@ -54,6 +54,7 @@ TanStack Start + React 19 + Vite, MapLibre GL, Zustand, TanStack Query, `pngjs` 
 - [Dziennik błędów (Slice 0)](docs/HINDCAST-LOG.md) — jeden wiersz na dzień burzowy; `--json` + Szansa
 - [Plan dokładności i niezawodności](docs/ACCURACY-PLAN.md) — ranking błędów, źródła danych (SRI, PERUN), warstwy, taksonomia alertów, kolejność małych kroków
 - [Pomysły i roadmapa](docs/IDEAS.md) — GPS, push, POLRAD, pioruny, tożsamość produktu
+- [Plan dokładności i niezawodności](docs/ACCURACY-PLAN.md) — ranking błędów, źródła danych (SRI, PERUN), warstwy, taksonomia alertów, kolejność małych kroków
 
 ## Uruchomienie
 
