@@ -327,7 +327,7 @@ export function GromApp() {
         haversineKm(place.lat, place.lon, a.now.lat, a.now.lon) -
         haversineKm(place.lat, place.lon, b.now.lat, b.now.lon),
     );
-    const cell = list.find((t) => t.threatening) ?? list[0] ?? threat?.track;
+    const cell = list[0] ?? threat?.track;
     if (!cell) return;
     setFocus({
       token: Date.now(),
