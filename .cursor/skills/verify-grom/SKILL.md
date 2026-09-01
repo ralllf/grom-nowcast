@@ -32,7 +32,7 @@ From repo root. Record the PID of the npm/vite process you started (helper write
 2. `GET http://127.0.0.1:8080/` → `200` and HTML includes `<title>GROM</title>` and `id="grom-threat-sheet"`.
 3. First `getSnapshot` can take 10–20 s (SRI H5 decode). The SSR HTML still says `Skanuję radar…` until the client query lands. That is not failure.
 
-**Teardown:** kill only the PID in `/tmp/verify-grom/launch.json` (and the Chrome PID in that same file if you started Chrome). Never `pkill -f vite` / `pkill chrome`.
+**Teardown:** kill only the process group / PIDs in `/tmp/verify-grom/launch.json` (`vitePgid` plus optional `chromePid`). Never `pkill -f vite` / `pkill chrome`.
 
 ```bash
 .cursor/skills/verify-grom/scripts/launch.sh
