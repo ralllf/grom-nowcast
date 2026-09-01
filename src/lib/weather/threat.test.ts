@@ -202,6 +202,39 @@ test("one contiguous front yields exactly one arrow (not two chunks of the same 
   assert.ok(threat.nearestKm !== null && threat.nearestKm < 15);
 });
 
+/** Compact 5×5 (~3 km) so the echo centroid stays where we put the centre. */
+function tightBlob(lat: number, lon: number, level: RadarLevel, half = 2): RadarSample[] {
+  const samples: RadarSample[] = [];
+  for (let i = -half; i <= half; i++) {
+    for (let j = -half; j <= half; j++) {
+      samples.push({ lat: lat + i * 0.015, lon: lon + j * 0.015, level });
+    }
+  }
+  return samples;
+}
+
+/**
+ * Live 2026-09-01 19:05 CEST Warszawa: inbound echo 23 km, pin dry, Szansa 55.
+ * One connected mass (bright cell + weak western companion + spine) so the
+ * full-mass centroid sits in the dry gap — the shape existing compact-blob
+ * tests never built, so they stayed green while the phone arrow sat in clear air.
+ */
+function warsawBarbell(dEastKm: number): { samples: RadarSample[]; cell: { lat: number; lon: number } } {
+  const warsaw = { lat: 52.2297, lon: 21.0122 };
+  const cell0 = destPoint(warsaw.lat, warsaw.lon, 180, 23);
+  const cell = destPoint(cell0.lat, cell0.lon, 90, dEastKm);
+  const weak = destPoint(cell.lat, cell.lon, 270, 22);
+  const mid = destPoint(cell.lat, cell.lon, 270, 11);
+  const samples = [
+    ...tightBlob(cell.lat, cell.lon, 3),
+    ...tightBlob(weak.lat, weak.lon, 1, 3),
+    { lat: mid.lat, lon: mid.lon, level: 1 as RadarLevel },
+    { lat: mid.lat + 0.012, lon: mid.lon, level: 1 as RadarLevel },
+    { lat: mid.lat - 0.012, lon: mid.lon, level: 1 as RadarLevel },
+  ].filter((s) => haversineKm(warsaw.lat, warsaw.lon, s.lat, s.lon) > 8);
+  return { samples, cell };
+}
+
 test("arrow sits on the rain mass center and points with the mass, not at the pin", () => {
   // Storm well west of pin, translating east. Arrow must stay on the storm, bearing eastward.
   const frames = [
@@ -222,6 +255,49 @@ test("arrow sits on the rain mass center and points with the mass, not at the pi
   assert.equal(threat.toward, "wschód");
   // Motion glyph points along advection, not toward the pin
   assert.ok(t.soon.lon > t.now.lon, "grot should point east with the rain");
+});
+
+test("inbound 23 km cell: arrow now sits on that echo, not in the dry gap aimed at the pin", () => {
+  // 2026-09-01 19:05 CEST dump: nearestKm 23.46, pinLevel 0, chance 55, eta 30
+  // frame-time. track.now was the 56 km mass centroid (52.388, 20.335) with 2
+  // samples within 3 km; bearing 110.3° vs pin azimuth 110.6°. Compact-blob
+  // tests still passed. Pin is not an input — Otwock must get the same glyph.
+  const warsaw: Place = { lat: 52.2297, lon: 21.0122, label: "Warszawa", terc: "1465" };
+  const otwock: Place = { lat: 52.1639, lon: 21.0726, label: "Otwock", terc: "1417" };
+  const origin = { lat: 52.1, lon: 19.35 };
+  const frames = [0, 1, 2, 3].map((t) => {
+    const { samples } = warsawBarbell(t * 7);
+    return frame(t * 600, samples, 23);
+  });
+  const lastCell = warsawBarbell(21).cell;
+  const a = computeThreat(warsaw, frames, [], origin);
+  const b = computeThreat(otwock, frames, [], origin);
+  assert.ok(a.nearestKm !== null && a.nearestKm > 8 && a.nearestKm <= 35, `echo ${a.nearestKm}`);
+  assert.ok((a.pinLevel ?? 0) <= 1, `pin should be dry/drizzle, got ${a.pinLevel}`);
+  assert.ok(a.tracks.length >= 1 && b.tracks.length >= 1);
+  const ta = a.track ?? a.tracks[0]!;
+  const tb = b.track ?? b.tracks[0]!;
+  const nowToCell = haversineKm(ta.now.lat, ta.now.lon, lastCell.lat, lastCell.lon);
+  const nowToPin = haversineKm(ta.now.lat, ta.now.lon, warsaw.lat, warsaw.lon);
+  assert.ok(nowToCell <= 5, `arrow now ${nowToCell.toFixed(1)} km from cell echo, not the core`);
+  assert.ok(nowToPin > 8, `arrow must not sit on the pin (${nowToPin.toFixed(1)} km)`);
+  assert.ok(
+    ta.bearing > 55 && ta.bearing < 125,
+    `bearing should be cell motion ~east, got ${ta.bearing.toFixed(0)}`,
+  );
+  const pinAz = bearingDeg(ta.now.lat, ta.now.lon, warsaw.lat, warsaw.lon);
+  assert.ok(
+    angleDiffDeg(ta.bearing, pinAz) > 25,
+    `bearing ${ta.bearing.toFixed(0)}° too close to pin azimuth ${pinAz.toFixed(0)}°`,
+  );
+  assert.ok(
+    haversineKm(ta.now.lat, ta.now.lon, tb.now.lat, tb.now.lon) < 1,
+    `same frames → same arrow now, got ${ta.now.lat},${ta.now.lon} vs ${tb.now.lat},${tb.now.lon}`,
+  );
+  assert.ok(
+    angleDiffDeg(ta.bearing, tb.bearing) < 5,
+    `same frames → same bearing, got ${ta.bearing} vs ${tb.bearing}`,
+  );
 });
 
 test("arrow anchors on reflectivity core, not the fringe pulled toward the pin", () => {

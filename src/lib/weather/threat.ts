@@ -893,7 +893,10 @@ export function computeThreat(
       const closing = dAhead < dNow - 0.4;
       const cellApproaching = dNow < dThen - 0.6;
       const approachingHit = closing || cellApproaching;
-      const track = makeTrack(anchor, motion);
+      // Glyph origin = reflectivity core, not the full-mass centroid. A 50 km
+      // patchy component's centroid sits in a dry hole; the shaft then aims at
+      // the pin because that is the advection. Sheet ETA still uses `anchor`.
+      const track = makeTrack(massAnchor(mass), motion);
 
       hits.push({
         miss: approach.d,
