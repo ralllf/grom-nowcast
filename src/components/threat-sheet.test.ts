@@ -1,5 +1,8 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { describe, it } from "node:test";
+import { fileURLToPath } from "node:url";
 import {
   etaLabel,
   imgwAsideCountLine,
@@ -9,6 +12,8 @@ import {
 } from "./threat-sheet-logic.ts";
 import { IMGW_WARNINGS_UNAVAILABLE, RADAR_UNAVAILABLE } from "../lib/weather/snapshot.ts";
 import type { Threat } from "@/lib/weather/types";
+
+const SHEET_SRC = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "threat-sheet.tsx"), "utf8");
 
 function threat(partial: Partial<Threat>): Threat {
   return {
@@ -137,6 +142,16 @@ describe("imgwAsideCountLine", () => {
   it("prints the real count only after IMGW settled", () => {
     assert.equal(imgwAsideCountLine({ stormWarningCount: 0, warningsUnavailable: false }), "0 burzowych w kraju");
     assert.equal(imgwAsideCountLine({ stormWarningCount: 3, warningsUnavailable: false }), "3 burzowych w kraju");
+  });
+});
+
+describe("threat-sheet user copy", () => {
+  it("does not leak leadMin into the honesty paragraph", () => {
+    const honesty = SHEET_SRC.match(
+      /Szansa, ETA i alert są dla pinezki[\s\S]*?opad dojdzie\./,
+    );
+    assert.ok(honesty, "expected the pin-honesty paragraph in threat-sheet.tsx");
+    assert.doesNotMatch(honesty[0], /leadMin/);
   });
 });
 
