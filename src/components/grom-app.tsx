@@ -327,7 +327,7 @@ export function GromApp() {
         haversineKm(place.lat, place.lon, a.now.lat, a.now.lon) -
         haversineKm(place.lat, place.lon, b.now.lat, b.now.lon),
     );
-    const cell = list[0] ?? threat?.track;
+    const cell = threat?.track ?? list[0];
     if (!cell) return;
     setFocus({
       token: Date.now(),
@@ -354,7 +354,20 @@ export function GromApp() {
     () => localImgwLane(warnings, place.county),
     [warnings, place.county],
   );
-  const tracks = threat?.tracks ?? [];
+  const fieldTracks = threat?.tracks ?? [];
+  const pinTrack = threat?.track;
+  // Domain glyphs stay pin-independent (max 3 by confidence). Also draw the
+  // pin-narrative cell when it lost that cut — otherwise Warszawa's inbound
+  // mass has a sheet but no arrow.
+  const tracks = (() => {
+    if (!pinTrack) return fieldTracks;
+    const already = fieldTracks.some(
+      (t) =>
+        Math.abs(t.now.lat - pinTrack.now.lat) < 1e-5 && Math.abs(t.now.lon - pinTrack.now.lon) < 1e-5,
+    );
+    if (already) return fieldTracks;
+    return [...fieldTracks, { ...pinTrack, threatening: true }];
+  })();
   const hasImgwTint = Object.keys(imgwDegrees).length > 0;
 
   return (
