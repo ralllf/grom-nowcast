@@ -18,6 +18,14 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { RadarMap } from "@/components/radar-map";
 import { ThreatSheet } from "@/components/threat-sheet";
+import {
+  FOCUSABLE_SELECTOR,
+  isSettingsScrimClick,
+  locateGpsHint,
+  settingsIntroCopy,
+  shouldCloseSettingsOnKey,
+  tabWrapTarget,
+} from "@/components/settings-dialog-logic";
 import { imgwAsideCountLine, type SheetDetent } from "@/components/threat-sheet-logic";
 import { cn } from "@/lib/utils";
 import { CITIES } from "@/lib/weather/cities";
@@ -131,11 +139,30 @@ export function GromApp() {
   } | null>(null);
   const [sheetDetent, setSheetDetent] = useState<SheetDetent>("peek");
   const ignoreMapClickUntil = useRef(0);
+  const settingsDialogRef = useRef<HTMLDivElement>(null);
+  const settingsTriggerRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     useGrom.getState().hydrate();
     setPermission(notifyPermission());
   }, []);
+
+  useEffect(() => {
+    if (!settingsOpen) return;
+    const first = settingsDialogRef.current?.querySelector<HTMLElement>(FOCUSABLE_SELECTOR);
+    first?.focus();
+    function onKey(e: KeyboardEvent) {
+      if (shouldCloseSettingsOnKey(e.key)) {
+        e.preventDefault();
+        setSettingsOpen(false);
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      settingsTriggerRef.current?.focus();
+    };
+  }, [settingsOpen]);
 
   const snapshotQuery = useQuery({
     // National radar field — pin must not change the query key / motion arrows.
@@ -276,9 +303,7 @@ export function GromApp() {
   function locate() {
     if (isEmbeddedPreview() || !navigator.geolocation) {
       setGeoError(null);
-      setGeoHint(
-        "W tym podglądzie przeglądarka blokuje GPS. Wybierz miasto albo stuknij mapę — na telefonie, poza podglądem, celownik pobierze lokalizację.",
-      );
+      setGeoHint(locateGpsHint(isEmbeddedPreview(), Boolean(navigator.geolocation)));
       setSettingsOpen(true);
       return;
     }
@@ -430,6 +455,7 @@ export function GromApp() {
               <Crosshair className="size-5" />
             </Button>
             <Button
+              ref={settingsTriggerRef}
               variant="subtle"
               size="icon"
               aria-label="Ustawienia"
@@ -617,11 +643,37 @@ export function GromApp() {
       </section>
 
       {settingsOpen ? (
-        <div className="absolute inset-0 z-20 flex items-end justify-center bg-bg/60 p-3 sm:items-center">
+        <div
+          className="absolute inset-0 z-20 flex items-end justify-center bg-bg/60 p-3 sm:items-center"
+          onClick={(e) => {
+            if (isSettingsScrimClick(e.target, e.currentTarget)) setSettingsOpen(false);
+          }}
+        >
           <div
+            ref={settingsDialogRef}
             role="dialog"
+            aria-modal={true}
             aria-labelledby="settings-title"
+            tabIndex={-1}
             className="w-full max-w-lg max-h-[min(40rem,88dvh)] overflow-y-auto rounded-3xl bg-surface p-5 shadow-[0_0_0_1px_rgba(255,255,255,0.08)]"
+            onKeyDown={(e) => {
+              if (shouldCloseSettingsOnKey(e.key)) {
+                e.preventDefault();
+                setSettingsOpen(false);
+                return;
+              }
+              if (e.key !== "Tab") return;
+              const root = settingsDialogRef.current;
+              if (!root) return;
+              const focusables = [...root.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)];
+              const active =
+                document.activeElement instanceof HTMLElement ? document.activeElement : null;
+              const wrap = tabWrapTarget(e.shiftKey, focusables, active);
+              if (wrap || focusables.length === 0) {
+                e.preventDefault();
+                wrap?.focus();
+              }
+            }}
           >
             <div className="flex items-center justify-between gap-3">
               <h2 id="settings-title" className="font-display text-xl font-semibold">
@@ -638,8 +690,7 @@ export function GromApp() {
             </div>
 
             <p className="mt-3 text-sm leading-relaxed text-muted">
-              {geoHint ??
-                "Wybierz miasto albo stuknij mapę. GPS działa na telefonie poza tym podglądem — tu przeglądarka go blokuje."}
+              {settingsIntroCopy(geoHint, isEmbeddedPreview())}
             </p>
 
             <form

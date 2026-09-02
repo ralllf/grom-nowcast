@@ -676,7 +676,19 @@ try {
     await screenshot(cdp, join(OUT, "00-failed-dialog.png"));
     throw new Error("settings dialog did not open");
   }
-  step("dialog open: Lokalizacja i alerty");
+  const dialogA11y = await evalExpr(
+    cdp,
+    `(() => {
+      const d = document.querySelector('[role="dialog"][aria-labelledby="settings-title"]');
+      if (!d) return null;
+      return { role: d.getAttribute("role"), ariaModal: d.getAttribute("aria-modal") };
+    })()`,
+  );
+  if (dialogA11y?.ariaModal !== "true") {
+    await screenshot(cdp, join(OUT, "00-failed-dialog.png"));
+    throw new Error(`settings dialog missing aria-modal=true: ${JSON.stringify(dialogA11y)}`);
+  }
+  step(`dialog open: Lokalizacja i alerty; aria-modal=${dialogA11y.ariaModal}`);
   await screenshot(cdp, join(OUT, "02-settings-dialog.png"));
 
   step('click city chip "Kraków"');
