@@ -305,6 +305,7 @@ test("incoming cell from the west gets ETA, comingFrom and a visible track", () 
   assert.ok(threat.etaMin !== null && threat.etaMin <= 50, `ETA too large: ${threat.etaMin}`);
   assert.ok(threat.expect?.includes("deszcz") || threat.expect?.includes("ulew"));
   assert.match(threat.detail, /Idzie od zachodu/);
+  assert.doesNotMatch(threat.detail, /→/);
   assert.doesNotMatch(threat.detail, /Spodziewaj się/);
   assert.match(threat.detail, /Dojście nad Twoją pinezką/);
 });

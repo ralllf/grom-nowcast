@@ -1,0 +1,141 @@
+{
+  "when": "2026-09-02T22:36:09.174Z",
+  "hit": {
+    "city": "Wrocław",
+    "place": "Wrocław",
+    "idzie": [
+      "Idzie od zachodu na wschód · 35 km/h"
+    ],
+    "box": [
+      "Wrocław",
+      "Wrocław",
+      "Idzie od zachodu na wschód · 35 km/h",
+      "Spodziewaj się: słabego deszczu",
+      "Opad jest nad Wrocławiem teraz. Komórka może też urosnąć na miejscu — tego radar nie zapowie.",
+      "Szansa, Za ile i alert są dla pinezki (Wrocław) — miasta albo punktu na mapie — nie dla koła w okolicy. Próg alertu to czas, nie dystans. Na mapie strzałki to pole ruchu; te, które dotyczą pinezki, mówią czy opad dojdzie.",
+      "Radar 00:30 · 6 min · IMGW ✕ · wyładowania ✕",
+      "Źródłem danych ostrzeżeń i sieci POLRAD jest Instytut Meteorologii i Gospodarki Wodnej – Państwowy Instytut Badawczy. Dane radarowe zostały przetworzone (SRI mm/h IMGW, siatka ~3 km; RainViewer dBZ → Marshall–Palmer gdy SRI niedostępne). Analiza: IMGW COMPO_SRI. Mapa: IMGW SRI (4 klasy) / RainViewer fallback / OpenFreeMap / OSM. To nie jest oficjalny alert RCB. Komórka burzowa może powstać lokalnie nawet przy czystym radarze."
+    ],
+    "hasArrowGlyph": true,
+    "preview": [
+      "Wrocław",
+      "Czysto",
+      "CZYSTO",
+      "Idzie od zachodu na wschód · 35 km/h",
+      "Spodziewaj się: słabego deszczu",
+      "Opad jest nad Wrocławiem teraz. Komórka może też urosnąć na miejscu — tego radar nie zapowie.",
+      "SZANSA",
+      "10%",
+      "ZA ILE",
+      "teraz",
+      "ECHO",
+      "3 km · słaby",
+      "Opad nad pinezką · 90 min · mm/h",
+      "z ruchu echa",
+      "00:30",
+      "01:00"
+    ]
+  },
+  "scanned": [
+    {
+      "city": "Warszawa",
+      "place": "Warszawa",
+      "idzie": [],
+      "box": [
+        "Warszawa",
+        "Warszawa",
+        "Echo ok. 88 km od Warszawa. Szansa ~10%. Komórka może też urosnąć na miejscu — tego radar nie zapowie.",
+        "Szansa, Za ile i alert są dla pinezki (Warszawa) — miasta albo punktu na mapie — nie dla koła w okolicy. Próg alertu to czas, nie dystans. Na mapie strzałki to pole ruchu; te, które dotyczą pinezki, mówią czy opad dojdzie.",
+        "Radar 00:30 · 6 min · IMGW ✕ · wyładowania ✕",
+        "Źródłem danych ostrzeżeń i sieci POLRAD jest Instytut Meteorologii i Gospodarki Wodnej – Państwowy Instytut Badawczy. Dane radarowe zostały przetworzone (SRI mm/h IMGW, siatka ~3 km; RainViewer dBZ → Marshall–Palmer gdy SRI niedostępne). Analiza: IMGW COMPO_SRI. Mapa: IMGW SRI (4 klasy) / RainViewer fallback / OpenFreeMap / OSM. To nie jest oficjalny alert RCB. Komórka burzowa może powstać lokalnie nawet przy czystym radarze."
+      ],
+      "hasArrowGlyph": true,
+      "preview": [
+        "Warszawa",
+        "Czysto",
+        "CZYSTO",
+        "Echo ok. 88 km od Warszawa. Szansa ~10%. Komórka może też urosnąć na miejscu — tego radar nie zapowie.",
+        "SZANSA",
+        "10%",
+        "ZA ILE",
+        "—",
+        "ECHO",
+        "88 km",
+        "Opad nad pinezką · 90 min · mm/h",
+        "z ruchu echa",
+        "00:30",
+        "01:00",
+        "01:30",
+        "02:00"
+      ]
+    },
+    {
+      "city": "Kraków",
+      "place": "Kraków",
+      "idzie": [],
+      "box": [
+        "Kraków",
+        "Kraków",
+        "Echo ok. 30 km od Kraków. Szansa ~10%. Komórka może też urosnąć na miejscu — tego radar nie zapowie.",
+        "Szansa, Za ile i alert są dla pinezki (Kraków) — miasta albo punktu na mapie — nie dla koła w okolicy. Próg alertu to czas, nie dystans. Na mapie strzałki to pole ruchu; te, które dotyczą pinezki, mówią czy opad dojdzie.",
+        "Radar 00:30 · 6 min · IMGW ✕ · wyładowania ✕",
+        "Źródłem danych ostrzeżeń i sieci POLRAD jest Instytut Meteorologii i Gospodarki Wodnej – Państwowy Instytut Badawczy. Dane radarowe zostały przetworzone (SRI mm/h IMGW, siatka ~3 km; RainViewer dBZ → Marshall–Palmer gdy SRI niedostępne). Analiza: IMGW COMPO_SRI. Mapa: IMGW SRI (4 klasy) / RainViewer fallback / OpenFreeMap / OSM. To nie jest oficjalny alert RCB. Komórka burzowa może powstać lokalnie nawet przy czystym radarze."
+      ],
+      "hasArrowGlyph": true,
+      "preview": [
+        "Kraków",
+        "Czysto",
+        "CZYSTO",
+        "Echo ok. 30 km od Kraków. Szansa ~10%. Komórka może też urosnąć na miejscu — tego radar nie zapowie.",
+        "SZANSA",
+        "10%",
+        "ZA ILE",
+        "—",
+        "ECHO",
+        "30 km",
+        "Opad nad pinezką · 90 min · mm/h",
+        "z ruchu echa",
+        "00:30",
+        "01:00",
+        "01:30",
+        "02:00"
+      ]
+    },
+    {
+      "city": "Wrocław",
+      "place": "Wrocław",
+      "idzie": [
+        "Idzie od zachodu na wschód · 35 km/h"
+      ],
+      "box": [
+        "Wrocław",
+        "Wrocław",
+        "Idzie od zachodu na wschód · 35 km/h",
+        "Spodziewaj się: słabego deszczu",
+        "Opad jest nad Wrocławiem teraz. Komórka może też urosnąć na miejscu — tego radar nie zapowie.",
+        "Szansa, Za ile i alert są dla pinezki (Wrocław) — miasta albo punktu na mapie — nie dla koła w okolicy. Próg alertu to czas, nie dystans. Na mapie strzałki to pole ruchu; te, które dotyczą pinezki, mówią czy opad dojdzie.",
+        "Radar 00:30 · 6 min · IMGW ✕ · wyładowania ✕",
+        "Źródłem danych ostrzeżeń i sieci POLRAD jest Instytut Meteorologii i Gospodarki Wodnej – Państwowy Instytut Badawczy. Dane radarowe zostały przetworzone (SRI mm/h IMGW, siatka ~3 km; RainViewer dBZ → Marshall–Palmer gdy SRI niedostępne). Analiza: IMGW COMPO_SRI. Mapa: IMGW SRI (4 klasy) / RainViewer fallback / OpenFreeMap / OSM. To nie jest oficjalny alert RCB. Komórka burzowa może powstać lokalnie nawet przy czystym radarze."
+      ],
+      "hasArrowGlyph": true,
+      "preview": [
+        "Wrocław",
+        "Czysto",
+        "CZYSTO",
+        "Idzie od zachodu na wschód · 35 km/h",
+        "Spodziewaj się: słabego deszczu",
+        "Opad jest nad Wrocławiem teraz. Komórka może też urosnąć na miejscu — tego radar nie zapowie.",
+        "SZANSA",
+        "10%",
+        "ZA ILE",
+        "teraz",
+        "ECHO",
+        "3 km · słaby",
+        "Opad nad pinezką · 90 min · mm/h",
+        "z ruchu echa",
+        "00:30",
+        "01:00"
+      ]
+    }
+  ]
+}
