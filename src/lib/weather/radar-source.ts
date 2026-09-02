@@ -54,6 +54,7 @@ function framesToScan(
       nearestKm,
       degraded: !complete,
       cellKm,
+      nccCellKm: source === "sri" && cellKm <= 3 ? 2 : undefined,
     })),
     maxLevel: latest?.maxLevel ?? 0,
     nearestKm: latest?.nearestKm ?? null,

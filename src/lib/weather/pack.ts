@@ -73,6 +73,7 @@ export function framesFromScan(radar: RadarScan): RadarMemoryFrame[] {
       nearestKm: f.nearestKm,
       samples: f.samples.length > 0 ? f.samples : f.packed ? unpackSamples(f.packed) : [],
       cellKm: f.cellKm ?? radar.cellKm,
+      nccCellKm: f.nccCellKm,
     }));
   }
   // Legacy shape: samples / prevSamples on the scan itself.

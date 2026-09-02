@@ -9,7 +9,7 @@ IMGW COMPO_SRI .sri.h5 (datastore, 5 min)  ──outage──▶  RainViewer kaf
   próbki (lat, lon, level 1–4)  ×  4 skany (SRI: 15–20 min; fallback: ~30 min)
         │
         ▼
-  masy (flood-fill) → siatka km → smooth dużej skali → NCC (TREC)
+  masy (flood-fill) → siatka km → smooth dużej skali → NCC (TREC; SRI: 2 km)
         │  QC korelacji; strzałki = pole ruchu (bez pinezki)
         │
         ├── canvas: strzałki z rdzeni mas, długość ∝ prędkość (~30 min)
@@ -84,8 +84,9 @@ szczeblu. To nie model MESO-NH. UI mówi „szansa”, nie „pewność”.
 ## Trafi czy minie — z próbek, nie z centroidu
 
 Wektor ruchu na pinezkę: pole z wektorów pewnych mas (IDW na siatce 3 km) plus
-**regionalny NCC** w tle (`REGIONAL_CONFIDENCE_MIN`). NCC liczy
-się na siatce **3 km** (jak próbki) z podpikselowym wierzchołkiem (parabola) i wyszukiwaniem
+**regionalny NCC** w tle (`REGIONAL_CONFIDENCE_MIN`). NCC na SRI liczy
+się na siatce **2 km** (pack/klasy zostają na 3 km) z karą za małe pokrycie okna,
+podpikselowym wierzchołkiem (parabola) i wyszukiwaniem
 coarse-to-fine. `willHit`, `etaMin` i „minie” wynikają z **adwekcji rzeczywistych próbek**
 nad pinezkę po wektorze lokalnym — nie z jednego wektora głównej masy i nie z tego,
 czy *środek masy* przejdzie 5 km od pinezki. Front szeroki na

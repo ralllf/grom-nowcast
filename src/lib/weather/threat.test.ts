@@ -21,9 +21,14 @@ import {
   buildMotionField,
   gateKm,
   motionAt,
+  bestNccShift,
+  motionNccCellKm,
+  nccAtShift,
   nccCellKm,
   nccSampleCell,
+  pairMotionNcc,
   pinTimeline,
+  SRI_NCC_CELL_KM,
 } from "./threat.ts";
 import type { OfficialWarning, Place, RadarLevel, RadarMemoryFrame, RadarSample } from "./types.ts";
 
@@ -94,6 +99,113 @@ test("NCC bins at aggregate cellKm: 6 km samples are adjacent at 6, every-other 
   assert.equal(nccCellKm(f3), 3);
   assert.equal(nccCellKm(f6), 6);
   assert.equal(nccCellKm([frame(1_000, blob(50, 21, 2), 0)]), 3);
+});
+
+/** Native-ish SRI spacing (~1.16 km) so a 5-min 50 km/h hop is not a 3 km lattice jump. */
+function sriNativeBlob(lat: number, lon: number, level: RadarLevel = 3): RadarSample[] {
+  const samples: RadarSample[] = [];
+  const dLat = 1.16 / 111;
+  const dLon = 1.16 / (111 * Math.max(Math.cos((lat * Math.PI) / 180), 0.25));
+  for (let i = -5; i <= 5; i++) {
+    for (let j = -5; j <= 5; j++) {
+      samples.push({ lat: lat + i * dLat, lon: lon + j * dLon, level });
+    }
+  }
+  return samples;
+}
+
+test("SRI NCC bins at 2 km; pack cellKm stays 3 (nccCellKm threading)", () => {
+  assert.equal(SRI_NCC_CELL_KM, 2, "hunch: 2 km is enough vs full 1.16 km");
+  const f3 = [frame(1_000, blob(50, 21, 2), 0), frame(1_600, blob(50, 21, 2), 0)].map((f) => ({
+    ...f,
+    cellKm: 3,
+    nccCellKm: 2,
+  }));
+  const f6 = [frame(1_000, blob(50, 21, 2), 0), frame(1_600, blob(50, 21, 2), 0)].map((f) => ({
+    ...f,
+    cellKm: 6,
+  }));
+  assert.equal(nccCellKm(f3), 3, "dense field / pack stay on the 3 km analysis grid");
+  assert.equal(motionNccCellKm(f3), 2, "SRI motion NCC is 2 km");
+  assert.equal(nccCellKm(f6), 6);
+  assert.equal(motionNccCellKm(f6), 6, "coarsened pack still threads into NCC (no 2 km checkerboard)");
+});
+
+test("5-min 50 km/h SRI hop is recovered smoother than the 36 km/h 3 km quantum", () => {
+  const dt = 5 * 60;
+  const hours = dt / 3600;
+  const movedKm = 50 * hours;
+  const start = destPoint(city.lat, city.lon, 270, 20);
+  const end = destPoint(start.lat, start.lon, 90, movedKm);
+  const prev = sriNativeBlob(start.lat, start.lon, 3);
+  const next = sriNativeBlob(end.lat, end.lon, 3);
+  const fine = pairMotionNcc(prev, next, start.lat, start.lon, hours, SRI_NCC_CELL_KM);
+  const coarse = pairMotionNcc(prev, next, start.lat, start.lon, hours, 3);
+  assert.ok(fine, "2 km NCC must return a vector");
+  assert.ok(
+    fine.speed >= 42 && fine.speed <= 58,
+    `2 km NCC should recover ~50 km/h, got ${fine.speed.toFixed(1)}`,
+  );
+  assert.ok(
+    Math.abs(fine.speed - 50) < 8,
+    `2 km residual ${Math.abs(fine.speed - 50).toFixed(1)} km/h should beat a 36 km/h quantum`,
+  );
+  assert.ok(
+    Math.abs(fine.speed - 36) > 6,
+    `2 km speed ${fine.speed.toFixed(1)} must not sit on the 36 km/h 3 km quantum`,
+  );
+  if (coarse) {
+    assert.ok(
+      Math.abs(fine.speed - 50) < Math.abs(coarse.speed - 50) + 0.05,
+      `2 km (${fine.speed.toFixed(1)}) must be at least as close to 50 as 3 km (${coarse.speed.toFixed(1)})`,
+    );
+  }
+});
+
+test("overlap penalty: a 24-cell partial-overlap peak loses to a well-overlapped shift", () => {
+  const n = 40;
+  const a = new Float64Array(n * n);
+  const b = new Float64Array(n * n);
+  const paint = (g: Float64Array, x0: number, y0: number, x1: number, y1: number, v: number) => {
+    for (let y = y0; y <= y1; y++) {
+      for (let x = x0; x <= x1; x++) {
+        if (x >= 0 && y >= 0 && x < n && y < n) g[y * n + x] = v;
+      }
+    }
+  };
+  // Period-11 column pattern, true motion +2. +24 aliases (22 = 2×11) so
+  // overlap-only Pearson is also perfect on the 16-cell corner.
+  for (let y = 10; y <= 25; y++) {
+    for (let x = 0; x < n; x++) {
+      a[y * n + x] = 1 + (x % 11);
+      b[y * n + x] = 1 + ((x - 2 + 11) % 11);
+    }
+  }
+  // Stain in the well-overlapped region (outside a 24-cell overlap) so the
+  // alias can win on overlap-only Pearson.
+  paint(a, 20, 10, 22, 12, 1);
+
+  const rawSmall = nccAtShift(a, b, 2, 0, { gridN: n, overlapPenalty: false });
+  const rawBig = nccAtShift(a, b, 24, 0, { gridN: n, overlapPenalty: false });
+  assert.ok(rawBig >= 0.85, `24-cell overlap-only peak should look excellent, got ${rawBig.toFixed(3)}`);
+  assert.ok(
+    rawBig + 0.02 >= rawSmall,
+    `overlap-only 24-cell (${rawBig.toFixed(3)}) must be able to beat or match +2 (${rawSmall.toFixed(3)})`,
+  );
+
+  const penalized = nccAtShift(a, b, 24, 0, { gridN: n, overlapPenalty: true });
+  const penalizedSmall = nccAtShift(a, b, 2, 0, { gridN: n, overlapPenalty: true });
+  assert.ok(
+    penalizedSmall > penalized,
+    `penalty must flip the peak: +2 (${penalizedSmall.toFixed(3)}) > +24 (${penalized.toFixed(3)})`,
+  );
+
+  const picked = bestNccShift(a, b, 24, { gridN: n });
+  assert.ok(picked, "penalized search must still find a peak");
+  assert.ok(
+    Math.abs(picked.dix) <= 4 && Math.abs(picked.diy) <= 2,
+    `best shift must be the well-overlapped +2, got (${picked.dix}, ${picked.diy})`,
+  );
 });
 
 function latticeHitsForNcc(count: number) {

@@ -42,6 +42,9 @@ test("SRI frames win when the datastore listing decodes", async () => {
   assert.equal(out.scan.echoCount, 1);
   assert.equal(out.scan.past.at(-1)?.time, 1_700_000_000);
   assert.equal(decodedTiles, 0);
+  assert.equal(out.scan.cellKm, 3, "packed analysis field stays 3 km");
+  assert.equal(out.scan.history[0]!.cellKm, 3);
+  assert.equal(out.scan.history[0]!.nccCellKm, 2, "SRI motion NCC is 2 km");
 });
 
 test("datastore outage falls back to RainViewer tiles", async () => {
@@ -56,6 +59,7 @@ test("datastore outage falls back to RainViewer tiles", async () => {
   assert.equal(out.scan.analysisSource, "rainviewer");
   assert.equal(out.scan.latestTime, 1_700_000_000);
   assert.equal(out.scan.host, maps.host);
+  assert.equal(out.scan.history[0]!.nccCellKm, undefined, "RainViewer keeps pack-scale NCC");
 });
 
 test("empty SRI listing is an outage and falls back", async () => {
