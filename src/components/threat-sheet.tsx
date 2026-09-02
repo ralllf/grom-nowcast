@@ -180,7 +180,7 @@ export function ThreatSheet({
             </div>
             <dl className="flex shrink-0 gap-3 text-center">
               <PeekStat label="Szansa" value={chance} />
-              <PeekStat label="ETA" value={eta} />
+              <PeekStat label="Za ile" value={eta} />
               <PeekStat label="Echo" value={echo} />
             </dl>
           </div>
@@ -242,7 +242,7 @@ export function ThreatSheet({
 
         <dl className="mt-4 grid grid-cols-3 gap-2 text-center">
           <Stat label="Szansa" value={chance} />
-          <Stat label="ETA" value={eta} />
+          <Stat label="Za ile" value={eta} />
           <Stat label="Echo" value={echoFull} />
         </dl>
 
@@ -278,7 +278,7 @@ export function ThreatSheet({
         ) : null}
 
         <p className="mt-3 text-xs leading-relaxed text-faint">
-          Szansa, ETA i alert są dla pinezki ({place.label}) — miasta albo punktu na mapie — nie
+          Szansa, Za ile i alert są dla pinezki ({place.label}) — miasta albo punktu na mapie — nie
           dla koła w okolicy. Próg alertu to czas, nie dystans. Na mapie strzałki to pole ruchu;
           te, które dotyczą pinezki, mówią czy opad dojdzie.
         </p>
