@@ -9,18 +9,19 @@ type Props = {
   onZoomIn: () => void;
   onZoomOut: () => void;
   onLocate: () => void;
+  locatePending?: boolean;
   scale: { label: string; widthPx: number };
 };
 
 const RAIN_LEVELS = [1, 2, 3, 4] as const;
 
-export function MapChrome({ onZoomIn, onZoomOut, onLocate, scale }: Props) {
+export function MapChrome({ onZoomIn, onZoomOut, onLocate, locatePending = false, scale }: Props) {
   return (
     <div
       id="grom-map-chrome"
       data-peek={SHEET_PEEK_PX}
       className={cn(
-        "pointer-events-none fixed right-3 z-20 flex flex-col items-end gap-2 sm:right-5",
+        "pointer-events-none fixed right-3 z-10 flex flex-col items-end gap-2 sm:right-5",
         // 128px = SHEET_PEEK_PX. sm+ lifts above the IMGW aside (max-h-72 + pad).
         "bottom-[calc(128px+env(safe-area-inset-bottom,0px)+0.75rem)] sm:bottom-[21rem]",
       )}
@@ -51,6 +52,7 @@ export function MapChrome({ onZoomIn, onZoomOut, onLocate, scale }: Props) {
         size="icon"
         aria-label="Wybierz lokalizację"
         onClick={onLocate}
+        disabled={locatePending}
         className="pointer-events-auto shadow-[0_0_0_1px_rgba(255,255,255,0.08)]"
       >
         <Crosshair className="size-5" />

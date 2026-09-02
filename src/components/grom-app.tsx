@@ -398,6 +398,7 @@ export function GromApp() {
         sheetDetent={sheetDetent}
         focus={focus}
         onLocate={locate}
+        locatePending={geoPending}
         onPick={(lat, lon) => {
           if (Date.now() < ignoreMapClickUntil.current) return;
           setGeoError(null);

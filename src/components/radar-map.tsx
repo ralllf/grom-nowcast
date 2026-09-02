@@ -54,6 +54,7 @@ type Props = {
   focus: Focus | null;
   onPick: (lat: number, lon: number) => void;
   onLocate: () => void;
+  locatePending?: boolean;
   className?: string;
 };
 
@@ -120,6 +121,7 @@ export function RadarMap({
   focus,
   onPick,
   onLocate,
+  locatePending = false,
   className,
 }: Props) {
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -348,6 +350,7 @@ export function RadarMap({
         onZoomIn={() => mapRef.current?.zoomIn()}
         onZoomOut={() => mapRef.current?.zoomOut()}
         onLocate={onLocate}
+        locatePending={locatePending}
         scale={scale}
       />
     </div>

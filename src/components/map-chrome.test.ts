@@ -78,4 +78,10 @@ describe("map chrome fences", () => {
     assert.match(CHROME, /128px/);
     assert.match(CHROME, /data-peek=\{SHEET_PEEK_PX\}/);
   });
+
+  it("stays at z-10 so an expanded sheet covers chrome and keeps the handle", () => {
+    assert.match(CHROME, /fixed right-3 z-10 /);
+    assert.doesNotMatch(CHROME, /z-20/);
+    assert.match(APP, /locatePending=\{geoPending\}/);
+  });
 });
