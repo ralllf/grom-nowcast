@@ -18,7 +18,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { RadarMap } from "@/components/radar-map";
 import { ThreatSheet } from "@/components/threat-sheet";
-import { imgwAsideCountLine } from "@/components/threat-sheet-logic";
+import { imgwAsideCountLine, type SheetDetent } from "@/components/threat-sheet-logic";
 import { cn } from "@/lib/utils";
 import { CITIES } from "@/lib/weather/cities";
 import { haversineKm } from "@/lib/weather/geo";
@@ -129,6 +129,7 @@ export function GromApp() {
     pinLat: number;
     pinLon: number;
   } | null>(null);
+  const [sheetDetent, setSheetDetent] = useState<SheetDetent>("peek");
   const ignoreMapClickUntil = useRef(0);
 
   useEffect(() => {
@@ -394,6 +395,7 @@ export function GromApp() {
         imgwDegrees={imgwDegrees}
         strikes={snapshot?.lightning ?? []}
         threatLevel={threat?.level ?? null}
+        sheetDetent={sheetDetent}
         focus={focus}
         onPick={(lat, lon) => {
           if (Date.now() < ignoreMapClickUntil.current) return;
@@ -575,6 +577,7 @@ export function GromApp() {
             geoError={geoError}
             onClearGeoError={() => setGeoError(null)}
             onShowRainMotion={showRainMotion}
+            onDetentChange={setSheetDetent}
             radarTime={radarTime}
             lightningUnavailable={snapshot?.lightningUnavailable ?? !snapshot}
           />

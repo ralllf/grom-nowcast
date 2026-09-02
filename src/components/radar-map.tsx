@@ -7,11 +7,24 @@ import {
   type ImgwGeoJSON,
 } from "@/lib/weather/imgw-lane";
 import { loadPowiatBoundaries } from "@/lib/weather/teryt";
+import {
+  placeChangeOffset,
+  sheetFitPadding,
+  sheetHeightPx,
+  type SheetDetent,
+} from "@/components/threat-sheet-logic";
 import { drawMapOverlay } from "@/lib/weather/map-overlay";
 import type { CellTrack, LightningStrike, ThreatLevel } from "@/lib/weather/types";
 import { strikeOpacity } from "@/lib/weather/perun";
 import { pickRadarLayer, type OverlayCorners } from "@/lib/weather/sri-overlay";
 import { cn } from "@/lib/utils";
+
+const SM_UP = "(min-width: 640px)";
+
+function cameraSheetPx(detent: SheetDetent): number {
+  if (window.matchMedia(SM_UP).matches) return 0;
+  return sheetHeightPx(detent, window.innerHeight);
+}
 
 type Focus = {
   token: number;
@@ -34,6 +47,8 @@ type Props = {
   strikes: LightningStrike[];
   /** Sheet level — pin halo tints danger at `now`. */
   threatLevel?: ThreatLevel | null;
+  /** Bottom-sheet detent; drives fitBounds padding and place-change offset. */
+  sheetDetent?: SheetDetent;
   focus: Focus | null;
   onPick: (lat: number, lon: number) => void;
   className?: string;
@@ -98,6 +113,7 @@ export function RadarMap({
   imgwDegrees = {},
   strikes,
   threatLevel = null,
+  sheetDetent = "peek",
   focus,
   onPick,
   className,
@@ -137,6 +153,8 @@ export function RadarMap({
     threatLevel,
   };
   const imgwGenRef = useRef(0);
+  const sheetDetentRef = useRef(sheetDetent);
+  sheetDetentRef.current = sheetDetent;
 
   useEffect(() => {
     const el = rootRef.current;
@@ -255,7 +273,11 @@ export function RadarMap({
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !readyRef.current) return;
-    map.easeTo({ center: [liveRef.current.lon, liveRef.current.lat], duration: 700 });
+    map.easeTo({
+      center: [liveRef.current.lon, liveRef.current.lat],
+      duration: 700,
+      offset: placeChangeOffset(cameraSheetPx(sheetDetentRef.current)),
+    });
     paintOverlay(canvasRef.current, map, liveRef.current, true);
   }, [lat, lon]);
 
@@ -294,9 +316,9 @@ export function RadarMap({
         [minLon, minLat],
         [maxLon, maxLat],
       ],
-      { padding: 90, maxZoom: 8.6, duration: 1000 },
+      { padding: sheetFitPadding(cameraSheetPx(sheetDetent)), maxZoom: 8.6, duration: 1000 },
     );
-  }, [focus]);
+  }, [focus, sheetDetent]);
 
   return (
     <div ref={wrapRef} className={cn("relative h-full w-full bg-map", className)}>

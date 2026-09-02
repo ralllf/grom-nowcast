@@ -1,14 +1,18 @@
 import { MapPin, X } from "lucide-react";
 import { useEffect, useRef, useState, type PointerEvent } from "react";
 import {
+  autoExpandDetent,
   cellTrendLine,
   echoLabel,
   etaLabel,
+  nextSheetDetent,
   nowcastHeadline,
+  SHEET_DETENT_CLASS,
   sheetSourceHonesty,
   sheetStatusRow,
-  shouldAutoExpandSheet,
+  toggleSheetDetent,
   threatLevelChip,
+  type SheetDetent,
 } from "@/components/threat-sheet-logic";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
@@ -63,6 +67,7 @@ type Props = {
   radarTime: number | null;
   /** True when the PERUN download bounced — folded into the status row. */
   lightningUnavailable?: boolean;
+  onDetentChange?: (detent: SheetDetent) => void;
 };
 
 export function ThreatSheet({
@@ -79,11 +84,23 @@ export function ThreatSheet({
   onShowRainMotion,
   radarTime,
   lightningUnavailable = false,
+  onDetentChange,
 }: Props) {
-  const [open, setOpen] = useState(false);
+  const [detent, setDetent] = useState<SheetDetent>("peek");
   const autoKey = useRef<string | null>(null);
   const startY = useRef<number | null>(null);
   const dragged = useRef(false);
+  const open = detent !== "peek";
+  const onDetentChangeRef = useRef(onDetentChange);
+  onDetentChangeRef.current = onDetentChange;
+  const onShowRainMotionRef = useRef(onShowRainMotion);
+  onShowRainMotionRef.current = onShowRainMotion;
+
+  function applyDetent(next: SheetDetent) {
+    if (next === detent) return;
+    setDetent(next);
+    onDetentChangeRef.current?.(next);
+  }
 
   const nowMs = Date.now();
   const ageMin = radarAgeMin(radarTime, nowMs);
@@ -113,11 +130,13 @@ export function ThreatSheet({
 
   useEffect(() => {
     const desktop = window.matchMedia(SM_UP).matches;
-    if (!shouldAutoExpandSheet(threat?.level, desktop)) return;
+    const target = autoExpandDetent(threat?.level, desktop);
+    if (!target) return;
     const key = `${place.lat.toFixed(3)},${place.lon.toFixed(3)}:${threat?.level}`;
     if (autoKey.current === key) return;
     autoKey.current = key;
-    setOpen(true);
+    applyDetent(target);
+    onShowRainMotionRef.current();
   }, [place.lat, place.lon, threat?.level]);
 
   function onHandlePointerDown(e: PointerEvent<HTMLButtonElement>) {
@@ -135,13 +154,12 @@ export function ThreatSheet({
     if (startY.current == null) return;
     const dy = e.clientY - startY.current;
     startY.current = null;
-    if (dy > 32) setOpen(false);
-    else if (dy < -32) setOpen(true);
+    applyDetent(nextSheetDetent(detent, dy));
   }
 
   function onHandleClick() {
     if (dragged.current) return;
-    setOpen((v) => !v);
+    applyDetent(toggleSheetDetent(detent));
   }
 
   return (
@@ -150,7 +168,8 @@ export function ThreatSheet({
       className={cn(
         "pointer-events-auto border bg-surface/90 shadow-[0_0_0_1px_rgba(255,255,255,0.08)] backdrop-blur-md",
         "flex flex-col rounded-t-3xl pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:block sm:rounded-3xl sm:p-5 sm:pb-5",
-        open ? "max-h-[70dvh] overflow-hidden" : "min-h-24",
+        SHEET_DETENT_CLASS[detent],
+        detent === "peek" && "min-h-24",
         "sm:min-h-0 sm:max-h-[calc(100dvh-20rem)] sm:overflow-y-auto",
         threat ? PANEL[threat.level] : "border-transparent",
       )}
