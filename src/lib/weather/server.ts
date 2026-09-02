@@ -23,6 +23,7 @@ import {
   SRI_LIST_URL,
   sriFileUrl,
 } from "./sri";
+import { createSriListCache, tryVercelSriListStore } from "./sri-list-cache";
 import { rememberSriOverlay, sriOverlayMetaFor, sriOverlayPng } from "./sri-overlay-png";
 import { applyTerytFallback } from "./teryt";
 import type { OfficialWarning, Place, RadarFrameMeta, Snapshot } from "./types";
@@ -265,8 +266,6 @@ const PIXEL_STRIDE = 2;
 const MAX_RADAR_TILES = 24;
 const FRAME_CACHE_MAX = 12;
 
-const sriListCache: { at: number; html: string | null } = { at: 0, html: null };
-
 /** Decoded frames keyed by scan timestamp — frames never change once published. */
 const frameCache = new Map<number, SampledFrame>();
 const frameInFlight = new Map<number, Promise<SampledFrame>>();
@@ -359,18 +358,18 @@ function sampleFrame(host: string, frame: RadarFrameMeta): Promise<SampledFrame>
   return sampleCached(frame.time, () => decodeFrame(host, frame));
 }
 
-async function listSriHtml(): Promise<string> {
-  const now = Date.now();
-  if (sriListCache.html && now - sriListCache.at < 45_000) return sriListCache.html;
-  const html = await fetchText(SRI_LIST_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded", Accept: "text/html" },
-    body: `path=${encodeURIComponent(SRI_DATASTORE_PATH)}`,
-  });
-  sriListCache.html = html;
-  sriListCache.at = now;
-  return html;
-}
+const listSriHtml = createSriListCache({
+  fetchHtml: () =>
+    fetchText(SRI_LIST_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded", Accept: "text/html" },
+      body: `path=${encodeURIComponent(SRI_DATASTORE_PATH)}`,
+    }),
+  shared: tryVercelSriListStore(),
+  log: (event) => {
+    console.info(`[sri-list] ${event}`);
+  },
+});
 
 async function decodeSriFile(name: string, time: number): Promise<SampledFrame> {
   const { decodeSriH5 } = await import("./sri-h5");

@@ -22,7 +22,7 @@ export default defineConfig(({ command, isPreview }) => ({
   // TanStack Start SSR otherwise resolves maplibre-gl's CJS/package entry and
   // the worker URL import never reaches Vite's ?worker&url pipeline.
   // h5wasm ships its own Node/wasm loader — keep it external.
-  ssr: { noExternal: ["maplibre-gl"], external: ["h5wasm"] },
+  ssr: { noExternal: ["maplibre-gl"], external: ["h5wasm", "@vercel/functions"] },
   plugins: [
     tailwindcss(),
     tanstackStart(),

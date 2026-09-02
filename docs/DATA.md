@@ -9,7 +9,7 @@ GROM nie produkuje obserwacji. Składa publiczne źródła i liczy nowcast **na 
 | | |
 |---|---|
 | Produkt | POLCOMP `COMPO_SRI.comp.sri` — surface rain intensity, mm/h |
-| Listing | POST `https://danepubliczne.imgw.pl/pl/datastore/getFilesList` z `path=Oper/Polrad/Produkty/POLCOMP/COMPO_SRI.comp.sri` (HTML). **Nie** `/api/data/product/id/COMPO_SRI.comp.sri` — to lustro opóźnione o godziny. |
+| Listing | POST `https://danepubliczne.imgw.pl/pl/datastore/getFilesList` z `path=Oper/Polrad/Produkty/POLCOMP/COMPO_SRI.comp.sri` (HTML). Shared 90 s (Vercel Runtime Cache + single-flight). **Nie** `/api/data/product/id/COMPO_SRI.comp.sri` — to lustro opóźnione o godziny. |
 | Plik | `…/datastore/getfiledown/Oper/Polrad/Produkty/POLCOMP/COMPO_SRI.comp.sri/<YYYYMMDDHHmmss>00dBR.sri.h5` |
 | Siatka | **800×800**, nie 900×900. `xscale` ≈ 1163.64 m, `yscale` ≈ 1153.65 m (~1.16 km). ODIM `where`: `+proj=aeqd +lon_0=19.0926 +lat_0=52.3469 +ellps=sphere` (R = 6 370 997 m). |
 | Wartości | `quantity=RATE`, `gain=1`, `offset=0`, `nodata=-2`, `undetect=-1` — prawdziwe mm/h, nie Marshall–Palmer z koloru. |
