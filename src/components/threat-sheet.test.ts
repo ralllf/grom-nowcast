@@ -20,6 +20,7 @@ import type { Threat } from "@/lib/weather/types";
 const HERE = dirname(fileURLToPath(import.meta.url));
 const SHEET_SRC = readFileSync(join(HERE, "threat-sheet.tsx"), "utf8");
 const APP_SRC = readFileSync(join(HERE, "grom-app.tsx"), "utf8");
+const MAP_SRC = readFileSync(join(HERE, "radar-map.tsx"), "utf8");
 
 function threat(partial: Partial<Threat>): Threat {
   return {
@@ -66,6 +67,60 @@ describe("shouldAutoExpandSheet", () => {
     assert.equal(shouldAutoExpandSheet("watch", false), false);
     assert.equal(shouldAutoExpandSheet("nearby", false), false);
     assert.equal(shouldAutoExpandSheet(undefined, false), false);
+  });
+
+  it("now/imminent auto height is half (45dvh), not 70dvh", async () => {
+    const logic = await import("./threat-sheet-logic.ts");
+    assert.equal(logic.autoExpandDetent("now", false), "half");
+    assert.equal(logic.autoExpandDetent("imminent", false), "half");
+    assert.equal(logic.autoExpandDetent("now", true), null);
+    assert.equal(logic.autoExpandDetent("nearby", false), null);
+    assert.equal(logic.SHEET_DETENT_CLASS.half.includes("max-h-[45dvh]"), true);
+    assert.match(SHEET_SRC, /SHEET_DETENT_CLASS\[detent\]/);
+    assert.match(SHEET_SRC, /max-h-\[45dvh\]|SHEET_DETENT_CLASS/);
+    assert.doesNotMatch(SHEET_SRC, /max-h-\[70dvh\]/);
+  });
+});
+
+describe("sheet detents and map padding", () => {
+  it("names peek / half / full heights", async () => {
+    const { SHEET_DETENT_CLASS, sheetHeightPx } = await import("./threat-sheet-logic.ts");
+    assert.match(SHEET_DETENT_CLASS.peek, /max-h-\[128px\]/);
+    assert.match(SHEET_DETENT_CLASS.half, /max-h-\[45dvh\]/);
+    assert.match(SHEET_DETENT_CLASS.full, /max-h-\[85dvh\]/);
+    assert.equal(sheetHeightPx("peek", 800), 128);
+    assert.equal(sheetHeightPx("half", 800), 360);
+    assert.equal(sheetHeightPx("full", 800), 680);
+  });
+
+  it("fitBounds bottom padding is sheetPx + 24", async () => {
+    const { sheetFitPadding } = await import("./threat-sheet-logic.ts");
+    assert.deepEqual(sheetFitPadding(360), { top: 90, right: 90, bottom: 384, left: 90 });
+    assert.deepEqual(sheetFitPadding(0), { top: 90, right: 90, bottom: 90, left: 90 });
+  });
+
+  it("place-change offset lifts the centre by half the sheet", async () => {
+    const { placeChangeOffset } = await import("./threat-sheet-logic.ts");
+    assert.deepEqual(placeChangeOffset(360), [0, -180]);
+    assert.deepEqual(placeChangeOffset(0), [0, 0]);
+  });
+
+  it("wires fitBounds padding and easeTo offset through the helpers", () => {
+    assert.match(MAP_SRC, /sheetFitPadding\(/);
+    assert.match(MAP_SRC, /placeChangeOffset\(/);
+    assert.match(MAP_SRC, /offset:\s*placeChangeOffset\(/);
+    assert.doesNotMatch(MAP_SRC, /padding:\s*90,/);
+  });
+
+  it("snaps the handle across peek → half → full", async () => {
+    const { nextSheetDetent, toggleSheetDetent } = await import("./threat-sheet-logic.ts");
+    assert.equal(nextSheetDetent("peek", -40), "half");
+    assert.equal(nextSheetDetent("half", -40), "full");
+    assert.equal(nextSheetDetent("full", 40), "half");
+    assert.equal(nextSheetDetent("half", 40), "peek");
+    assert.equal(toggleSheetDetent("peek"), "half");
+    assert.equal(toggleSheetDetent("half"), "peek");
+    assert.equal(toggleSheetDetent("full"), "peek");
   });
 });
 

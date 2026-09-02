@@ -96,9 +96,72 @@ export function threatLevelChip(level: ThreatLevel): string {
   return LEVEL_CHIP[level];
 }
 
+export type SheetDetent = "peek" | "half" | "full";
+
+export const SHEET_PEEK_PX = 128;
+export const SHEET_HALF_VH = 0.45;
+export const SHEET_FULL_VH = 0.85;
+export const SHEET_FIT_GAP_PX = 24;
+export const SHEET_EDGE_PAD_PX = 90;
+
+export const SHEET_DETENT_CLASS: Record<SheetDetent, string> = {
+  peek: "max-h-[128px]",
+  half: "max-h-[45dvh] overflow-hidden",
+  full: "max-h-[85dvh] overflow-hidden",
+};
+
+const DETENT_ORDER: SheetDetent[] = ["peek", "half", "full"];
+
+/** Mobile now/imminent opens the half detent, not full/70dvh. Desktop stays peek. */
+export function autoExpandDetent(
+  level: ThreatLevel | undefined,
+  desktop: boolean,
+): SheetDetent | null {
+  if (desktop) return null;
+  if (level === "imminent" || level === "now") return "half";
+  return null;
+}
+
 export function shouldAutoExpandSheet(level: ThreatLevel | undefined, desktop: boolean): boolean {
-  if (desktop) return false;
-  return level === "imminent" || level === "now";
+  return autoExpandDetent(level, desktop) !== null;
+}
+
+export function sheetHeightPx(detent: SheetDetent, viewportH: number): number {
+  if (detent === "peek") return SHEET_PEEK_PX;
+  if (detent === "half") return Math.round(viewportH * SHEET_HALF_VH);
+  return Math.round(viewportH * SHEET_FULL_VH);
+}
+
+/** `padding.bottom = sheetPx + 24`. Zero sheet (desktop) keeps the old 90 all around. */
+export function sheetFitPadding(sheetPx: number): {
+  top: number;
+  right: number;
+  bottom: number;
+  left: number;
+} {
+  const bottom = sheetPx > 0 ? sheetPx + SHEET_FIT_GAP_PX : SHEET_EDGE_PAD_PX;
+  return {
+    top: SHEET_EDGE_PAD_PX,
+    right: SHEET_EDGE_PAD_PX,
+    bottom,
+    left: SHEET_EDGE_PAD_PX,
+  };
+}
+
+/** Place-change `easeTo` offset: lift the centre by half the sheet. */
+export function placeChangeOffset(sheetPx: number): [number, number] {
+  return [0, sheetPx > 0 ? -sheetPx / 2 : 0];
+}
+
+export function nextSheetDetent(current: SheetDetent, dy: number): SheetDetent {
+  const i = DETENT_ORDER.indexOf(current);
+  if (dy > 32) return DETENT_ORDER[Math.max(0, i - 1)]!;
+  if (dy < -32) return DETENT_ORDER[Math.min(DETENT_ORDER.length - 1, i + 1)]!;
+  return current;
+}
+
+export function toggleSheetDetent(current: SheetDetent): SheetDetent {
+  return current === "peek" ? "half" : "peek";
 }
 
 /** Nowcast lane only — IMGW never occupies the "nadciąga za 18 min" headline. */

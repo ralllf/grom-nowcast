@@ -11,11 +11,12 @@ The bottom card (`#grom-threat-sheet`) is the product: chance, ETA, and echo for
 - One grey status row: `Radar HH:MM · N min · IMGW ✓/✕ · wyładowania ✓/✕` (amber only when radar is stale or down)
 - Map chip (not the sheet) names the painted source (`Radar IMGW` / `Radar`)
 - `Pokaż ruch opadu na mapie` when tracks exist and nearest echo is > 25 km
-- Mobile peek (collapsed): same three stats; drag/tap handle (`aria-expanded`)
+- Mobile peek (collapsed, ~128px): same three stats; drag/tap handle (`aria-expanded`)
+- Mobile detents: **peek** `max-h-[128px]` · **half** `max-h-[45dvh]` · **full** `max-h-[85dvh]`. Auto-expand at `now`/`imminent` goes to **half**, not 70dvh.
 
 ## How to get to it (user POV)
 
-Open `/`. On a viewport ≥ 640 px the full sheet is already open (`sm:block`). On a phone, tap the grab handle (headline is its `aria-label`) or wait for auto-expand only when level is `imminent` or `now`. Default first visit is Warszawa. Wait until the headline is no longer `Skanuję radar…` (and not `Brak danych` unless the snapshot failed).
+Open `/`. On a viewport ≥ 640 px the full sheet is already open (`sm:block`). On a phone, tap the grab handle (headline is its `aria-label`) or wait for auto-expand to the **half** detent only when level is `imminent` or `now`. Default first visit is Warszawa. Wait until the headline is no longer `Skanuję radar…` (and not `Brak danych` unless the snapshot failed).
 
 ## Driving it with Chrome CDP
 
