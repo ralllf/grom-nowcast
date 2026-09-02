@@ -149,6 +149,16 @@ export const STALE_RADAR_MIN = 30;
 export const EPISODE_TTL_MIN = 45;
 /** The pin must look clear for this long before "przeszło" fires (≈2 polls). */
 export const ALL_CLEAR_DEBOUNCE_MIN = 3;
+/**
+ * Once an episode has started, keep treating the cell as incoming until wall-clock
+ * ETA exceeds leadMin by this much. Stops qualify→clear chatter when ETA flaps
+ * around the lead gate (35 km @ 60 km/h vs leadMin 30).
+ */
+export const INCOMING_HYSTERESIS_MIN = 10;
+/** No all-clear on a miss-episode while frame ETA is still this close to leadMin. */
+export const ALL_CLEAR_ETA_HOLD_MIN = 15;
+/** After "now", pinLevel below minLevel for this long + nothing incoming = decayed clear. */
+export const DECAYED_CLEAR_MIN = 10;
 /** Echo beyond this distance counts as "off the pin". */
 const CLEAR_KM = 20;
 const OVER_KM = 8;
@@ -244,13 +254,16 @@ export function evaluateAlert(
   const frameEta = etaToLevel(threat, minLevel);
   const ageMin = radarAgeMin(opts.radarTime, now);
   const eta = frameEta === null ? null : wallClockMin(frameEta, ageMin);
+  // Qualify at leadMin from idle; once the episode is open, drop only after leadMin+10.
+  const incomingLead =
+    memory.stage === "idle" ? settings.leadMin : settings.leadMin + INCOMING_HYSTERESIS_MIN;
   const incoming =
     !overPin &&
     !threat.receding &&
     frameEta !== null &&
     frameEta > 0 &&
     eta !== null &&
-    eta <= settings.leadMin &&
+    eta <= incomingLead &&
     threat.chancePct >= settings.minChancePct;
   const qualifies = overPin || incoming;
 
@@ -336,10 +349,16 @@ export function evaluateAlert(
   // Not qualifying.
   if (mem.stage === "idle") return { event: null, memory: mem, reason: "idle" };
 
-  const looksClear =
+  const stillInPlay =
+    !mem.hit &&
+    ((frameEta !== null && frameEta <= settings.leadMin + ALL_CLEAR_ETA_HOLD_MIN) ||
+      threat.approaching);
+  const distanceClear =
     threat.nearestKm === null ||
     threat.nearestKm > CLEAR_KM ||
     (threat.receding && threat.nearestKm > OVER_KM);
+  const decayedInPlace = mem.hit && threat.pinLevel < minLevel && !incoming;
+  const looksClear = !stillInPlay && (distanceClear || decayedInPlace);
 
   if (!looksClear) {
     // Still something around (ETA grew, cell slowed) — hold the episode open.
@@ -351,7 +370,9 @@ export function evaluateAlert(
     mem.clearSince = now;
     return { event: null, memory: mem, reason: "quiet-episode" };
   }
-  if (now - mem.clearSince < ALL_CLEAR_DEBOUNCE_MIN * 60_000) {
+  const debounceMin =
+    decayedInPlace && !distanceClear ? DECAYED_CLEAR_MIN : ALL_CLEAR_DEBOUNCE_MIN;
+  if (now - mem.clearSince < debounceMin * 60_000) {
     return { event: null, memory: mem, reason: "quiet-episode" };
   }
 
@@ -361,6 +382,12 @@ export function evaluateAlert(
   if (!settings.allClear) return { event: null, memory: next, reason: "quiet-episode" };
 
   const toward = threat.toward ? ` na ${threat.toward}` : "";
+  const suffix = radarSuffix(opts.radarTime, now, opts.analysisSource);
+  const body = hit
+    ? distanceClear
+      ? `Opad odszedł${toward}. Radar czysty w promieniu ${CLEAR_KM} km.${suffix}`
+      : `Opad odszedł${toward}.${suffix}`
+    : `Komórka minęła ${opts.placeLabel} bokiem. Radar czysty w promieniu ${CLEAR_KM} km.${suffix}`;
   return {
     memory: next,
     reason: "fired",
@@ -369,9 +396,7 @@ export function evaluateAlert(
       id: `${episode}:allclear`,
       kind: "allclear",
       title: `Przeszło · ${opts.placeLabel}`,
-      body: hit
-        ? `Opad odszedł${toward}. Radar czysty w promieniu ${CLEAR_KM} km.${radarSuffix(opts.radarTime, now, opts.analysisSource)}`
-        : `Komórka minęła ${opts.placeLabel} bokiem. Radar czysty w promieniu ${CLEAR_KM} km.${radarSuffix(opts.radarTime, now, opts.analysisSource)}`,
+      body,
     },
   };
 }

@@ -19,9 +19,9 @@ function arg(name, fallback) {
 }
 
 if (process.argv.includes("--help") || process.argv.includes("-h")) {
-  process.stdout.write(`drive.mjs --feature location-pin|radar-map [--base URL] [--out DIR]
+  process.stdout.write(`drive.mjs --feature location-pin|radar-map|pin-alerts [--base URL] [--out DIR]
 
-Features: location-pin, radar-map
+Features: location-pin, radar-map, pin-alerts
 Chrome: system google-chrome / google-chrome-stable. User-data-dir under ${RUN_DIR}/chrome-profile.
 `);
   process.exit(0);
@@ -32,8 +32,8 @@ const BASE = (arg("--base", process.env.BASE || "http://127.0.0.1:8080")).replac
 const runId = new Date().toISOString().replace(/[-:]/g, "").replace("T", "-").slice(0, 15);
 const OUT = arg("--out", join(ROOT, ".cursor/skills/verify-grom/evidence", runId));
 
-if (FEATURE !== "location-pin" && FEATURE !== "radar-map") {
-  console.error(`Unknown feature '${FEATURE}'. Shipped drivers: location-pin, radar-map`);
+if (FEATURE !== "location-pin" && FEATURE !== "radar-map" && FEATURE !== "pin-alerts") {
+  console.error(`Unknown feature '${FEATURE}'. Shipped drivers: location-pin, radar-map, pin-alerts`);
   process.exit(2);
 }
 
@@ -350,6 +350,162 @@ try {
       `Chip on: aria-pressed=true, overlay amber pixels=${amberOn}. Sheet unchanged.`;
     await cdp.send("Browser.close").catch(() => {});
     ws.close();
+  } else if (FEATURE === "pin-alerts") {
+    await screenshot(cdp, join(OUT, "01-sheet-before.png"));
+    const sheetBefore = await evalExpr(cdp, `document.querySelector('#grom-threat-sheet')?.innerText || ''`);
+    const sheetHasStats = /szansa/i.test(sheetBefore) && /eta/i.test(sheetBefore) && /echo/i.test(sheetBefore);
+    if (!sheetBefore.includes("Warszawa") || !sheetHasStats) {
+      throw new Error(`sheet missing Warszawa / Szansa/ETA/Echo before alerts: ${JSON.stringify(sheetBefore.slice(0, 400))}`);
+    }
+
+    step('click button[aria-label="Ustawienia"]');
+    const opened = await evalExpr(
+      cdp,
+      `(() => { const b = document.querySelector('button[aria-label="Ustawienia"]'); if (!b) return 'missing'; b.click(); return 'clicked'; })()`,
+    );
+    if (opened !== "clicked") throw new Error("settings button missing");
+    await sleep(300);
+    const dialog = await evalExpr(
+      cdp,
+      `document.querySelector('[role="dialog"][aria-labelledby="settings-title"]')?.innerText || ''`,
+    );
+    if (!dialog.includes("Lokalizacja i alerty") || !dialog.includes("Alerty na pinezkę")) {
+      await screenshot(cdp, join(OUT, "00-failed-dialog.png"));
+      throw new Error("settings dialog did not open");
+    }
+    step("dialog open: Lokalizacja i alerty");
+    await screenshot(cdp, join(OUT, "02-settings-dialog.png"));
+
+    const toggleState = await evalExpr(
+      cdp,
+      `(() => {
+        const dlg = document.querySelector('[role="dialog"][aria-labelledby="settings-title"]');
+        const btn = [...(dlg?.querySelectorAll("button") || [])].find((b) => {
+          const t = b.textContent.replace(/\\s+/g, " ").trim();
+          return t === "Włącz" || t === "Włączone";
+        });
+        if (!btn) return { state: "missing" };
+        const text = btn.textContent.replace(/\\s+/g, " ").trim();
+        if (text === "Włącz") btn.click();
+        return { state: text };
+      })()`,
+    );
+    if (toggleState.state === "missing") throw new Error("Włącz / Włączone toggle missing");
+    step(`alerts toggle was ${toggleState.state}`);
+
+    let testReady = false;
+    const tEnable = Date.now();
+    while (Date.now() - tEnable < 4000) {
+      testReady = await evalExpr(
+        cdp,
+        `(() => {
+          const dlg = document.querySelector('[role="dialog"][aria-labelledby="settings-title"]');
+          return !!(dlg && [...dlg.querySelectorAll("button")].find((b) => b.textContent.trim() === "Testuj alert"));
+        })()`,
+      );
+      if (testReady) break;
+      await sleep(150);
+    }
+    if (!testReady) {
+      await screenshot(cdp, join(OUT, "00-failed-enable.png"));
+      throw new Error("Testuj alert did not appear after enabling");
+    }
+
+    step('click "Testuj alert"');
+    const tested = await evalExpr(
+      cdp,
+      `(() => {
+        const dlg = document.querySelector('[role="dialog"][aria-labelledby="settings-title"]');
+        const btn = [...(dlg?.querySelectorAll("button") || [])].find((b) => b.textContent.trim() === "Testuj alert");
+        if (!btn) return "missing";
+        btn.click();
+        return "clicked";
+      })()`,
+    );
+    if (tested !== "clicked") throw new Error("Testuj alert missing");
+
+    let banner = "";
+    const tBanner = Date.now();
+    while (Date.now() - tBanner < 4000) {
+      banner = (await evalExpr(
+        cdp,
+        `document.querySelector('[role="status"][aria-live="assertive"]')?.innerText || ''`,
+      )) || "";
+      if (banner.includes("Deszcz za ok. 18 min")) break;
+      await sleep(150);
+    }
+    if (!banner.includes("Deszcz za ok. 18 min")) {
+      await screenshot(cdp, join(OUT, "00-failed-banner.png"));
+      throw new Error(`test banner missing title: ${JSON.stringify(banner.slice(0, 240))}`);
+    }
+    if (!banner.includes("Warszawa")) {
+      await screenshot(cdp, join(OUT, "00-failed-banner.png"));
+      throw new Error(`test banner missing pin label: ${JSON.stringify(banner.slice(0, 240))}`);
+    }
+    step("banner: Deszcz za ok. 18 min · Warszawa");
+    await screenshot(cdp, join(OUT, "03-test-banner.png"));
+
+    step('click button[aria-label="Zamknij alert"]');
+    const dismissed = await evalExpr(
+      cdp,
+      `(() => { const b = document.querySelector('button[aria-label="Zamknij alert"]'); if (!b) return 'missing'; b.click(); return 'clicked'; })()`,
+    );
+    if (dismissed !== "clicked") throw new Error("Zamknij alert missing");
+    await sleep(250);
+    const bannerGone = await evalExpr(
+      cdp,
+      `!document.querySelector('[role="status"][aria-live="assertive"]')`,
+    );
+    if (!bannerGone) {
+      await screenshot(cdp, join(OUT, "00-failed-dismiss.png"));
+      throw new Error("banner still present after Zamknij alert");
+    }
+
+    const logText = await evalExpr(
+      cdp,
+      `document.querySelector('[role="dialog"][aria-labelledby="settings-title"]')?.innerText || ''`,
+    );
+    if (!logText.includes("Ostatnie alerty") || !logText.includes("Deszcz za ok. 18 min")) {
+      await screenshot(cdp, join(OUT, "00-failed-log.png"));
+      throw new Error(`Ostatnie alerty missing test title: ${JSON.stringify(logText.slice(0, 300))}`);
+    }
+
+    const stored = await evalExpr(
+      cdp,
+      `(() => { try { return JSON.parse(localStorage.getItem("grom-alerts-v1") || "[]"); } catch { return []; } })()`,
+    );
+    if (!Array.isArray(stored) || stored[0]?.title !== "Deszcz za ok. 18 min") {
+      throw new Error(`grom-alerts-v1[0].title mismatch: ${JSON.stringify(stored?.[0])}`);
+    }
+    notes.sideEffects.push({ storage: "grom-alerts-v1", title: stored[0].title });
+
+    const closed = await evalExpr(
+      cdp,
+      `(() => { const b = document.querySelector('button[aria-label="Zamknij"]'); if (!b) return 'missing'; b.click(); return 'clicked'; })()`,
+    );
+    if (closed !== "clicked") throw new Error("Zamknij dialog missing");
+    await sleep(300);
+
+    const sheetAfter = (await evalExpr(cdp, `document.querySelector('#grom-threat-sheet')?.innerText || ''`)) || "";
+    const sheetAfterOk =
+      sheetAfter.includes("Warszawa") &&
+      /szansa/i.test(sheetAfter) &&
+      /eta/i.test(sheetAfter) &&
+      /echo/i.test(sheetAfter);
+    if (!sheetAfterOk) {
+      await screenshot(cdp, join(OUT, "00-failed-sheet.png"));
+      throw new Error(`sheet broken after pin-alerts: ${JSON.stringify(sheetAfter.slice(0, 400))}`);
+    }
+    step("sheet still Warszawa + Szansa/ETA/Echo after test alert");
+    await screenshot(cdp, join(OUT, "04-sheet-after.png"));
+
+    notes.ok = true;
+    notes.finishedAt = new Date().toISOString();
+    notes.result =
+      "Enabled pin alerts, Testuj alert showed Deszcz za ok. 18 min for Warszawa, " +
+      "dismissed banner, log + grom-alerts-v1 kept the title. Sheet still Warszawa / Szansa / ETA / Echo.";
+    await cdp.send("Browser.close").catch(() => {});
+    ws.close();
   } else {
   await screenshot(cdp, join(OUT, "01-warszawa-sheet.png"));
 
@@ -461,7 +617,12 @@ ${
   n.feature === "radar-map"
     ? `- \`01-tracks-off.png\` — fresh load, \`tor komórki\` aria-pressed false, no orange arrows
 - \`02-tracks-on.png\` — chip on, arrows drawn`
-    : `- \`01-warszawa-sheet.png\` — sheet after snapshot, default / prior pin
+    : n.feature === "pin-alerts"
+      ? `- \`01-sheet-before.png\` — sheet after snapshot, default pin
+- \`02-settings-dialog.png\` — dialog \`Lokalizacja i alerty\` open
+- \`03-test-banner.png\` — \`Testuj alert\` banner
+- \`04-sheet-after.png\` — dialog closed, sheet unchanged`
+      : `- \`01-warszawa-sheet.png\` — sheet after snapshot, default / prior pin
 - \`02-settings-dialog.png\` — dialog \`Lokalizacja i alerty\` open
 - \`03-krakow-sheet.png\` — sheet after Kraków chip`
 }

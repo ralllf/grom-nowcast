@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   ALERT_PRESETS,
   ALL_CLEAR_DEBOUNCE_MIN,
+  DECAYED_CLEAR_MIN,
   DEFAULT_ALERT_SETTINGS,
   EMPTY_ALERT_MEMORY,
   EPISODE_TTL_MIN,
@@ -85,19 +86,24 @@ function run(
   steps: Array<[Threat, number]>,
   settings: AlertSettings = on,
   memory: AlertMemory = EMPTY_ALERT_MEMORY,
+  radarAgeSec = 300,
 ) {
   const fired: string[] = [];
+  const events: string[] = [];
   let mem = memory;
   for (const [t, atMin] of steps) {
     const now = T0 + atMin * MIN;
     const r = evaluateAlert(t, settings, mem, now, {
       placeLabel: "Kraków",
-      radarTime: Math.floor(now / 1000) - 300,
+      radarTime: Math.floor(now / 1000) - radarAgeSec,
     });
     mem = r.memory;
-    if (r.event) fired.push(r.event.kind);
+    if (r.event) {
+      fired.push(r.event.kind);
+      events.push(`${r.event.kind}|${r.event.title}|${r.event.body}`);
+    }
   }
-  return { fired, mem };
+  return { fired, events, mem };
 }
 
 test("disabled settings never fire", () => {
@@ -408,6 +414,98 @@ test("matchAlertPreset returns null for a custom slider mix", () => {
     minLevel: ALERT_PRESETS.czuly.minLevel,
     minChancePct: ALERT_PRESETS.czuly.minChancePct,
   });
+});
+
+test("ETA flapping across leadMin does not fire przeszło then incoming", () => {
+  // 35 km at 60 km/h ≈ 35 min. Fresh radar so wall-clock ETA = frame ETA.
+  const cell = (etaMin: number) =>
+    incoming(etaMin, 3, { nearestKm: 35, speedKmh: 60, approaching: true, willHit: true });
+  const { fired, events, mem } = run(
+    [
+      [cell(28), 0],
+      [cell(32), 3],
+      [cell(32), 3 + ALL_CLEAR_DEBOUNCE_MIN],
+      [cell(29), 8],
+    ],
+    { ...on, leadMin: 30 },
+    EMPTY_ALERT_MEMORY,
+    0,
+  );
+  assert.deepEqual(fired, ["incoming"]);
+  assert.equal(mem.stage, "incoming");
+  assert.equal(mem.hit, false);
+  assert.equal(
+    events.some((e) => /przeszło|minęła/i.test(e)),
+    false,
+  );
+});
+
+test("approaching cell with eta just above leadMin stays in the episode", () => {
+  const cell = (etaMin: number) =>
+    incoming(etaMin, 3, { nearestKm: 35, speedKmh: 60, approaching: true, willHit: true });
+  const { fired, mem } = run(
+    [
+      [cell(28), 0],
+      [cell(32), 4],
+      [cell(34), 8],
+    ],
+    { ...on, leadMin: 30 },
+    EMPTY_ALERT_MEMORY,
+    0,
+  );
+  assert.deepEqual(fired, ["incoming"]);
+  assert.equal(mem.stage, "incoming");
+  assert.equal(mem.episode, String(T0));
+});
+
+test("approaching cell beyond leadMin+15 still holds the episode (no minęła bokiem)", () => {
+  const near = incoming(28, 3, { nearestKm: 28, speedKmh: 60, approaching: true, willHit: true });
+  const far = incoming(50, 3, { nearestKm: 50, speedKmh: 60, approaching: true, willHit: true });
+  const { fired, events, mem } = run(
+    [
+      [near, 0],
+      [far, 5],
+      [far, 5 + ALL_CLEAR_DEBOUNCE_MIN],
+    ],
+    { ...on, leadMin: 30 },
+    EMPTY_ALERT_MEMORY,
+    0,
+  );
+  assert.deepEqual(fired, ["incoming"]);
+  assert.equal(mem.stage, "incoming");
+  assert.equal(
+    events.some((e) => /minęła/i.test(e)),
+    false,
+  );
+});
+
+test("decayed over the pin all-clears after pinLevel stays below minLevel", () => {
+  const drizzle = threat({
+    nearestKm: 6,
+    pinLevel: 1,
+    cellLevel: 1,
+    maxLevel: 1,
+    etaMin: 0,
+  });
+  const early = run([
+    [overPin(3), 0],
+    [drizzle, 2],
+    [drizzle, 2 + DECAYED_CLEAR_MIN - 1],
+  ]);
+  assert.deepEqual(early.fired, ["now"]);
+  assert.equal(early.mem.stage, "now");
+  assert.equal(early.mem.hit, true);
+
+  const done = run([
+    [overPin(3), 0],
+    [drizzle, 2],
+    [drizzle, 2 + DECAYED_CLEAR_MIN],
+  ]);
+  assert.deepEqual(done.fired, ["now", "allclear"]);
+  assert.equal(done.mem.stage, "idle");
+  assert.match(done.events[1]!, /^allclear\|Przeszło · Kraków\|Opad odszedł/);
+  assert.doesNotMatch(done.events[1]!, /minęła/);
+  assert.doesNotMatch(done.events[1]!, /Radar czysty w promieniu/);
 });
 
 test("klasa 4 with lightning near the cell says Gwałtowna burza and names the strikes", () => {
