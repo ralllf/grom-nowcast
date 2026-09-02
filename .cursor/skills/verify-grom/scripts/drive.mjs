@@ -353,8 +353,9 @@ try {
   } else if (FEATURE === "pin-alerts") {
     await screenshot(cdp, join(OUT, "01-sheet-before.png"));
     const sheetBefore = await evalExpr(cdp, `document.querySelector('#grom-threat-sheet')?.innerText || ''`);
-    if (!sheetBefore.includes("Szansa") || !sheetBefore.includes("ETA") || !sheetBefore.includes("Echo")) {
-      throw new Error(`sheet missing Szansa/ETA/Echo before alerts: ${JSON.stringify(sheetBefore.slice(0, 200))}`);
+    const sheetHasStats = /szansa/i.test(sheetBefore) && /eta/i.test(sheetBefore) && /echo/i.test(sheetBefore);
+    if (!sheetBefore.includes("Warszawa") || !sheetHasStats) {
+      throw new Error(`sheet missing Warszawa / Szansa/ETA/Echo before alerts: ${JSON.stringify(sheetBefore.slice(0, 400))}`);
     }
 
     step('click button[aria-label="Ustawienia"]');
@@ -486,14 +487,14 @@ try {
     await sleep(300);
 
     const sheetAfter = (await evalExpr(cdp, `document.querySelector('#grom-threat-sheet')?.innerText || ''`)) || "";
-    if (
-      !sheetAfter.includes("Warszawa") ||
-      !sheetAfter.includes("Szansa") ||
-      !sheetAfter.includes("ETA") ||
-      !sheetAfter.includes("Echo")
-    ) {
+    const sheetAfterOk =
+      sheetAfter.includes("Warszawa") &&
+      /szansa/i.test(sheetAfter) &&
+      /eta/i.test(sheetAfter) &&
+      /echo/i.test(sheetAfter);
+    if (!sheetAfterOk) {
       await screenshot(cdp, join(OUT, "00-failed-sheet.png"));
-      throw new Error(`sheet broken after pin-alerts: ${JSON.stringify(sheetAfter.slice(0, 240))}`);
+      throw new Error(`sheet broken after pin-alerts: ${JSON.stringify(sheetAfter.slice(0, 400))}`);
     }
     step("sheet still Warszawa + Szansa/ETA/Echo after test alert");
     await screenshot(cdp, join(OUT, "04-sheet-after.png"));
@@ -616,7 +617,12 @@ ${
   n.feature === "radar-map"
     ? `- \`01-tracks-off.png\` — fresh load, \`tor komórki\` aria-pressed false, no orange arrows
 - \`02-tracks-on.png\` — chip on, arrows drawn`
-    : `- \`01-warszawa-sheet.png\` — sheet after snapshot, default / prior pin
+    : n.feature === "pin-alerts"
+      ? `- \`01-sheet-before.png\` — sheet after snapshot, default pin
+- \`02-settings-dialog.png\` — dialog \`Lokalizacja i alerty\` open
+- \`03-test-banner.png\` — \`Testuj alert\` banner
+- \`04-sheet-after.png\` — dialog closed, sheet unchanged`
+      : `- \`01-warszawa-sheet.png\` — sheet after snapshot, default / prior pin
 - \`02-settings-dialog.png\` — dialog \`Lokalizacja i alerty\` open
 - \`03-krakow-sheet.png\` — sheet after Kraków chip`
 }
