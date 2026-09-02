@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import h5wasm from "h5wasm/node";
 import { SRI_LAT0, SRI_LON0, SRI_R } from "./aeqd.ts";
-import { POLCOMP_SRI_GRID, type SriGrid } from "./sri.ts";
+import { POLCOMP_SRI_GRID, sriGeorefFromCorners, type SriGrid } from "./sri.ts";
 
 export type DecodedSri = {
   time: number;
@@ -91,11 +91,36 @@ export async function decodeSriH5(buf: Uint8Array): Promise<DecodedSri> {
       const ny = shape?.[0] ?? (where && "attrs" in where ? numAttr(where, "ysize", POLCOMP_SRI_GRID.ny) : POLCOMP_SRI_GRID.ny);
       const nx = shape?.[1] ?? (where && "attrs" in where ? numAttr(where, "xsize", POLCOMP_SRI_GRID.nx) : POLCOMP_SRI_GRID.nx);
 
+      const ulLon = where && "attrs" in where ? numAttr(where, "UL_lon", Number.NaN) : Number.NaN;
+      const ulLat = where && "attrs" in where ? numAttr(where, "UL_lat", Number.NaN) : Number.NaN;
+      const lrLon = where && "attrs" in where ? numAttr(where, "LR_lon", Number.NaN) : Number.NaN;
+      const lrLat = where && "attrs" in where ? numAttr(where, "LR_lat", Number.NaN) : Number.NaN;
+      const xscaleAttr =
+        where && "attrs" in where ? numAttr(where, "xscale", POLCOMP_SRI_GRID.xscale) : POLCOMP_SRI_GRID.xscale;
+      const yscaleAttr =
+        where && "attrs" in where ? numAttr(where, "yscale", POLCOMP_SRI_GRID.yscale) : POLCOMP_SRI_GRID.yscale;
+      const georef =
+        Number.isFinite(ulLon) &&
+        Number.isFinite(ulLat) &&
+        Number.isFinite(lrLon) &&
+        Number.isFinite(lrLat) &&
+        nx > 0 &&
+        ny > 0
+          ? sriGeorefFromCorners(ulLon, ulLat, lrLon, lrLat, nx, ny, origin.lat0, origin.lon0)
+          : {
+              xscale: xscaleAttr,
+              yscale: yscaleAttr,
+              x0: -(nx / 2) * xscaleAttr,
+              y0: (ny / 2) * yscaleAttr,
+            };
+
       const grid: SriGrid = {
         nx,
         ny,
-        xscale: where && "attrs" in where ? numAttr(where, "xscale", POLCOMP_SRI_GRID.xscale) : POLCOMP_SRI_GRID.xscale,
-        yscale: where && "attrs" in where ? numAttr(where, "yscale", POLCOMP_SRI_GRID.yscale) : POLCOMP_SRI_GRID.yscale,
+        xscale: georef.xscale,
+        yscale: georef.yscale,
+        x0: georef.x0,
+        y0: georef.y0,
         lat0: origin.lat0,
         lon0: origin.lon0,
         radiusM: SRI_R,

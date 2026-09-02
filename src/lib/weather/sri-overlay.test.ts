@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { PNG } from "pngjs";
+import { aeqdForward } from "./aeqd.ts";
 import { LEVEL_MIN_RATE, LEVEL_SWATCH, levelFromRate } from "./palette.ts";
-import { POLCOMP_SRI_GRID } from "./sri.ts";
+import { POLCOMP_SRI_GRID, sriGeorefFromCorners, sriPixelToLonLat } from "./sri.ts";
 import {
   attachSriOverlays,
   encodeClassPng,
@@ -121,6 +122,22 @@ test("overlay pixels use exactly the four legend swatches (plus transparent)", (
     const key = `${decoded.data[i]},${decoded.data[i + 1]},${decoded.data[i + 2]},${decoded.data[i + 3]}`;
     assert.ok(allowed.has(key), `foreign colour ${key}`);
   }
+});
+
+test("overlay corners lock to the same ODIM UL/LR geometry as decode", () => {
+  const geo = sriGeorefFromCorners(11.6, 56.3, 25.3, 48.0, 800, 800);
+  const grid = { ...POLCOMP_SRI_GRID, ...geo };
+  const [tl, tr, br, bl] = overlayCorners(grid);
+  assert.ok(tl && tr && br && bl);
+  assert.ok(Math.abs(tl[0] - 11.6) < 1e-8, `TL lon ${tl[0]}`);
+  assert.ok(Math.abs(tl[1] - 56.3) < 1e-8, `TL lat ${tl[1]}`);
+  assert.ok(Math.abs(br[0] - 25.3) < 1e-8, `BR lon ${br[0]}`);
+  assert.ok(Math.abs(br[1] - 48.0) < 1e-8, `BR lat ${br[1]}`);
+
+  const p00 = sriPixelToLonLat(0, 0, grid);
+  const xy = aeqdForward(p00.lat, p00.lon);
+  assert.ok(Math.abs(xy.x - (geo.x0 + 0.5 * geo.xscale)) < 1e-6);
+  assert.ok(Math.abs(xy.y - (geo.y0 - 0.5 * geo.yscale)) < 1e-6);
 });
 
 test("overlay corners are MapLibre image-source lon/lat quads (TL TR BR BL)", () => {

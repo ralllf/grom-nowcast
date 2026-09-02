@@ -5,7 +5,7 @@ import { join } from "node:path";
 import test from "node:test";
 import h5wasm from "h5wasm/node";
 import { decodeSriH5 } from "./sri-h5.ts";
-import { hitsFromSriGrid } from "./sri.ts";
+import { hitsFromSriGrid, sriGeorefFromCorners } from "./sri.ts";
 
 test("decodeSriH5 reads ODIM RATE, where scales, and the scan clock", async () => {
   await h5wasm.ready;
@@ -48,6 +48,49 @@ test("decodeSriH5 reads ODIM RATE, where scales, and the scan clock", async () =
     const hits = hitsFromSriGrid(decoded.data, decoded.grid);
     assert.equal(hits.length, 1);
     assert.equal(hits[0]!.rate, 7.5);
+  } finally {
+    unlinkSync(path);
+  }
+});
+
+test("decodeSriH5 derives pixel size from UL/LR corners, not attr xscale/yscale", async () => {
+  await h5wasm.ready;
+  const path = join(tmpdir(), `grom-sri-h5-corners-${process.pid}.h5`);
+  const f = new h5wasm.File(path, "w");
+  const where = f.create_group("where");
+  where.create_attribute("projdef", "+proj=aeqd +lon_0=19.0926 +lat_0=52.3469 +ellps=sphere");
+  where.create_attribute("xscale", 1163.641987013176);
+  where.create_attribute("yscale", 1153.6468207035664);
+  where.create_attribute("xsize", 800);
+  where.create_attribute("ysize", 800);
+  where.create_attribute("UL_lon", 11.6);
+  where.create_attribute("UL_lat", 56.3);
+  where.create_attribute("LR_lon", 25.3);
+  where.create_attribute("LR_lat", 48.0);
+  const what = f.create_group("what");
+  what.create_attribute("date", "20260901");
+  what.create_attribute("time", "183500");
+  const d1 = f.create_group("dataset1");
+  const d1what = d1.create_group("what");
+  d1what.create_attribute("nodata", -2);
+  d1what.create_attribute("undetect", -1);
+  d1what.create_attribute("gain", 1);
+  d1what.create_attribute("offset", 0);
+  const data = new Float32Array(4).fill(-2);
+  data[0] = 1.2;
+  d1.create_group("data1").create_dataset({ name: "data", data, shape: [2, 2] });
+  f.flush();
+  f.close();
+
+  try {
+    const { readFileSync } = await import("node:fs");
+    const decoded = await decodeSriH5(new Uint8Array(readFileSync(path)));
+    const expected = sriGeorefFromCorners(11.6, 56.3, 25.3, 48.0, 2, 2);
+    assert.ok(Math.abs(decoded.grid.xscale - expected.xscale) < 1e-6);
+    assert.ok(Math.abs(decoded.grid.yscale - expected.yscale) < 1e-6);
+    assert.ok(Math.abs(decoded.grid.x0 - expected.x0) < 1e-6);
+    assert.ok(Math.abs(decoded.grid.y0 - expected.y0) < 1e-6);
+    assert.ok(Math.abs(decoded.grid.xscale - 1163.64) > 100, "must not keep attr xscale");
   } finally {
     unlinkSync(path);
   }
