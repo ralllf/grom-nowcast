@@ -83,4 +83,30 @@ test("framesFromScan prefers packed history and keeps order", () => {
   assert.equal(frames[0]!.samples.length, 1);
   assert.equal(frames[1]!.samples.length, 2);
   assert.equal(frames[1]!.samples[1]!.rate, 25.1);
+  assert.equal(frames[0]!.cellKm, 3);
+  assert.equal(frames[1]!.cellKm, 3);
+});
+
+test("framesFromScan keeps a 6 km scan cellKm on every frame", () => {
+  const scan: RadarScan = {
+    host: "",
+    generated: 0,
+    latestTime: 2,
+    past: [],
+    nowcast: [],
+    samples: [],
+    prevSamples: [],
+    prevTime: null,
+    maxLevel: 0,
+    nearestKm: null,
+    echoCount: 0,
+    cellKm: 6,
+    history: [
+      { time: 1, samples: [], maxLevel: 2, nearestKm: null, packed: packSamples(samples.slice(0, 1)) },
+      { time: 2, samples: [], maxLevel: 4, nearestKm: null, packed: packSamples(samples), cellKm: 6 },
+    ],
+  };
+  const frames = framesFromScan(scan);
+  assert.equal(frames[0]!.cellKm, 6);
+  assert.equal(frames[1]!.cellKm, 6);
 });

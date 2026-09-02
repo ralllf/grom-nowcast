@@ -72,6 +72,7 @@ export function framesFromScan(radar: RadarScan): RadarMemoryFrame[] {
       maxLevel: f.maxLevel,
       nearestKm: f.nearestKm,
       samples: f.samples.length > 0 ? f.samples : f.packed ? unpackSamples(f.packed) : [],
+      cellKm: f.cellKm ?? radar.cellKm,
     }));
   }
   // Legacy shape: samples / prevSamples on the scan itself.
@@ -82,6 +83,7 @@ export function framesFromScan(radar: RadarScan): RadarMemoryFrame[] {
       samples: radar.prevSamples,
       maxLevel: radar.prevSamples.reduce<RadarLevel>((m, s) => (s.level > m ? s.level : m), 0),
       nearestKm: null,
+      cellKm: radar.cellKm,
     });
   }
   if (radar.latestTime != null) {
@@ -90,6 +92,7 @@ export function framesFromScan(radar: RadarScan): RadarMemoryFrame[] {
       samples: radar.samples,
       maxLevel: radar.maxLevel,
       nearestKm: radar.nearestKm,
+      cellKm: radar.cellKm,
     });
   }
   return frames;

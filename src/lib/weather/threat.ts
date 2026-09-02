@@ -24,7 +24,7 @@ const PIN_KM = 5;
 /** Echo further than this is not a nowcast threat for the pin (~90 min window). */
 export const TRACK_MAX_KM = 100;
 const LOCAL_MAX_KM = 25;
-/** Samples are ~3 km apart (z=6 grid); echo this close is already "here". */
+/** Echo this close is already "here" (km, not cells — independent of aggregate cellKm). */
 const OVER_KM = 8;
 /** Pin timeline: horizon and step (minutes). */
 const TIMELINE_MIN = 90;
@@ -101,11 +101,11 @@ function massAnchor(mass: { samples: RadarSample[]; lat: number; lon: number }):
  * 3) normalized cross-correlation (Pearson) for displacement
  * 4) QC: min NCC + agreement across frame pairs
  */
-/** NCC grid cell — matches the ~3 km sample spacing so 10-min shifts are not quantised to 30 km/h. */
-const CELL_KM = 3;
-const GRID_HALF_CELLS = 20; // ±60 km
+/** Fallback NCC cell when a frame did not carry `aggregate().cellKm`. */
+const DEFAULT_CELL_KM = 3;
+const GRID_HALF_CELLS = 20; // ±60 km at 3 km cells
 const GRID_N = GRID_HALF_CELLS * 2;
-const SMOOTH_RADIUS = 3; // ~20 km box — large-scale envelope
+const SMOOTH_RADIUS = 3; // cells — ~20 km box at 3 km, scales with cellKm
 const NCC_MIN = 0.4;
 const PAIR_AGREE_DEG = 40;
 const MAX_SHIFT_KM = 70;
@@ -125,10 +125,40 @@ function kmToLonDeg(km: number, lat: number) {
   return km / (111 * Math.max(Math.cos((lat * Math.PI) / 180), 0.25));
 }
 
-function samplesToGrid(samples: RadarSample[], lat0: number, lon0: number): Float64Array {
+/** NCC bin size — must match packed `aggregate().cellKm` (not a hardcoded 3). */
+export function nccCellKm(frames: RadarMemoryFrame[]): number {
+  let km = 0;
+  for (const f of frames) {
+    if (typeof f.cellKm === "number" && f.cellKm > 0) km = Math.max(km, f.cellKm);
+  }
+  return km > 0 ? km : DEFAULT_CELL_KM;
+}
+
+/** Which NCC cell a lon/lat lands in at `cellKm`. */
+export function nccSampleCell(
+  lat: number,
+  lon: number,
+  lat0: number,
+  lon0: number,
+  cellKm: number,
+): { ix: number; iy: number } | null {
+  const dLat = kmToLatDeg(cellKm);
+  const dLon = kmToLonDeg(cellKm, lat0);
+  const ix = Math.round((lon - lon0) / dLon) + GRID_HALF_CELLS;
+  const iy = Math.round((lat - lat0) / dLat) + GRID_HALF_CELLS;
+  if (ix < 0 || iy < 0 || ix >= GRID_N || iy >= GRID_N) return null;
+  return { ix, iy };
+}
+
+function samplesToGrid(
+  samples: RadarSample[],
+  lat0: number,
+  lon0: number,
+  cellKm: number,
+): Float64Array {
   const g = new Float64Array(GRID_N * GRID_N);
-  const dLat = kmToLatDeg(CELL_KM);
-  const dLon = kmToLonDeg(CELL_KM, lat0);
+  const dLat = kmToLatDeg(cellKm);
+  const dLon = kmToLonDeg(cellKm, lat0);
   for (const s of samples) {
     if (s.level < 1) continue;
     const ix = Math.round((s.lon - lon0) / dLon) + GRID_HALF_CELLS;
@@ -236,15 +266,16 @@ function pairMotionNcc(
   lat0: number,
   lon0: number,
   hours: number,
+  cellKm: number,
 ): { speed: number; bearing: number; moved: number; score: number } | null {
   if (hours <= 0) return null;
-  const rawA = samplesToGrid(prev, lat0, lon0);
-  const rawB = samplesToGrid(next, lat0, lon0);
+  const rawA = samplesToGrid(prev, lat0, lon0, cellKm);
+  const rawB = samplesToGrid(next, lat0, lon0, cellKm);
   if (gridRainCells(rawA) < 4 || gridRainCells(rawB) < 4) return null;
   const a = boxSmooth(rawA, SMOOTH_RADIUS);
   const b = boxSmooth(rawB, SMOOTH_RADIUS);
   const maxKm = Math.min(MAX_SPEED * hours, MAX_SHIFT_KM);
-  const maxC = Math.max(1, Math.min(MAX_SHIFT_CELLS, Math.ceil(maxKm / CELL_KM)));
+  const maxC = Math.max(1, Math.min(MAX_SHIFT_CELLS, Math.ceil(maxKm / cellKm)));
   const best = bestNccShift(a, b, maxC);
   if (!best) return null;
   if (best.dix === 0 && best.diy === 0) {
@@ -265,8 +296,8 @@ function pairMotionNcc(
   };
   const fx = best.dix + refine("x");
   const fy = best.diy + refine("y");
-  const dLat = fy * kmToLatDeg(CELL_KM);
-  const dLon = fx * kmToLonDeg(CELL_KM, lat0);
+  const dLat = fy * kmToLatDeg(cellKm);
+  const dLon = fx * kmToLonDeg(cellKm, lat0);
   const moved = haversineKm(lat0, lon0, lat0 + dLat, lon0 + dLon);
   const speed = moved / hours;
   if (speed > MAX_SPEED) return null;
@@ -280,6 +311,7 @@ function pairMotionNcc(
 
 function systemMotion(frames: RadarMemoryFrame[], lat0: number, lon0: number): MotionEst | null {
   if (frames.length < 2) return null;
+  const cellKm = nccCellKm(frames);
   type Part = { deg: number; w: number; speed: number; score: number };
   const parts: Part[] = [];
 
@@ -288,7 +320,7 @@ function systemMotion(frames: RadarMemoryFrame[], lat0: number, lon0: number): M
     const next = frames[i];
     if (!prev || !next) continue;
     const hours = (next.time - prev.time) / 3600;
-    const m = pairMotionNcc(prev.samples, next.samples, lat0, lon0, hours);
+    const m = pairMotionNcc(prev.samples, next.samples, lat0, lon0, hours, cellKm);
     if (!m || m.speed < 1) continue;
     parts.push({
       deg: m.bearing,
@@ -301,7 +333,7 @@ function systemMotion(frames: RadarMemoryFrame[], lat0: number, lon0: number): M
   const last = frames.at(-1);
   if (first && last && last.time > first.time) {
     const hoursAll = (last.time - first.time) / 3600;
-    const mAll = pairMotionNcc(first.samples, last.samples, lat0, lon0, hoursAll);
+    const mAll = pairMotionNcc(first.samples, last.samples, lat0, lon0, hoursAll, cellKm);
     if (mAll && mAll.speed >= 1) {
       parts.push({
         deg: mAll.bearing,

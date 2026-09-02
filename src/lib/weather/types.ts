@@ -27,6 +27,8 @@ export type RadarMemoryFrame = {
   packed?: string;
   /** True when at least one Poland-domain tile failed to fetch. */
   degraded?: boolean;
+  /** Sample spacing after `aggregate()` — NCC bins at this km. */
+  cellKm?: number;
 };
 
 export type RadarScan = {

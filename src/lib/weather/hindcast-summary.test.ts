@@ -3,6 +3,7 @@ import test from "node:test";
 import type { RadarLevel, RadarMemoryFrame, RadarSample } from "./types.ts";
 import {
   HINDCAST_LEADS,
+  MAX_RADAR_SAMPLES,
   RESEARCH_ALERT_CONFIG,
   SHIPPED_ALERT_CONFIG,
   cellKmFromSampleCount,
@@ -140,9 +141,10 @@ test("latestAgeSec is null without a download stamp (cached re-score)", () => {
 
 test("cellKmFromSampleCount is a 3 km echo-cell proxy, not server aggregate()", () => {
   assert.equal(cellKmFromSampleCount(100), 3);
-  assert.equal(cellKmFromSampleCount(9000), 3);
-  assert.equal(cellKmFromSampleCount(9001), 6);
-  assert.equal(cellKmFromSampleCount(36_001), 12);
+  assert.equal(cellKmFromSampleCount(9_000), 3);
+  assert.equal(cellKmFromSampleCount(MAX_RADAR_SAMPLES), 3);
+  assert.equal(cellKmFromSampleCount(MAX_RADAR_SAMPLES + 1), 6);
+  assert.equal(cellKmFromSampleCount(MAX_RADAR_SAMPLES * 4 + 1), 12);
 });
 
 test("shipped 30 min window ignores rain that research 60 min still scores", () => {
