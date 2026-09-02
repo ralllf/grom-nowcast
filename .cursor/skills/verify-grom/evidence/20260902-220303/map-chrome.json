@@ -1,0 +1,43 @@
+{
+  "when": "2026-09-02T22:03:07.878Z",
+  "zoomIn": {
+    "w": 44,
+    "h": 44,
+    "top": 234,
+    "bottom": 278,
+    "visible": true,
+    "text": "Przybliż"
+  },
+  "zoomOut": {
+    "w": 44,
+    "h": 44,
+    "top": 278,
+    "bottom": 322,
+    "visible": true,
+    "text": "Oddal"
+  },
+  "locate": {
+    "w": 44,
+    "h": 44,
+    "top": 330,
+    "bottom": 374,
+    "visible": true,
+    "text": "Wybierz lokalizację"
+  },
+  "legend": {
+    "w": 118,
+    "h": 22,
+    "top": 382,
+    "bottom": 404,
+    "visible": true,
+    "text": "Legenda opadu"
+  },
+  "credit": {
+    "w": 137,
+    "h": 20,
+    "top": 444,
+    "bottom": 464,
+    "visible": true,
+    "text": "OpenFreeMap / OSM"
+  }
+}
