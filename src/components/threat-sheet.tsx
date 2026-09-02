@@ -97,9 +97,9 @@ export function ThreatSheet({
   onShowRainMotionRef.current = onShowRainMotion;
 
   function applyDetent(next: SheetDetent) {
+    if (next === detent) return;
     setDetent(next);
     onDetentChangeRef.current?.(next);
-    if (next !== "peek") onShowRainMotionRef.current();
   }
 
   const nowMs = Date.now();
@@ -136,6 +136,7 @@ export function ThreatSheet({
     if (autoKey.current === key) return;
     autoKey.current = key;
     applyDetent(target);
+    onShowRainMotionRef.current();
   }, [place.lat, place.lon, threat?.level]);
 
   function onHandlePointerDown(e: PointerEvent<HTMLButtonElement>) {

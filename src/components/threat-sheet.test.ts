@@ -112,6 +112,15 @@ describe("sheet detents and map padding", () => {
     assert.doesNotMatch(MAP_SRC, /padding:\s*90,/);
   });
 
+  it("only fitBounds on auto-expand; grom-app threads the detent into the map", () => {
+    const apply = SHEET_SRC.match(/function applyDetent\([\s\S]*?\n  \}/);
+    assert.ok(apply, "expected applyDetent in threat-sheet.tsx");
+    assert.doesNotMatch(apply[0], /onShowRainMotion/);
+    assert.match(SHEET_SRC, /applyDetent\(target\);\s*onShowRainMotionRef\.current\(\)/);
+    assert.match(APP_SRC, /sheetDetent=\{sheetDetent\}/);
+    assert.match(APP_SRC, /onDetentChange=\{setSheetDetent\}/);
+  });
+
   it("snaps the handle across peek → half → full", async () => {
     const { nextSheetDetent, toggleSheetDetent } = await import("./threat-sheet-logic.ts");
     assert.equal(nextSheetDetent("peek", -40), "half");
