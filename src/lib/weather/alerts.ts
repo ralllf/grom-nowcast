@@ -205,8 +205,17 @@ function radarSuffix(
  */
 export function etaToLevel(threat: Threat, level: RadarLevel): number | null {
   if (threat.timelineAdvected && threat.timeline.length > 0) {
-    const hit = threat.timeline.find((p) => p.level >= level);
-    return hit ? hit.t : null;
+    const hit = threat.timeline.find((p) => !p.unknown && p.level >= level);
+    if (hit) return hit.t;
+    if (
+      threat.timeline.some((p) => p.unknown) &&
+      threat.willHit &&
+      threat.etaMin !== null &&
+      threat.cellLevel >= level
+    ) {
+      return threat.etaMin;
+    }
+    return null;
   }
   if (threat.willHit && threat.etaMin !== null && threat.cellLevel >= level) return threat.etaMin;
   return null;

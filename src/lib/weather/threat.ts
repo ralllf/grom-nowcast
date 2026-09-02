@@ -837,6 +837,7 @@ export function computeThreat(
   let receding = false;
   let speedKmh: number | null = null;
   let etaMin: number | null = null;
+  let massEtaMin: number | null = null;
   let comingFrom: string | null = null;
   let toward: string | null = null;
   let willHit = false;
@@ -960,6 +961,7 @@ export function computeThreat(
       }
       threatCellLevel = primary.level;
       willHit = primary.miss <= PIN_KM;
+      massEtaMin = primary.eta;
       threatTrack = primary.track;
     }
   }
@@ -1022,7 +1024,10 @@ export function computeThreat(
       approaching = true;
       etaMin = tlFirst.t;
       if (threatCellLevel < tlMaxLevel) threatCellLevel = tlMaxLevel;
-    } else if (!leftCoverage) {
+    } else if (leftCoverage) {
+      // Off-composite is unknown — keep the mass hit/ETA instead of a dry miss.
+      if (willHit && etaMin === null && massEtaMin != null) etaMin = massEtaMin;
+    } else {
       willHit = false;
       etaMin = null;
     }
