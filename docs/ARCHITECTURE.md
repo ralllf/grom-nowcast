@@ -74,12 +74,14 @@ W oknie 0–90 min, krok 2 min, rzutujemy komórkę po azymucie i prędkości.
 - Zbliża się i minie ≤ 12 km → ETA z adnotacją, to jeszcze o nas.
 - Minie daleko albo stoi bez kierunku → ETA `—` albo `minie`, bez udawania pewności.
 
-Szansa % jest grubą siatką (5–95), potem **przemapowana** na częstość z dziennika
-hindcastu ([`chance.ts`](../src/lib/weather/chance.ts), Slice 8): surowy szczebel
-60 (tor trafia) → 55, 70/80 (nad pinezką / ETA ≤ 20) → 90. Echo w okolicy, które
-minie pinezkę, zostaje na surowym 10 → 10 — bez starych szczebli 25/40/55 z koła.
-Tylko gdy echo jest ≤ 100 km — suche pinezki i samo IMGW zostają na surowym
-szczeblu. To nie model MESO-NH. UI mówi „szansa”, nie „pewność”.
+Szansa % jest grubą siatką (5–95), potem **przemapowana po tożsamości szczebla**
+([`chance.ts`](../src/lib/weather/chance.ts)), nie po surowej liczbie.
+`willHitApproachingKlasa2` (surowy 60) → 55; nad pinezką / ETA ≤ 20 → 90.
+Dzisiejszy `willHitEta20to45` (surowy 50, klasa 1) zostaje na 50 — to nie jest
+stary close-echo 50–59 (n=28, 18% → 20). Echo, które minie pinezkę, zostaje na
+`echoFar` 10. Tylko gdy echo jest ≤ 100 km — suche pinezki i samo IMGW zostają
+na surowym szczeblu. Jedno rano RainViewera; nie ma bramki ±10 pt. To nie model
+MESO-NH. UI mówi „szansa”, nie „pewność”.
 
 ## Trafi czy minie — z próbek, nie z centroidu
 
@@ -96,7 +98,7 @@ czy *środek masy* przejdzie 5 km od pinezki. Front szeroki na
 
 ## Oś czasu opadu (jak MeteoSwiss)
 
-Pod statystykami jest pasek **0–90 min co 5 min**: ile mm/h będzie nad pinezką. Liczymy przez **adwekcję wsteczną na gęstym polu**: wektory pewnych mas interpolowane odwrotną odległością na siatkę 3 km (regionalny NCC w tle), potem 2–3 iteracje punktu stałego trajektorii wstecznej na każdy krok (semi-Lagrange, Germann & Zawadzki 2002) — nie jeden wektor głównej masy na wszystkie próbki. Promień zapytania rośnie z wyprzedzeniem (~15 % przemieszczenia, max +6 km). Bez wiarygodnego ruchu — persystencja („bez ruchu — jak teraz”), oznaczona w UI. Bez wzrostu/zaniku komórek, bez modelu NWP.
+Pod statystykami jest pasek **0–90 min co 5 min**: ile mm/h będzie nad pinezką. Liczymy przez **adwekcję wsteczną na gęstym polu**: wektory pewnych mas interpolowane odwrotną odległością na siatkę 3 km (regionalny NCC w tle), potem 2–3 iteracje punktu stałego trajektorii wstecznej na każdy krok (semi-Lagrange, Germann & Zawadzki 2002) — nie jeden wektor głównej masy na wszystkie próbki. Promień zapytania rośnie z wyprzedzeniem (~15 % przemieszczenia, max +6 km). Bez wiarygodnego ruchu — persystencja („bez ruchu — jak teraz”), oznaczona w UI. Wzrost/zanik (Lagrangian ΔR, 15–20 min, e-fold ~30 min) jest zaimplementowany, ale `GROWTH_MATH_ENABLED` zostaje **false** (0 dni `konwekcja`). Bez modelu NWP.
 
 ## Kopiowanie komunikatu
 
@@ -104,7 +106,7 @@ Gdy sprawa dotyczy pinezki:
 
 - `Idzie od zachodu → na wschód · 48 km/h`
 - `Spodziewaj się: deszcz i mokrą jezdnię` (z poziomu echa, nie z jutrzejszego ostrzeżenia z słowem „grad”)
-- `Komórka rośnie` / `Komórka słabnie` — trend intensywności/powierzchni tej samej masy na 4-klatkowym tropie (`buildMassTrail`). **Tylko copy:** bramka Slice 0 nie przepuszcza korekty osi czasu / ETA (za mało dni konwekcyjnych w [`HINDCAST-LOG.md`](HINDCAST-LOG.md)).
+- `Komórka rośnie` / `Komórka słabnie` — trend intensywności/powierzchni tej samej masy na 4-klatkowym tropie (`buildMassTrail`). **Copy live; math off:** Lagrangian ΔR jest za `GROWTH_MATH_ENABLED=false` — bramka Slice 0 nie przepuszcza korekty osi czasu / ETA (0 dni `konwekcja` w [`HINDCAST-LOG.md`](HINDCAST-LOG.md)).
 - `Dojście nad Kraków: ok. 18 min`
 
 Gdy echo jest 127 km stąd i nie idzie na nas: **Czysto** + przycisk **Pokaż ruch opadu**, żeby zobaczyć strzałki na komórce bez kłamania, że burza jest nad miastem.
@@ -151,7 +153,7 @@ na `enabled`. Normalny = wysłane defaulty (30 / 2 / 50).
 - Analiza SRI to kompozyt IMGW (10 radarów, co 5 min, ~1.16 km, 800×800). Overlay mapy to to samo pole w 4 klasach legendy (F9). RainViewer zostaje fallbackiem. Opóźnienie SRI rzędu kilku minut. Szczegóły siatki: `docs/DATA.md`.
 - Siatka ~3 km. Dobra do wektora mezoskali i do „czy pada nad miastem”; pojedyncza komórka < 3 km może zniknąć między próbkami.
 - Marshall–Palmer to jedna relacja Z–R dla wszystkiego: w burzy konwekcyjnej zaniża, w mżawce zawyża. Klasy mm/h są orientacyjne.
-- Cztery skany ~30 min, ekstrapolacja liniowa. Nie optyczny flow, bez wzrostu/zaniku komórek.
+- Cztery skany ~30 min, ekstrapolacja liniowa. Nie optyczny flow. Wzrost/zanik jest za flagą (`GROWTH_MATH_ENABLED=false`).
 - Ostrzeżenie IMGW jest **powiatowe**. Łączymy je TERYT-em, ale nie udajemy, że IMGW wie, nad którą ulicą spadnie.
 
 Szczegóły implementacji: [`src/lib/weather/`](../src/lib/weather/).

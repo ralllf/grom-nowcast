@@ -12,12 +12,22 @@ import type {
   ThreatLevel,
   TimelinePoint,
 } from "./types.ts";
-import { cellTrendCopy, cellTrendFromSnaps, type TrailSnap } from "./trend.ts";
+import {
+  GROWTH_MATH_ENABLED,
+  applyGrowthToTimeline,
+  cellTrendCopy,
+  cellTrendFromSnaps,
+  lagrangianMeanRateSlope,
+  type RateTrailSnap,
+  type TrailSnap,
+} from "./trend.ts";
 import { strikeNearCell } from "./perun.ts";
 import { isActiveWarning } from "./imgw-time.ts";
 import { HAIL_RATE, LEVEL_MIN_RATE, levelFromRate } from "./palette.ts";
-import { calibrateChancePct } from "./chance.ts";
+import { calibrateChancePct, type ChanceRung } from "./chance.ts";
 import { COMPO_SRI_GRID, inSriComposite, type SriGrid } from "./sri.ts";
+
+export type { ChanceRung };
 
 /** Distance at which the cell is treated as covering the city / GPS pin. */
 const PIN_KM = 5;
@@ -914,6 +924,17 @@ function trailSnaps(trail: { time: number; mass: Mass }[]): TrailSnap[] {
   });
 }
 
+function rateTrailSnaps(trail: { time: number; mass: Mass }[]): RateTrailSnap[] {
+  return trail.map((t) => ({
+    time: t.time,
+    cells: t.mass.samples.map((s) => ({
+      lat: s.lat,
+      lon: s.lon,
+      rate: sampleRate(s),
+    })),
+  }));
+}
+
 function buildMassTrail(mass: Mass, layers: MassLayer[]): { time: number; mass: Mass }[] {
   const newest = layers.at(-1);
   if (!newest) return [];
@@ -1102,6 +1123,73 @@ function roundPct(n: number) {
   return Math.max(5, Math.min(95, Math.round(n / 5) * 5));
 }
 
+/** Inputs the Szansa ladder reads — geometry / klasa / IMGW, not the raw integer. */
+export type ChanceLadderInput = {
+  willHit: boolean;
+  approaching: boolean;
+  receding: boolean;
+  expectLevel: number;
+  pinMaxLevel: number;
+  nearestKm: number | null;
+  etaMin: number | null;
+  missKm: number | null;
+  imgwDegree: number | null;
+};
+
+/**
+ * Name the winning ladder rung, then ship `calibrateChancePct(rung)`.
+ * Raw integers are recorded on the table for leftover / history; they are not keys.
+ */
+export function chanceLadder(input: ChanceLadderInput): { rung: ChanceRung; rawPct: number } {
+  let raw = 10;
+  let rung: ChanceRung = "echoFar";
+
+  const raise = (next: ChanceRung, value: number) => {
+    if (value > raw) {
+      raw = value;
+      rung = next;
+    }
+  };
+
+  if (input.imgwDegree != null) {
+    raise("imgwWatch", 15 + input.imgwDegree * 10);
+  }
+  if (input.willHit && input.approaching && input.expectLevel >= 2) {
+    raise("willHitApproachingKlasa2", 60);
+  }
+  if (input.nearestKm != null && input.nearestKm <= OVER_KM && input.pinMaxLevel >= 2) {
+    raise("overPinKlasa2", 70);
+  }
+  if (input.etaMin === 0 && input.pinMaxLevel >= 2) {
+    raise("overPinNowKlasa2", 80);
+  }
+  if (input.etaMin != null && input.etaMin > 0 && input.etaMin <= 20 && input.willHit) {
+    raise("willHitEtaLe20", 70);
+  }
+  if (input.etaMin != null && input.etaMin > 20 && input.etaMin <= 45 && input.willHit) {
+    raise("willHitEta20to45", 50);
+  }
+  if (input.nearestKm != null && input.nearestKm <= PIN_KM && input.pinMaxLevel >= 3) {
+    raise("overPinKlasa3", 90);
+  }
+
+  if (input.receding && (input.nearestKm == null || input.nearestKm > OVER_KM)) {
+    if (raw > 20) {
+      raw = 20;
+      rung = "receding";
+    }
+  }
+  if (input.missKm != null && input.missKm > PIN_KM + 8 && !input.willHit) {
+    const next = Math.max(15, raw - 20);
+    if (next < raw) {
+      raw = next;
+      rung = "missBeside";
+    }
+  }
+
+  return { rung, rawPct: roundPct(raw) };
+}
+
 function expectPl(maxLevel: number, hailAtPin = false): string | null {
   if (maxLevel >= 4) {
     return hailAtPin
@@ -1132,6 +1220,7 @@ export function computeThreat(
   warnings: OfficialWarning[],
   sampleOrigin: { lat: number; lon: number } = place,
   strikes: LightningStrike[] = [],
+  growthMath = GROWTH_MATH_ENABLED,
 ): Threat {
   const matched = warnings.filter((w) => w.matchesPlace && w.stormRelated);
   // Frames are already cropped to the radar domain (Poland). Do not re-crop around the pin.
@@ -1160,6 +1249,7 @@ export function computeThreat(
   let threatTrack: CellTrack | null = null;
   let threatCellLevel = 0;
   let cellTrend: CellTrend = null;
+  let growthSlope = 0;
   const motionAnchors: MotionAnchor[] = [];
 
   const motionKm = motionNccCellKm(usable);
@@ -1195,7 +1285,11 @@ export function computeThreat(
       }
     }
     if (pinMass) {
-      cellTrend = cellTrendFromSnaps(trailSnaps(buildMassTrail(pinMass, layers)));
+      const pinTrail = buildMassTrail(pinMass, layers);
+      cellTrend = cellTrendFromSnaps(trailSnaps(pinTrail));
+      if (growthMath) {
+        growthSlope = lagrangianMeanRateSlope(rateTrailSnaps(pinTrail));
+      }
     }
 
     type Hit = {
@@ -1345,7 +1439,8 @@ export function computeThreat(
         )
       : null;
   const timelineMotion = motionField ?? pinMotion;
-  const timeline = last ? pinTimeline(lastSamples, place.lat, place.lon, timelineMotion) : [];
+  const advected = last ? pinTimeline(lastSamples, place.lat, place.lon, timelineMotion) : [];
+  const timeline = applyGrowthToTimeline(advected, growthSlope, growthMath);
   const tlFirst = timelineMotion
     ? (timeline.find((p) => p.t > 0 && !p.unknown && p.level >= 1) ?? null)
     : null;
@@ -1399,29 +1494,23 @@ export function computeThreat(
     if (maxLevel < 1 && !willHit) expect = null;
   }
 
-  let chance = 10;
-  if (activeMatch.length > 0) {
-    const degree = Math.max(...activeMatch.map((w) => w.degree), 1);
-    chance = Math.max(chance, 15 + degree * 10);
-  }
-  if (willHit && approaching && expectLevel >= 2) chance = Math.max(chance, 60);
-  // Raw 70/80 remap to shipped 90. That rung is "under this cell", not any pin echo.
-  // Detection intensity stays the neighbourhood max so Szansa rungs are not retuned.
-  if (nearestKm !== null && nearestKm <= OVER_KM && pinMaxLevel >= 2) chance = Math.max(chance, 70);
-  if (etaMin !== null && etaMin === 0 && pinMaxLevel >= 2) chance = Math.max(chance, 80);
-  if (etaMin !== null && etaMin > 0 && etaMin <= 20 && willHit) chance = Math.max(chance, 70);
-  if (etaMin !== null && etaMin > 20 && etaMin <= 45 && willHit) chance = Math.max(chance, 50);
-  if (nearestKm !== null && nearestKm <= PIN_KM && pinMaxLevel >= 3) chance = Math.max(chance, 90);
-  if (receding && (nearestKm === null || nearestKm > OVER_KM)) chance = Math.min(chance, 20);
-  if (missKm !== null && missKm > PIN_KM + 8 && !willHit) {
-    chance = Math.min(chance, Math.max(15, chance - 20));
-  }
-  chance = roundPct(chance);
+  const imgwDegree =
+    activeMatch.length > 0 ? Math.max(...activeMatch.map((w) => w.degree), 1) : null;
+  const { rung, rawPct } = chanceLadder({
+    willHit,
+    approaching,
+    receding,
+    expectLevel,
+    pinMaxLevel,
+    nearestKm,
+    etaMin,
+    missKm,
+    imgwDegree,
+  });
   // Echo ≤ 100 km is the Slice-0 calibration population. Dry / IMGW-only pins
   // are not in that table — leave their raw rungs (typically 10 / 25–45) alone.
-  if (nearestKm !== null && nearestKm <= TRACK_MAX_KM) {
-    chance = calibrateChancePct(chance);
-  }
+  const chance =
+    nearestKm !== null && nearestKm <= TRACK_MAX_KM ? calibrateChancePct(rung) : rawPct;
 
   let level: ThreatLevel = "clear";
   if (activeMatch.length > 0) level = "watch";

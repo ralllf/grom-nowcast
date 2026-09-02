@@ -64,34 +64,34 @@ POD/FAR/CSI cells are written `P/F/C` in percent, e.g. `64/32/49`.
 
 ## Slice 8 remap (2026-08-31)
 
-No SRI-era row and no held-out day exist yet. Slice 8 remaps echo-driven Szansa
-from the **one published midday row** above (`2026-08-31`, window 09:40–11:40,
-RainViewer). Observed = rain ≥ klasa 1 over the pin within 60 min, echo ≤ 100 km.
+No SRI-era row and no held-out day exist yet. Live remap keys on **rung
+identity**, not the raw integer ([`chance.ts`](../src/lib/weather/chance.ts)).
+The n / observed numbers below are the **one published midday row**
+(`2026-08-31`, window 09:40–11:40, RainViewer; rain ≥ klasa 1 over the pin
+within 60 min, echo ≤ 100 km). They are historical frequencies for the
+population that filled that bin that morning — not a ±10 pt reliability gate
+and not a lookup by today's raw %.
 
 Dry / IMGW-only pins are **not** in this table and keep their raw rungs.
 
-| raw rung | n | mean raw | observed | shipped | ±10 pt gate |
+| live id | historical raw | n | observed | shipped | note |
 |---|---|---|---|---|---|
-| 0–19 | 219 | 10.3 | 10% | **10** | yes |
-| 20–29 | 2 | 22.5 | 0% | **10** | n<20, conservative |
-| 30–39 | 0 | — | — | **15** | empty |
-| 40–49 | 1 | 40 | 0% | **15** | n<20 |
-| 50–59 | 28 | 55 | 18% | **20** | yes |
-| 60–69 | 75 | 60 | 56% | **55** | yes |
-| 70–79 | 27 | 70 | 89% | **90** | yes |
-| 80–89 | 109 | 80 | 90% | **90** | yes |
-| 90–100 | 33 | 90 | 100% | **95** | yes |
+| `echoFar` | 0–19 | 219 | 10% | **10** | measured leftover / far echo |
+| `legacyArea20` | 20–29 | 2 | 0% | **10** | tiny n, conservative |
+| `legacyArea30` | 30–39 | 0 | — | **15** | empty leftover |
+| `legacyArea40` | 40–49 | 1 | 0% | **15** | tiny n |
+| `willHitEta20to45` | 50 (today) | 0 | — | **50** | no matching identity in the row; do not wear the 18% |
+| `legacyCloseEcho` | 50–59 | 28 | 18% | **20** | old close-echo population; leftover id |
+| `willHitApproachingKlasa2` | 60–69 | 75 | 56% | **55** | still clears `minChancePct` 50 |
+| `overPinKlasa2` / `willHitEtaLe20` | 70–79 | 27 | 89% | **90** | |
+| `overPinNowKlasa2` | 80–89 | 109 | 90% | **90** | |
+| `overPinKlasa3` | 90–100 | 33 | 100% | **95** | |
 
-The table lives in [`src/lib/weather/chance.ts`](../src/lib/weather/chance.ts) and
-is asserted by `chance.test.ts`. Re-run `npm run --silent hindcast -- --sri --json`
-on a stormy day and add a row here before tightening the bins.
+`willHitEta20to45` and `legacyCloseEcho` share raw 50 and ship **50 vs 20**.
+Re-run `npm run --silent hindcast -- --sri --json` on a stormy day and add a
+row here before inventing new frequencies.
 
-Alert implication at shipped defaults (`leadMin` 30, `minLevel` 2, `minChancePct` 50):
-the well-calibrated willHit+approaching rung (60 → 55) still clears the gate; the
-overconfident close-echo rung (55 → 20, obs 18%) no longer fires. That should
-not worsen POD and should cut FAR. Confirm on the next logged day.
-
-## Slice 9 gate (2026-08-31) — copy only, math off
+## Slice 9 gate (2026-08-31) — copy live, math implemented and off
 
 The plan lets timeline / ETA move for growing cells only on **≥ 3 convective
 log days**, with POD at +20…+40 min up, FAR up by < 3 pts, and ETA median bias
@@ -100,10 +100,13 @@ toward 0.
 Published rows today: **2**, both `front`. Convective days: **0**. Slice 0's
 own success check (≥ 5 days including ≥ 2 convective) is also unmet.
 
-`GROWTH_MATH_ENABLED` in [`src/lib/weather/trend.ts`](../src/lib/weather/trend.ts)
-stays **false**. The sheet ships **Komórka rośnie / słabnie** from the 4-frame
-trail; nowcast numbers do not change. Re-open the math only after three
-`konwekcja` rows exist and the numbers above hold.
+Math is Lagrangian ΔR (sum of `rate` over matched cells along the trail),
+applied 15–20 min then damped toward zero with ~30 min e-folding — not
+first-vs-last max/mean/count on the whole mass. `GROWTH_MATH_ENABLED` in
+[`src/lib/weather/trend.ts`](../src/lib/weather/trend.ts) stays **false**
+(0 `konwekcja` days). The sheet ships **Komórka rośnie / słabnie** from the
+4-frame trail; live nowcast numbers do not change. Re-open the flag only after
+three `konwekcja` rows exist and the numbers above hold.
 
 ## Log
 

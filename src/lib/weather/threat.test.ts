@@ -8,8 +8,10 @@ import {
 import { bearingDeg, destPoint, haversineKm } from "./geo.ts";
 import { levelFromRate } from "./palette.ts";
 import { aggregate, BASE_CELL_LAT, BASE_CELL_LON, PL_RADAR_BBOX } from "./radar-grid.ts";
+import { calibrateChancePct } from "./chance.ts";
 import {
   BACK_TRAJ_ITERS,
+  chanceLadder,
   computeThreat,
   GATE_DT_SEC,
   LINK_KM,
@@ -1128,12 +1130,40 @@ test("incoming willHit Szansa uses the calibrated 55 or 90 rung", () => {
   const frames = [frame(1_000, blob(50.0, 20.4), 43), frame(1_600, blob(50.0, 20.55), 32)];
   const threat = computeThreat(city, frames, []);
   assert.equal(threat.willHit, true);
-  // Raw 60 (willHit+approaching) → 55; raw 70 (ETA ≤ 20) → 90.
+  // willHitApproachingKlasa2 → 55; willHitEtaLe20 / over-pin → 90.
   if (threat.etaMin !== null && threat.etaMin > 20 && threat.etaMin <= 45) {
     assert.equal(threat.chancePct, 55);
   } else {
     assert.equal(threat.chancePct, 90);
   }
+});
+
+test("chanceLadder names willHit ETA 20–45 klasa 1, not leftover close-echo", () => {
+  const { rung, rawPct } = chanceLadder({
+    willHit: true,
+    approaching: true,
+    receding: false,
+    expectLevel: 1,
+    pinMaxLevel: 1,
+    nearestKm: 25,
+    etaMin: 30,
+    missKm: 2,
+    imgwDegree: null,
+  });
+  assert.equal(rung, "willHitEta20to45");
+  assert.equal(rawPct, 50);
+  assert.equal(calibrateChancePct(rung), 50);
+  assert.equal(calibrateChancePct("legacyCloseEcho"), 20);
+});
+
+test("klasa-1 willHit ETA 20–45 ships 50, not the old close-echo 20", () => {
+  // Weaker / farther than the klasa-3 incoming fixture so ETA stays in 20–45.
+  const frames = [frame(1_000, blob(50.0, 20.25, 1), 54), frame(1_600, blob(50.0, 20.4, 1), 43)];
+  const threat = computeThreat(city, frames, []);
+  assert.equal(threat.willHit, true);
+  assert.ok(threat.etaMin !== null && threat.etaMin > 20 && threat.etaMin <= 45, `eta ${threat.etaMin}`);
+  assert.ok(threat.cellLevel < 2, `klasa ${threat.cellLevel}`);
+  assert.equal(threat.chancePct, 50);
 });
 
 test("Szansa with no echo stays the dry 10 (calibration does not apply)", () => {
@@ -1241,6 +1271,84 @@ test("copy-only: growing cell does not change ETA or timeline vs same latest geo
     g.timeline.map((p) => p.level),
     s.timeline.map((p) => p.level),
   );
+});
+
+function blobAtRate(lat: number, lon: number, rate: number): RadarSample[] {
+  const level = levelFromRate(rate);
+  const samples: RadarSample[] = [];
+  for (let i = -2; i <= 2; i++) {
+    for (let j = -2; j <= 2; j++) {
+      samples.push({
+        lat: lat + i * 0.012,
+        lon: lon + j * 0.012,
+        level,
+        rate,
+      });
+    }
+  }
+  return samples;
+}
+
+test("flag off: live computeThreat matches today's gated path (no Lagrangian extra)", () => {
+  const deepening = [
+    frame(0, blobAtRate(50.0, 21.0, 2), 0),
+    frame(600, blobAtRate(50.0, 21.0, 4), 0),
+    frame(1_200, blobAtRate(50.0, 21.0, 6), 0),
+    frame(1_800, blobAtRate(50.0, 21.0, 8), 0),
+  ];
+  const live = computeThreat(city, deepening, []);
+  const forcedOff = computeThreat(city, deepening, [], city, [], false);
+  assert.equal(live.cellTrend, "growing");
+  assert.deepEqual(live.timeline, forcedOff.timeline);
+  assert.equal(live.etaMin, forcedOff.etaMin);
+  const rainy = live.timeline.filter((p) => p.rate > 0 && !p.unknown);
+  assert.ok(rainy.length >= 3);
+  const rates = new Set(rainy.map((p) => p.rate));
+  assert.equal(rates.size, 1, "gated path is persistence — no lead-dependent extra");
+});
+
+test("flag on: deepening trail grows 15–20 min rain; extra is damped after ~30 min", () => {
+  const deepening = [
+    frame(0, blobAtRate(50.0, 21.0, 2), 0),
+    frame(600, blobAtRate(50.0, 21.0, 4), 0),
+    frame(1_200, blobAtRate(50.0, 21.0, 6), 0),
+    frame(1_800, blobAtRate(50.0, 21.0, 8), 0),
+  ];
+  const off = computeThreat(city, deepening, [], city, [], false);
+  const on = computeThreat(city, deepening, [], city, [], true);
+  assert.equal(off.cellTrend, "growing");
+  assert.equal(on.cellTrend, "growing");
+  const at = (threat: ReturnType<typeof computeThreat>, t: number) =>
+    threat.timeline.find((p) => p.t === t);
+  const off0 = at(off, 0)!.rate;
+  const on15 = at(on, 15)!.rate;
+  const on20 = at(on, 20)!.rate;
+  const on50 = at(on, 50)!.rate;
+  assert.equal(at(on, 0)!.rate, off0);
+  assert.ok(on15 > off0, `15 min must take Lagrangian ΔR, got ${on15} vs ${off0}`);
+  assert.ok(on20 > on15, `apply window still accumulating at 20, got ${on20} vs ${on15}`);
+  const extra20 = on20 - at(off, 20)!.rate;
+  const extra50 = on50 - at(off, 50)!.rate;
+  assert.ok(extra50 > 0, "rain still over the pin at 50 is still adjusted");
+  assert.ok(extra50 < extra20, `extra at 50 (${extra50}) must be damped vs 20 (${extra20})`);
+});
+
+test("flag on: translating deepening cell raises 15–20 min rates vs the gated path", () => {
+  const growing = [
+    frame(0, blobAtRate(50.0, 20.4, 2), 43),
+    frame(600, blobAtRate(50.0, 20.55, 4), 32),
+    frame(1_200, blobAtRate(50.0, 20.7, 6), 21),
+    frame(1_800, blobAtRate(50.0, 20.85, 8), 11),
+  ];
+  const off = computeThreat(city, growing, [], city, [], false);
+  const on = computeThreat(city, growing, [], city, [], true);
+  assert.equal(on.cellTrend, "growing");
+  const wet = on.timeline.filter((p) => p.t > 0 && p.t <= 20 && p.rate > 0 && !p.unknown);
+  assert.ok(wet.length > 0, "translating cell must still arrive in the apply window");
+  for (const p of wet) {
+    const base = off.timeline.find((q) => q.t === p.t);
+    assert.ok(base && p.rate > base.rate, `t=${p.t}: grown ${p.rate} vs gated ${base?.rate}`);
+  }
 });
 
 /** Tight 5×5 so the nearest edge stays where we put the centre (±~2.7 km). */
