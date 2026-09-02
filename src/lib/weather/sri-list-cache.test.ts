@@ -71,7 +71,25 @@ test("shared store: a second cold cache does not re-download a fresh listing", a
   assert.equal(fetches.n, 1);
 });
 
-test("listing TTL is on the order of 45–90 s (SRI cadence is 5 min)", () => {
-  assert.ok(SRI_LIST_TTL_MS >= 45_000);
-  assert.ok(SRI_LIST_TTL_MS <= 90_000);
+test("listing TTL is 90 s (SRI cadence is 5 min; matches radarScanCache)", () => {
+  assert.equal(SRI_LIST_TTL_MS, 90_000);
+});
+
+test("after TTL a new consumer fetches IMGW again", async () => {
+  let now = 1_000;
+  const fetches = { n: 0 };
+  const getHtml = createSriListCache({
+    now: () => now,
+    fetchHtml: async () => {
+      fetches.n++;
+      return HTML;
+    },
+  });
+  assert.equal(await getHtml(), HTML);
+  now += SRI_LIST_TTL_MS - 1;
+  assert.equal(await getHtml(), HTML);
+  assert.equal(fetches.n, 1);
+  now += 2;
+  assert.equal(await getHtml(), HTML);
+  assert.equal(fetches.n, 2);
 });

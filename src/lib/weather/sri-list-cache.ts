@@ -7,8 +7,8 @@
  * share one listing. The 7.7 s / 968 KB POST must not run once per Vercel isolate.
  *
  * Layers: in-process TTL + single-flight, then Vercel Runtime Cache (no env,
- * not Redis/KV) when `getCache` is available. Off-platform (Vite, tests) the
- * shared layer is a no-op.
+ * not Redis/KV). Off-platform, `getCache()` falls back to process-local
+ * in-memory — same isolate as the RAM layer, not a second IMGW POST.
  */
 import { getCache } from "@vercel/functions";
 
