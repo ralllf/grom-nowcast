@@ -1062,7 +1062,7 @@ export function computeThreat(
   const overPinNow = nearestKm !== null && nearestKm <= OVER_KM;
   const expectLevel = Math.max(
     pinLevel,
-    overPinNow ? 0 : willHit || approaching ? threatCellLevel : 0,
+    overPinNow ? 0 : (willHit || approaching ? threatCellLevel : 0),
     overPinNow ? 0 : willHit ? tlMaxLevel : 0,
   );
   const hailAtPin = maxRateWithin(lastSamples, place.lat, place.lon, OVER_KM) >= HAIL_RATE;
