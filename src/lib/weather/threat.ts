@@ -30,7 +30,21 @@ const TIMELINE_MIN = 90;
 const TIMELINE_STEP = 5;
 /** Friends-of-friends link for connected echo (z=5 spacing ~12 km; allow one gap). */
 const LINK_KM = 16;
-const MATCH_KM = 45;
+/** 30 min — the window the 10 / 14 / 45 km constants were tuned for (RainViewer). */
+export const GATE_DT_SEC = 30 * 60;
+/** trailOk displacement at GATE_DT_SEC. */
+export const TRAIL_TRUST_KM_30 = 10;
+/** trail-only (no field) displacement at GATE_DT_SEC. */
+export const TRAIL_SOLO_KM_30 = 14;
+/** matchMass centroid gate at GATE_DT_SEC. */
+export const MATCH_KM_30 = 45;
+
+/** Distance gate: old 30-min km scaled by real Δt. */
+export function gateKm(kmAt30Min: number, dtSec: number): number {
+  if (dtSec <= 0) return 0;
+  return kmAt30Min * (dtSec / GATE_DT_SEC);
+}
+
 const MAX_SPEED = 95;
 const MIN_MOVE_SPEED = 4;
 const HORIZON_MIN = 90;
@@ -534,16 +548,17 @@ function massOverlap(a: Mass, b: Mass, linkKm: number): number {
   return hits;
 }
 
-function matchMass(mass: Mass, pool: Mass[]): Mass | null {
+function matchMass(mass: Mass, pool: Mass[], dtSec: number): Mass | null {
+  const matchKm = gateKm(MATCH_KM_30, dtSec);
   let best: Mass | null = null;
   let bestScore = -1;
   for (const prev of pool) {
     const d = haversineKm(mass.lat, mass.lon, prev.lat, prev.lon);
     // Centroid gate is mandatory. Overlap with a nationwide mega-mass must not
     // link a local fragment to a centroid hundreds of km away (fake advection).
-    if (d > MATCH_KM) continue;
+    if (d > matchKm) continue;
     const hits = massOverlap(mass, prev, LINK_KM);
-    const score = hits * 10 + (MATCH_KM - d);
+    const score = hits * 10 + (matchKm - d);
     if (score > bestScore) {
       best = prev;
       bestScore = score;
@@ -591,10 +606,11 @@ function buildMassTrail(mass: Mass, layers: MassLayer[]): { time: number; mass: 
   for (let i = layers.length - 2; i >= 0; i--) {
     const layer = layers[i];
     if (!layer) break;
-    const prev = matchMass(cursor, layer.masses);
+    const dtSec = trail[0]!.time - layer.time;
+    if (dtSec <= 0) break;
+    const prev = matchMass(cursor, layer.masses, dtSec);
     if (!prev) break;
-    const hours = (trail[0]!.time - layer.time) / 3600;
-    if (hours <= 0) break;
+    const hours = dtSec / 3600;
     const moved = haversineKm(prev.lat, prev.lon, cursor.lat, cursor.lon);
     if (moved / hours > MAX_SPEED) break;
     trail.unshift({ time: layer.time, mass: prev });
@@ -615,6 +631,8 @@ function motionForMass(trail: { time: number; mass: Mass }[]): MotionEst | null 
     time: t.time,
   }));
   const trailMot = motionFromTrail(centroids);
+  const dtSec =
+    centroids.length >= 2 ? centroids.at(-1)!.time - centroids[0]!.time : 0;
   const moved =
     centroids.length >= 2
       ? haversineKm(
@@ -639,7 +657,8 @@ function motionForMass(trail: { time: number; mass: Mass }[]): MotionEst | null 
   });
   const field = systemMotion(coreFrames, last.mass.lat, last.mass.lon);
 
-  const trailOk = trailMot && trailMot.speed >= MIN_MOVE_SPEED && moved >= 10;
+  const trailOk =
+    trailMot && trailMot.speed >= MIN_MOVE_SPEED && moved >= gateKm(TRAIL_TRUST_KM_30, dtSec);
   const fieldOk = field && field.speed >= MIN_MOVE_SPEED;
 
   if (trailOk && fieldOk) {
@@ -666,7 +685,7 @@ function motionForMass(trail: { time: number; mass: Mass }[]): MotionEst | null 
     };
   }
 
-  if (trailOk && trail.length >= 3 && moved >= 14) {
+  if (trailOk && trail.length >= 3 && moved >= gateKm(TRAIL_SOLO_KM_30, dtSec)) {
     const confidence = Math.min(
       78,
       Math.round(50 + Math.min(trail.length, 4) * 6 + Math.min(moved, 35) * 0.45),

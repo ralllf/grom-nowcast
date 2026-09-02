@@ -7,7 +7,7 @@ export const SRI_LIST_URL = "https://danepubliczne.imgw.pl/pl/datastore/getFiles
 export const SRI_FILE_BASE = `https://danepubliczne.imgw.pl/pl/datastore/getfiledown/${SRI_DATASTORE_PATH}`;
 
 export const SRI_CADENCE_SEC = 5 * 60;
-export const SRI_HISTORY_FRAMES = 4;
+export const SRI_HISTORY_FRAMES = 7;
 
 /**
  * Live COMPO_SRI `where` attrs (probed 2026-08-31). 800×800, not the 900×900
