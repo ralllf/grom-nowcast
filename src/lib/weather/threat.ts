@@ -105,9 +105,12 @@ function massAnchor(mass: { samples: RadarSample[]; lat: number; lon: number }):
  */
 /** Fallback NCC cell when a frame did not carry `aggregate().cellKm`. */
 const DEFAULT_CELL_KM = 3;
-const GRID_HALF_CELLS = 20; // ±60 km at 3 km cells
+/** SRI motion NCC — 2 km (24 km/h per 5 min) vs 36 km/h at 3 km. Pack stays 3 km. */
+export const SRI_NCC_CELL_KM = 2;
+const GRID_HALF_KM = 60;
+const GRID_HALF_CELLS = 20; // ±60 km at 3 km cells — dense IDW / pack grid
 const GRID_N = GRID_HALF_CELLS * 2;
-const SMOOTH_RADIUS = 3; // cells — ~20 km box at 3 km, scales with cellKm
+const SMOOTH_RADIUS = 3; // cells — ~20 km box at 3 km
 const NCC_MIN = 0.4;
 const PAIR_AGREE_DEG = 40;
 const MAX_SHIFT_KM = 70;
@@ -127,13 +130,30 @@ function kmToLonDeg(km: number, lat: number) {
   return km / (111 * Math.max(Math.cos((lat * Math.PI) / 180), 0.25));
 }
 
-/** NCC bin size — must match packed `aggregate().cellKm` (not a hardcoded 3). */
+/** Packed / class / dense-IDW bin size — must match `aggregate().cellKm`. */
 export function nccCellKm(frames: RadarMemoryFrame[]): number {
   let km = 0;
   for (const f of frames) {
     if (typeof f.cellKm === "number" && f.cellKm > 0) km = Math.max(km, f.cellKm);
   }
   return km > 0 ? km : DEFAULT_CELL_KM;
+}
+
+/** Motion NCC bin size — SRI `nccCellKm` (2) when set; else the pack. */
+export function motionNccCellKm(frames: RadarMemoryFrame[]): number {
+  let km = 0;
+  for (const f of frames) {
+    if (typeof f.nccCellKm === "number" && f.nccCellKm > 0) km = Math.max(km, f.nccCellKm);
+  }
+  return km > 0 ? km : nccCellKm(frames);
+}
+
+function motionGridHalf(cellKm: number): number {
+  return Math.max(8, Math.round(GRID_HALF_KM / cellKm));
+}
+
+function motionGridN(cellKm: number): number {
+  return motionGridHalf(cellKm) * 2;
 }
 
 /** Which NCC cell a lon/lat lands in at `cellKm`. */
@@ -157,37 +177,39 @@ function samplesToGrid(
   lat0: number,
   lon0: number,
   cellKm: number,
+  gridN: number = GRID_N,
+  gridHalf: number = GRID_HALF_CELLS,
 ): Float64Array {
-  const g = new Float64Array(GRID_N * GRID_N);
+  const g = new Float64Array(gridN * gridN);
   const dLat = kmToLatDeg(cellKm);
   const dLon = kmToLonDeg(cellKm, lat0);
   for (const s of samples) {
     if (s.level < 1) continue;
-    const ix = Math.round((s.lon - lon0) / dLon) + GRID_HALF_CELLS;
-    const iy = Math.round((s.lat - lat0) / dLat) + GRID_HALF_CELLS;
-    if (ix < 0 || iy < 0 || ix >= GRID_N || iy >= GRID_N) continue;
-    const i = iy * GRID_N + ix;
+    const ix = Math.round((s.lon - lon0) / dLon) + gridHalf;
+    const iy = Math.round((s.lat - lat0) / dLat) + gridHalf;
+    if (ix < 0 || iy < 0 || ix >= gridN || iy >= gridN) continue;
+    const i = iy * gridN + ix;
     if (s.level > g[i]!) g[i] = s.level;
   }
   return g;
 }
 
-function boxSmooth(src: Float64Array, radius: number): Float64Array {
-  const out = new Float64Array(GRID_N * GRID_N);
-  for (let iy = 0; iy < GRID_N; iy++) {
-    for (let ix = 0; ix < GRID_N; ix++) {
+function boxSmooth(src: Float64Array, radius: number, gridN: number = GRID_N): Float64Array {
+  const out = new Float64Array(gridN * gridN);
+  for (let iy = 0; iy < gridN; iy++) {
+    for (let ix = 0; ix < gridN; ix++) {
       let sum = 0;
       let n = 0;
       for (let dy = -radius; dy <= radius; dy++) {
         for (let dx = -radius; dx <= radius; dx++) {
           const jy = iy + dy;
           const jx = ix + dx;
-          if (jy < 0 || jx < 0 || jy >= GRID_N || jx >= GRID_N) continue;
-          sum += src[jy * GRID_N + jx]!;
+          if (jy < 0 || jx < 0 || jy >= gridN || jx >= gridN) continue;
+          sum += src[jy * gridN + jx]!;
           n++;
         }
       }
-      out[iy * GRID_N + ix] = n > 0 ? sum / n : 0;
+      out[iy * gridN + ix] = n > 0 ? sum / n : 0;
     }
   }
   return out;
@@ -199,22 +221,39 @@ function gridRainCells(g: Float64Array): number {
   return n;
 }
 
+type NccShiftOpts = { gridN?: number; overlapPenalty?: boolean };
+
+function overlapFrac(dix: number, diy: number, gridN: number): number {
+  const ox = gridN - Math.abs(dix);
+  const oy = gridN - Math.abs(diy);
+  if (ox <= 0 || oy <= 0) return 0;
+  return (ox * oy) / (gridN * gridN);
+}
+
 /** Pearson NCC of grid `a` vs `b` shifted by (dix, diy). */
-function nccAtShift(a: Float64Array, b: Float64Array, dix: number, diy: number): number {
+export function nccAtShift(
+  a: Float64Array,
+  b: Float64Array,
+  dix: number,
+  diy: number,
+  opts?: NccShiftOpts,
+): number {
+  const gridN = opts?.gridN ?? GRID_N;
+  const penalize = opts?.overlapPenalty !== false;
   let n = 0;
   let sumA = 0;
   let sumB = 0;
   let sumAA = 0;
   let sumBB = 0;
   let sumAB = 0;
-  for (let iy = 0; iy < GRID_N; iy++) {
+  for (let iy = 0; iy < gridN; iy++) {
     const jy = iy + diy;
-    if (jy < 0 || jy >= GRID_N) continue;
-    for (let ix = 0; ix < GRID_N; ix++) {
+    if (jy < 0 || jy >= gridN) continue;
+    for (let ix = 0; ix < gridN; ix++) {
       const jx = ix + dix;
-      if (jx < 0 || jx >= GRID_N) continue;
-      const av = a[iy * GRID_N + ix]!;
-      const bv = b[jy * GRID_N + jx]!;
+      if (jx < 0 || jx >= gridN) continue;
+      const av = a[iy * gridN + ix]!;
+      const bv = b[jy * gridN + jx]!;
       if (av <= 0 && bv <= 0) continue;
       n++;
       sumA += av;
@@ -230,20 +269,23 @@ function nccAtShift(a: Float64Array, b: Float64Array, dix: number, diy: number):
   const varA = sumAA - n * meanA * meanA;
   const varB = sumBB - n * meanB * meanB;
   if (varA <= 1e-6 || varB <= 1e-6) return -1;
-  return (sumAB - n * meanA * meanB) / Math.sqrt(varA * varB);
+  const pearson = (sumAB - n * meanA * meanB) / Math.sqrt(varA * varB);
+  if (!penalize) return pearson;
+  return pearson * overlapFrac(dix, diy, gridN);
 }
 
-function bestNccShift(
+export function bestNccShift(
   a: Float64Array,
   b: Float64Array,
   maxC: number,
+  opts?: NccShiftOpts,
 ): { dix: number; diy: number; score: number } | null {
   // Coarse-to-fine: the smoothed field is ~20 km wide, so a stride-2 scan cannot skip
   // the peak; refine ±1 around the best coarse shift. ~5× fewer correlations.
   const stride = maxC > 6 ? 2 : 1;
   let best: { dix: number; diy: number; score: number } | null = null;
   const consider = (dix: number, diy: number) => {
-    const score = nccAtShift(a, b, dix, diy);
+    const score = nccAtShift(a, b, dix, diy, opts);
     if (score < NCC_MIN) return;
     if (!best || score > best.score) best = { dix, diy, score };
   };
@@ -262,7 +304,7 @@ function bestNccShift(
   return best;
 }
 
-function pairMotionNcc(
+export function pairMotionNcc(
   prev: RadarSample[],
   next: RadarSample[],
   lat0: number,
@@ -271,14 +313,22 @@ function pairMotionNcc(
   cellKm: number,
 ): { speed: number; bearing: number; moved: number; score: number } | null {
   if (hours <= 0) return null;
-  const rawA = samplesToGrid(prev, lat0, lon0, cellKm);
-  const rawB = samplesToGrid(next, lat0, lon0, cellKm);
+  const gridN = motionGridN(cellKm);
+  const gridHalf = motionGridHalf(cellKm);
+  const rawA = samplesToGrid(prev, lat0, lon0, cellKm, gridN, gridHalf);
+  const rawB = samplesToGrid(next, lat0, lon0, cellKm, gridN, gridHalf);
   if (gridRainCells(rawA) < 4 || gridRainCells(rawB) < 4) return null;
-  const a = boxSmooth(rawA, SMOOTH_RADIUS);
-  const b = boxSmooth(rawB, SMOOTH_RADIUS);
+  const smoothR =
+    cellKm < DEFAULT_CELL_KM
+      ? Math.max(1, Math.round((SMOOTH_RADIUS * DEFAULT_CELL_KM) / cellKm))
+      : SMOOTH_RADIUS;
+  const a = boxSmooth(rawA, smoothR, gridN);
+  const b = boxSmooth(rawB, smoothR, gridN);
   const maxKm = Math.min(MAX_SPEED * hours, MAX_SHIFT_KM);
-  const maxC = Math.max(1, Math.min(MAX_SHIFT_CELLS, Math.ceil(maxKm / cellKm)));
-  const best = bestNccShift(a, b, maxC);
+  const capCells = Math.max(1, Math.floor(gridN / 3));
+  const maxC = Math.max(1, Math.min(MAX_SHIFT_CELLS, capCells, Math.ceil(maxKm / cellKm)));
+  const nccOpts = { gridN };
+  const best = bestNccShift(a, b, maxC, nccOpts);
   if (!best) return null;
   if (best.dix === 0 && best.diy === 0) {
     return { speed: 0, bearing: 0, moved: 0, score: best.score };
@@ -287,8 +337,8 @@ function pairMotionNcc(
   const refine = (axis: "x" | "y") => {
     const at = (d: number) =>
       axis === "x"
-        ? nccAtShift(a, b, best.dix + d, best.diy)
-        : nccAtShift(a, b, best.dix, best.diy + d);
+        ? nccAtShift(a, b, best.dix + d, best.diy, nccOpts)
+        : nccAtShift(a, b, best.dix, best.diy + d, nccOpts);
     const m = at(-1);
     const c = best.score;
     const pl = at(1);
@@ -311,9 +361,13 @@ function pairMotionNcc(
   };
 }
 
-function systemMotion(frames: RadarMemoryFrame[], lat0: number, lon0: number): MotionEst | null {
+function systemMotion(
+  frames: RadarMemoryFrame[],
+  lat0: number,
+  lon0: number,
+  cellKm: number = motionNccCellKm(frames),
+): MotionEst | null {
   if (frames.length < 2) return null;
-  const cellKm = nccCellKm(frames);
   type Part = { deg: number; w: number; speed: number; score: number };
   const parts: Part[] = [];
 
@@ -448,7 +502,8 @@ export const MOTION_IDW_CUTOFF_KM = 80;
 export const BACK_TRAJ_ITERS = 3;
 
 /**
- * Dense motion on the existing NCC grid (3 km unless a frame carried a coarser cellKm).
+ * Dense motion on the pack grid (3 km unless a frame carried a coarser cellKm).
+ * SRI motion NCC is 2 km; this field stays on the packed cellKm.
  * Cells near a mass use inverse-distance of that mass's vector; the rest get `background`
  * (regional NCC, else the primary pin vector).
  */
@@ -880,7 +935,10 @@ function buildMassTrail(mass: Mass, layers: MassLayer[]): { time: number; mass: 
   return trail;
 }
 
-function motionForMass(trail: { time: number; mass: Mass }[]): MotionEst | null {
+function motionForMass(
+  trail: { time: number; mass: Mass }[],
+  cellKm: number,
+): MotionEst | null {
   if (trail.length < 2) return null;
   const last = trail.at(-1);
   if (!last) return null;
@@ -914,9 +972,10 @@ function motionForMass(trail: { time: number; mass: Mass }[]): MotionEst | null 
       samples: near.length >= 5 ? near : pool,
       maxLevel: t.mass.maxLevel,
       nearestKm: null,
+      nccCellKm: cellKm,
     };
   });
-  const field = systemMotion(coreFrames, last.mass.lat, last.mass.lon);
+  const field = systemMotion(coreFrames, last.mass.lat, last.mass.lon, cellKm);
 
   const trailOk =
     trailMot && trailMot.speed >= MIN_MOVE_SPEED && moved >= gateKm(TRAIL_TRUST_KM_30, dtSec);
@@ -1103,6 +1162,8 @@ export function computeThreat(
   let cellTrend: CellTrend = null;
   const motionAnchors: MotionAnchor[] = [];
 
+  const motionKm = motionNccCellKm(usable);
+
   if (usable.length >= 2 && last) {
     const layers: MassLayer[] = usable.map((f) => ({
       time: f.time,
@@ -1153,7 +1214,7 @@ export function computeThreat(
 
     for (const mass of nowMasses) {
       const trail = buildMassTrail(mass, layers);
-      const motion = motionForMass(trail);
+      const motion = motionForMass(trail, motionKm);
       if (!motion || motion.speed < MIN_MOVE_SPEED) continue;
       if (motion.confidence < MOTION_CONFIDENCE_MIN) continue;
 
@@ -1255,7 +1316,7 @@ export function computeThreat(
       const inward = bearingDeg(place.lat, place.lon, center.lat, center.lon);
       center = destPoint(center.lat, center.lon, inward, 20);
     }
-    const regional = systemMotion(usable, center.lat, center.lon);
+    const regional = systemMotion(usable, center.lat, center.lon, motionKm);
     if (
       regional &&
       regional.speed >= MIN_MOVE_SPEED &&

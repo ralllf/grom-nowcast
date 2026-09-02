@@ -110,3 +110,46 @@ test("framesFromScan keeps a 6 km scan cellKm on every frame", () => {
   assert.equal(frames[0]!.cellKm, 6);
   assert.equal(frames[1]!.cellKm, 6);
 });
+
+test("framesFromScan keeps SRI nccCellKm=2 off the 3 km pack", () => {
+  const scan: RadarScan = {
+    host: "",
+    generated: 0,
+    latestTime: 2,
+    past: [],
+    nowcast: [],
+    samples: [],
+    prevSamples: [],
+    prevTime: null,
+    maxLevel: 0,
+    nearestKm: null,
+    echoCount: 0,
+    cellKm: 3,
+    analysisSource: "sri",
+    history: [
+      {
+        time: 1,
+        samples: [],
+        maxLevel: 2,
+        nearestKm: null,
+        packed: packSamples(samples.slice(0, 1)),
+        cellKm: 3,
+        nccCellKm: 2,
+      },
+      {
+        time: 2,
+        samples: [],
+        maxLevel: 4,
+        nearestKm: null,
+        packed: packSamples(samples),
+        cellKm: 3,
+        nccCellKm: 2,
+      },
+    ],
+  };
+  const frames = framesFromScan(scan);
+  assert.equal(frames[0]!.cellKm, 3);
+  assert.equal(frames[1]!.cellKm, 3);
+  assert.equal(frames[0]!.nccCellKm, 2);
+  assert.equal(frames[1]!.nccCellKm, 2);
+});
