@@ -9,7 +9,7 @@ IMGW COMPO_SRI .sri.h5 (datastore, 5 min)  ──outage──▶  RainViewer kaf
   próbki (lat, lon, level 1–4)  ×  4 skany (SRI: 15–20 min; fallback: ~30 min)
         │
         ▼
-  masy (flood-fill) → siatka km → smooth dużej skali → NCC (TREC)
+  masy (flood-fill) → siatka km → smooth dużej skali → NCC (TREC; SRI: 2 km)
         │  QC korelacji; strzałki = pole ruchu (bez pinezki)
         │
         ├── canvas: strzałki z rdzeni mas, długość ∝ prędkość (~30 min)
@@ -52,8 +52,8 @@ Klatki **nie idą do gita ani bazy**. Klient trzyma ostatnie skany w Zustand (RA
 
 ## Komórki i wektory
 
-1. **Tożsamość masy:** flood-fill / friends-of-friends po próbkach `level ≥ 1` (link ~20 km). Jedna spójna masa echa = jeden obiekt.
-2. **Ruch echa:** trop centroidu masy + NCC. Mega-masa (>140 km) → **split na kafelki ~55 km** (nie wyrzucamy całego frontu). Strzałka przy pewności ≥ **72**, zgodności trop↔NCC, stabilnej liczbie próbek w tropie. Max **3** strzałki (po pewności).
+1. **Tożsamość masy:** flood-fill / friends-of-friends po próbkach `level ≥ 1` (link 2 komórki, ≈ 6–7 km). Rdzenie = lokalne maksima ≥ klasa 3. Jedna spójna masa / jeden rdzeń = jeden obiekt — nie tniemy frontu na kafelki 55 km.
+2. **Ruch echa:** trop centroidu masy + NCC. Strzałka przy pewności ≥ **72**, zgodności trop↔NCC, stabilnej liczbie próbek w tropie. Max **3** strzałki (po pewności).
 3. **Kotwica na mapie:** środek masy. Długość ≈ prędkość × 30 min.
 4. **Pinezka nie przebudowuje kresków.** Snapshot radaru jest wspólny dla kraju; wybór miejsca = ostrzeżenia + ETA/szansa na tych samych klatkach.
 5. Prędkość z przesunięcia siatki / bazy ~30 min. Poniżej ~4 km/h = prawie stoi.
@@ -83,18 +83,20 @@ szczeblu. To nie model MESO-NH. UI mówi „szansa”, nie „pewność”.
 
 ## Trafi czy minie — z próbek, nie z centroidu
 
-Wektor ruchu dla pinezki: tor własnej masy (trop centroidu + NCC), a gdy go nie ma —
-**regionalny NCC** na polu wokół *najbliższego echa* (`REGIONAL_CONFIDENCE_MIN`). NCC liczy
-się na siatce **3 km** (jak próbki) z podpikselowym wierzchołkiem (parabola) i wyszukiwaniem
+Wektor ruchu na pinezkę: pole z wektorów pewnych mas (IDW na siatce 3 km) plus
+**regionalny NCC** w tle (`REGIONAL_CONFIDENCE_MIN`). NCC na SRI liczy
+się na siatce **2 km** (pack/klasy zostają na 3 km) z karą za małe pokrycie okna,
+podpikselowym wierzchołkiem (parabola) i wyszukiwaniem
 coarse-to-fine. `willHit`, `etaMin` i „minie” wynikają z **adwekcji rzeczywistych próbek**
-nad pinezkę — nie z tego, czy *środek masy* przejdzie 5 km od pinezki. Front szeroki na
+nad pinezkę po wektorze lokalnym — nie z jednego wektora głównej masy i nie z tego,
+czy *środek masy* przejdzie 5 km od pinezki. Front szeroki na
 50 km ze środkiem 20 km obok **trafia**. Promień zapytania rośnie z wyprzedzeniem
 (~15 % przemieszczenia, max +6 km). Alert liczy ETA **do progu intensywności**
 (`etaToLevel`), więc mżawka nie maskuje ulewy. Liczby: [`docs/HINDCAST.md`](HINDCAST.md).
 
 ## Oś czasu opadu (jak MeteoSwiss)
 
-Pod statystykami jest pasek **0–90 min co 5 min**: ile mm/h będzie nad pinezką. Liczymy przez **adwekcję wsteczną**: powietrze, które za *t* minut będzie nad pinezką, jest teraz w punkcie `pinezka − v·t` (wektor z toru głównej masy). Bierzemy max mm/h w promieniu ~6 km od tego punktu. Bez wiarygodnego ruchu — persystencja („bez ruchu — jak teraz”), oznaczona w UI. To ekstrapolacja liniowa: bez wzrostu/zaniku komórek, bez modelu NWP. MeteoSwiss (INCA/NowPrecip) robi to samo na 1 km i dokleja model po ~1–2 h — tu tego nie ma.
+Pod statystykami jest pasek **0–90 min co 5 min**: ile mm/h będzie nad pinezką. Liczymy przez **adwekcję wsteczną na gęstym polu**: wektory pewnych mas interpolowane odwrotną odległością na siatkę 3 km (regionalny NCC w tle), potem 2–3 iteracje punktu stałego trajektorii wstecznej na każdy krok (semi-Lagrange, Germann & Zawadzki 2002) — nie jeden wektor głównej masy na wszystkie próbki. Promień zapytania rośnie z wyprzedzeniem (~15 % przemieszczenia, max +6 km). Bez wiarygodnego ruchu — persystencja („bez ruchu — jak teraz”), oznaczona w UI. Bez wzrostu/zaniku komórek, bez modelu NWP.
 
 ## Kopiowanie komunikatu
 

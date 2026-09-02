@@ -27,8 +27,10 @@ export type RadarMemoryFrame = {
   packed?: string;
   /** True when at least one Poland-domain tile failed to fetch. */
   degraded?: boolean;
-  /** Sample spacing after `aggregate()` — NCC bins at this km. */
+  /** Sample spacing after `aggregate()` — packed field, classes, dense IDW. */
   cellKm?: number;
+  /** Motion NCC bin km. SRI uses 2; absent → pack `cellKm`. */
+  nccCellKm?: number;
 };
 
 export type RadarScan = {

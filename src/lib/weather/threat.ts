@@ -29,8 +29,14 @@ const OVER_KM = 8;
 /** Pin timeline: horizon and step (minutes). */
 const TIMELINE_MIN = 90;
 const TIMELINE_STEP = 5;
-/** Friends-of-friends link for connected echo (z=5 spacing ~12 km; allow one gap). */
-const LINK_KM = 16;
+/**
+ * Friends-of-friends link for identity — 2 cells at the 3 km analysis grid
+ * (≈ 6–7 km). 16 km used to bridge 5-cell gaps and glue a rainy day into one
+ * mega-mass that splitOversizedMass then cut into 55 km lon/lat tiles.
+ */
+export const LINK_KM = 6.5;
+/** Local maxima at or above this klasa are tracked cores. */
+const CORE_MIN_LEVEL = 3;
 /** 30 min — the window the 10 / 14 / 45 km constants were tuned for (RainViewer). */
 export const GATE_DT_SEC = 30 * 60;
 /** trailOk displacement at GATE_DT_SEC. */
@@ -53,10 +59,6 @@ const MAX_TRACKS = 3;
 const CORE_RADIUS_KM = 18;
 /** Arrow forward shaft = this many minutes of travel at estimated speed. */
 const ARROW_AHEAD_MIN = 30;
-/** Reject single masses larger than this — they get split into local tiles instead. */
-const MAX_MASS_SPAN_KM = 140;
-/** Spatial tile size when splitting an oversized connected component. */
-const SPLIT_TILE_KM = 55;
 /** Ignore tiny chips — they jitter and invent fake bearings. */
 const MIN_MASS_SAMPLES = 12;
 /** Hide arrows below this motion confidence (0–100). */
@@ -103,9 +105,12 @@ function massAnchor(mass: { samples: RadarSample[]; lat: number; lon: number }):
  */
 /** Fallback NCC cell when a frame did not carry `aggregate().cellKm`. */
 const DEFAULT_CELL_KM = 3;
-const GRID_HALF_CELLS = 20; // ±60 km at 3 km cells
+/** SRI motion NCC — 2 km (24 km/h per 5 min) vs 36 km/h at 3 km. Pack stays 3 km. */
+export const SRI_NCC_CELL_KM = 2;
+const GRID_HALF_KM = 60;
+const GRID_HALF_CELLS = 20; // ±60 km at 3 km cells — dense IDW / pack grid
 const GRID_N = GRID_HALF_CELLS * 2;
-const SMOOTH_RADIUS = 3; // cells — ~20 km box at 3 km, scales with cellKm
+const SMOOTH_RADIUS = 3; // cells — ~20 km box at 3 km
 const NCC_MIN = 0.4;
 const PAIR_AGREE_DEG = 40;
 const MAX_SHIFT_KM = 70;
@@ -125,13 +130,30 @@ function kmToLonDeg(km: number, lat: number) {
   return km / (111 * Math.max(Math.cos((lat * Math.PI) / 180), 0.25));
 }
 
-/** NCC bin size — must match packed `aggregate().cellKm` (not a hardcoded 3). */
+/** Packed / class / dense-IDW bin size — must match `aggregate().cellKm`. */
 export function nccCellKm(frames: RadarMemoryFrame[]): number {
   let km = 0;
   for (const f of frames) {
     if (typeof f.cellKm === "number" && f.cellKm > 0) km = Math.max(km, f.cellKm);
   }
   return km > 0 ? km : DEFAULT_CELL_KM;
+}
+
+/** Motion NCC bin size — SRI `nccCellKm` (2) when set; else the pack. */
+export function motionNccCellKm(frames: RadarMemoryFrame[]): number {
+  let km = 0;
+  for (const f of frames) {
+    if (typeof f.nccCellKm === "number" && f.nccCellKm > 0) km = Math.max(km, f.nccCellKm);
+  }
+  return km > 0 ? km : nccCellKm(frames);
+}
+
+function motionGridHalf(cellKm: number): number {
+  return Math.max(8, Math.round(GRID_HALF_KM / cellKm));
+}
+
+function motionGridN(cellKm: number): number {
+  return motionGridHalf(cellKm) * 2;
 }
 
 /** Which NCC cell a lon/lat lands in at `cellKm`. */
@@ -155,37 +177,39 @@ function samplesToGrid(
   lat0: number,
   lon0: number,
   cellKm: number,
+  gridN: number = GRID_N,
+  gridHalf: number = GRID_HALF_CELLS,
 ): Float64Array {
-  const g = new Float64Array(GRID_N * GRID_N);
+  const g = new Float64Array(gridN * gridN);
   const dLat = kmToLatDeg(cellKm);
   const dLon = kmToLonDeg(cellKm, lat0);
   for (const s of samples) {
     if (s.level < 1) continue;
-    const ix = Math.round((s.lon - lon0) / dLon) + GRID_HALF_CELLS;
-    const iy = Math.round((s.lat - lat0) / dLat) + GRID_HALF_CELLS;
-    if (ix < 0 || iy < 0 || ix >= GRID_N || iy >= GRID_N) continue;
-    const i = iy * GRID_N + ix;
+    const ix = Math.round((s.lon - lon0) / dLon) + gridHalf;
+    const iy = Math.round((s.lat - lat0) / dLat) + gridHalf;
+    if (ix < 0 || iy < 0 || ix >= gridN || iy >= gridN) continue;
+    const i = iy * gridN + ix;
     if (s.level > g[i]!) g[i] = s.level;
   }
   return g;
 }
 
-function boxSmooth(src: Float64Array, radius: number): Float64Array {
-  const out = new Float64Array(GRID_N * GRID_N);
-  for (let iy = 0; iy < GRID_N; iy++) {
-    for (let ix = 0; ix < GRID_N; ix++) {
+function boxSmooth(src: Float64Array, radius: number, gridN: number = GRID_N): Float64Array {
+  const out = new Float64Array(gridN * gridN);
+  for (let iy = 0; iy < gridN; iy++) {
+    for (let ix = 0; ix < gridN; ix++) {
       let sum = 0;
       let n = 0;
       for (let dy = -radius; dy <= radius; dy++) {
         for (let dx = -radius; dx <= radius; dx++) {
           const jy = iy + dy;
           const jx = ix + dx;
-          if (jy < 0 || jx < 0 || jy >= GRID_N || jx >= GRID_N) continue;
-          sum += src[jy * GRID_N + jx]!;
+          if (jy < 0 || jx < 0 || jy >= gridN || jx >= gridN) continue;
+          sum += src[jy * gridN + jx]!;
           n++;
         }
       }
-      out[iy * GRID_N + ix] = n > 0 ? sum / n : 0;
+      out[iy * gridN + ix] = n > 0 ? sum / n : 0;
     }
   }
   return out;
@@ -197,22 +221,39 @@ function gridRainCells(g: Float64Array): number {
   return n;
 }
 
+type NccShiftOpts = { gridN?: number; overlapPenalty?: boolean };
+
+function overlapFrac(dix: number, diy: number, gridN: number): number {
+  const ox = gridN - Math.abs(dix);
+  const oy = gridN - Math.abs(diy);
+  if (ox <= 0 || oy <= 0) return 0;
+  return (ox * oy) / (gridN * gridN);
+}
+
 /** Pearson NCC of grid `a` vs `b` shifted by (dix, diy). */
-function nccAtShift(a: Float64Array, b: Float64Array, dix: number, diy: number): number {
+export function nccAtShift(
+  a: Float64Array,
+  b: Float64Array,
+  dix: number,
+  diy: number,
+  opts?: NccShiftOpts,
+): number {
+  const gridN = opts?.gridN ?? GRID_N;
+  const penalize = opts?.overlapPenalty !== false;
   let n = 0;
   let sumA = 0;
   let sumB = 0;
   let sumAA = 0;
   let sumBB = 0;
   let sumAB = 0;
-  for (let iy = 0; iy < GRID_N; iy++) {
+  for (let iy = 0; iy < gridN; iy++) {
     const jy = iy + diy;
-    if (jy < 0 || jy >= GRID_N) continue;
-    for (let ix = 0; ix < GRID_N; ix++) {
+    if (jy < 0 || jy >= gridN) continue;
+    for (let ix = 0; ix < gridN; ix++) {
       const jx = ix + dix;
-      if (jx < 0 || jx >= GRID_N) continue;
-      const av = a[iy * GRID_N + ix]!;
-      const bv = b[jy * GRID_N + jx]!;
+      if (jx < 0 || jx >= gridN) continue;
+      const av = a[iy * gridN + ix]!;
+      const bv = b[jy * gridN + jx]!;
       if (av <= 0 && bv <= 0) continue;
       n++;
       sumA += av;
@@ -228,20 +269,23 @@ function nccAtShift(a: Float64Array, b: Float64Array, dix: number, diy: number):
   const varA = sumAA - n * meanA * meanA;
   const varB = sumBB - n * meanB * meanB;
   if (varA <= 1e-6 || varB <= 1e-6) return -1;
-  return (sumAB - n * meanA * meanB) / Math.sqrt(varA * varB);
+  const pearson = (sumAB - n * meanA * meanB) / Math.sqrt(varA * varB);
+  if (!penalize) return pearson;
+  return pearson * overlapFrac(dix, diy, gridN);
 }
 
-function bestNccShift(
+export function bestNccShift(
   a: Float64Array,
   b: Float64Array,
   maxC: number,
+  opts?: NccShiftOpts,
 ): { dix: number; diy: number; score: number } | null {
   // Coarse-to-fine: the smoothed field is ~20 km wide, so a stride-2 scan cannot skip
   // the peak; refine ±1 around the best coarse shift. ~5× fewer correlations.
   const stride = maxC > 6 ? 2 : 1;
   let best: { dix: number; diy: number; score: number } | null = null;
   const consider = (dix: number, diy: number) => {
-    const score = nccAtShift(a, b, dix, diy);
+    const score = nccAtShift(a, b, dix, diy, opts);
     if (score < NCC_MIN) return;
     if (!best || score > best.score) best = { dix, diy, score };
   };
@@ -260,7 +304,7 @@ function bestNccShift(
   return best;
 }
 
-function pairMotionNcc(
+export function pairMotionNcc(
   prev: RadarSample[],
   next: RadarSample[],
   lat0: number,
@@ -269,14 +313,22 @@ function pairMotionNcc(
   cellKm: number,
 ): { speed: number; bearing: number; moved: number; score: number } | null {
   if (hours <= 0) return null;
-  const rawA = samplesToGrid(prev, lat0, lon0, cellKm);
-  const rawB = samplesToGrid(next, lat0, lon0, cellKm);
+  const gridN = motionGridN(cellKm);
+  const gridHalf = motionGridHalf(cellKm);
+  const rawA = samplesToGrid(prev, lat0, lon0, cellKm, gridN, gridHalf);
+  const rawB = samplesToGrid(next, lat0, lon0, cellKm, gridN, gridHalf);
   if (gridRainCells(rawA) < 4 || gridRainCells(rawB) < 4) return null;
-  const a = boxSmooth(rawA, SMOOTH_RADIUS);
-  const b = boxSmooth(rawB, SMOOTH_RADIUS);
+  const smoothR =
+    cellKm < DEFAULT_CELL_KM
+      ? Math.max(1, Math.round((SMOOTH_RADIUS * DEFAULT_CELL_KM) / cellKm))
+      : SMOOTH_RADIUS;
+  const a = boxSmooth(rawA, smoothR, gridN);
+  const b = boxSmooth(rawB, smoothR, gridN);
   const maxKm = Math.min(MAX_SPEED * hours, MAX_SHIFT_KM);
-  const maxC = Math.max(1, Math.min(MAX_SHIFT_CELLS, Math.ceil(maxKm / cellKm)));
-  const best = bestNccShift(a, b, maxC);
+  const capCells = Math.max(1, Math.floor(gridN / 3));
+  const maxC = Math.max(1, Math.min(MAX_SHIFT_CELLS, capCells, Math.ceil(maxKm / cellKm)));
+  const nccOpts = { gridN };
+  const best = bestNccShift(a, b, maxC, nccOpts);
   if (!best) return null;
   if (best.dix === 0 && best.diy === 0) {
     return { speed: 0, bearing: 0, moved: 0, score: best.score };
@@ -285,8 +337,8 @@ function pairMotionNcc(
   const refine = (axis: "x" | "y") => {
     const at = (d: number) =>
       axis === "x"
-        ? nccAtShift(a, b, best.dix + d, best.diy)
-        : nccAtShift(a, b, best.dix, best.diy + d);
+        ? nccAtShift(a, b, best.dix + d, best.diy, nccOpts)
+        : nccAtShift(a, b, best.dix, best.diy + d, nccOpts);
     const m = at(-1);
     const c = best.score;
     const pl = at(1);
@@ -309,9 +361,13 @@ function pairMotionNcc(
   };
 }
 
-function systemMotion(frames: RadarMemoryFrame[], lat0: number, lon0: number): MotionEst | null {
+function systemMotion(
+  frames: RadarMemoryFrame[],
+  lat0: number,
+  lon0: number,
+  cellKm: number = motionNccCellKm(frames),
+): MotionEst | null {
   if (frames.length < 2) return null;
-  const cellKm = nccCellKm(frames);
   type Part = { deg: number; w: number; speed: number; score: number };
   const parts: Part[] = [];
 
@@ -437,36 +493,220 @@ function meanRateWithin(samples: RadarSample[], lat: number, lon: number, maxKm:
   return n === 0 ? 0 : sum / n;
 }
 
+export type MotionVec = { bearing: number; speedKmh: number };
+export type MotionAnchor = MotionVec & { lat: number; lon: number };
+
+/** Inverse-distance cutoff when painting per-mass vectors onto the NCC grid. */
+export const MOTION_IDW_CUTOFF_KM = 80;
+/** Fixed-point back-trajectory iterations (Germann & Zawadzki 2002, cheap SL). */
+export const BACK_TRAJ_ITERS = 3;
+
 /**
- * Rain at the pin for the next 90 minutes by backward advection: the air that will be
- * over the pin at time t is now at pin − v·t. With no usable motion, persistence.
+ * Dense motion on the pack grid (3 km unless a frame carried a coarser cellKm).
+ * SRI motion NCC is 2 km; this field stays on the packed cellKm.
+ * Cells near a mass use inverse-distance of that mass's vector; the rest get `background`
+ * (regional NCC, else the primary pin vector).
+ */
+export type MotionField = {
+  lat0: number;
+  lon0: number;
+  cellKm: number;
+  ux: Float64Array;
+  uy: Float64Array;
+  background: MotionVec | null;
+  anchors: MotionAnchor[];
+};
+
+export function isMotionField(
+  motion: MotionField | MotionVec,
+): motion is MotionField {
+  return "ux" in motion;
+}
+
+function vecToUv(v: MotionVec): { ux: number; uy: number } {
+  const r = (v.bearing * Math.PI) / 180;
+  return { ux: v.speedKmh * Math.sin(r), uy: v.speedKmh * Math.cos(r) };
+}
+
+function uvToVec(ux: number, uy: number): MotionVec {
+  return {
+    speedKmh: Math.hypot(ux, uy),
+    bearing: ((Math.atan2(ux, uy) * 180) / Math.PI + 360) % 360,
+  };
+}
+
+function idwUv(
+  anchors: MotionAnchor[],
+  lat: number,
+  lon: number,
+  cutoffKm: number,
+): { ux: number; uy: number } | null {
+  let nx = 0;
+  let ny = 0;
+  let wsum = 0;
+  for (const a of anchors) {
+    const d = haversineKm(lat, lon, a.lat, a.lon);
+    if (d > cutoffKm) continue;
+    const w = 1 / (d * d + 1);
+    const uv = vecToUv(a);
+    nx += w * uv.ux;
+    ny += w * uv.uy;
+    wsum += w;
+  }
+  if (wsum <= 0) return null;
+  return { ux: nx / wsum, uy: ny / wsum };
+}
+
+export function buildMotionField(
+  anchors: MotionAnchor[],
+  lat0: number,
+  lon0: number,
+  cellKm: number,
+  background: MotionVec | null,
+): MotionField {
+  const ux = new Float64Array(GRID_N * GRID_N);
+  const uy = new Float64Array(GRID_N * GRID_N);
+  ux.fill(Number.NaN);
+  uy.fill(Number.NaN);
+  const dLat = kmToLatDeg(cellKm);
+  const dLon = kmToLonDeg(cellKm, lat0);
+  const bg = background ? vecToUv(background) : null;
+  for (let iy = 0; iy < GRID_N; iy++) {
+    for (let ix = 0; ix < GRID_N; ix++) {
+      const lat = lat0 + (iy - GRID_HALF_CELLS) * dLat;
+      const lon = lon0 + (ix - GRID_HALF_CELLS) * dLon;
+      const idw = idwUv(anchors, lat, lon, MOTION_IDW_CUTOFF_KM);
+      const i = iy * GRID_N + ix;
+      if (idw) {
+        ux[i] = idw.ux;
+        uy[i] = idw.uy;
+      } else if (bg) {
+        ux[i] = bg.ux;
+        uy[i] = bg.uy;
+      }
+    }
+  }
+  return { lat0, lon0, cellKm, ux, uy, background, anchors };
+}
+
+/** Local vector at a lon/lat — grid lookup, then on-the-fly IDW, then background. */
+export function motionAt(
+  motion: MotionField | MotionVec,
+  lat: number,
+  lon: number,
+): MotionVec | null {
+  if (!isMotionField(motion)) return motion;
+  const cell = nccSampleCell(lat, lon, motion.lat0, motion.lon0, motion.cellKm);
+  if (cell) {
+    const i = cell.iy * GRID_N + cell.ix;
+    const x = motion.ux[i]!;
+    const y = motion.uy[i]!;
+    if (Number.isFinite(x) && Number.isFinite(y)) return uvToVec(x, y);
+  }
+  const idw = idwUv(motion.anchors, lat, lon, MOTION_IDW_CUTOFF_KM);
+  if (idw) return uvToVec(idw.ux, idw.uy);
+  return motion.background;
+}
+
+/**
+ * Departure point of air that arrives at the pin after `tMin` minutes.
+ * `iterations = 1` is a single Euler hop using v(pin); 2–3 is the cheap SL fixed point.
+ */
+export function backTrajectory(
+  pinLat: number,
+  pinLon: number,
+  tMin: number,
+  motion: MotionField | MotionVec,
+  iterations: number = BACK_TRAJ_ITERS,
+): { lat: number; lon: number } {
+  if (tMin <= 0) return { lat: pinLat, lon: pinLon };
+  const hours = tMin / 60;
+  let at = { lat: pinLat, lon: pinLon };
+  const steps = Math.max(1, iterations);
+  for (let i = 0; i < steps; i++) {
+    const v = motionAt(motion, at.lat, at.lon);
+    if (!v || v.speedKmh < 0.1) return i === 0 ? { lat: pinLat, lon: pinLon } : at;
+    at = destPoint(pinLat, pinLon, (v.bearing + 180) % 360, v.speedKmh * hours);
+  }
+  return at;
+}
+
+function sampleArrivesPin(
+  s: RadarSample,
+  pinLat: number,
+  pinLon: number,
+  hours: number,
+  reach: number,
+  motion: MotionField | MotionVec,
+  fallbackAt: { lat: number; lon: number },
+): boolean {
+  const v = motionAt(motion, s.lat, s.lon);
+  if (v && v.speedKmh >= 0.1) {
+    const dest = destPoint(s.lat, s.lon, v.bearing, v.speedKmh * hours);
+    return haversineKm(dest.lat, dest.lon, pinLat, pinLon) <= reach;
+  }
+  return haversineKm(s.lat, s.lon, fallbackAt.lat, fallbackAt.lon) <= reach;
+}
+
+/**
+ * Rain at the pin for the next 90 minutes by backward advection on a motion field:
+ * the air over the pin at time t left from an iterated departure (semi-Lagrangian),
+ * and each sample is moved with its *local* vector — not one pinMotion for the lot.
+ * A lone `{ bearing, speedKmh }` is a uniform field (old one-vector path).
  * A step off the SRI composite is `unknown`, not a dry (rate 0) miss.
  */
 export function pinTimeline(
   samples: RadarSample[],
   pinLat: number,
   pinLon: number,
-  motion: { bearing: number; speedKmh: number } | null,
+  motion: MotionField | MotionVec | null,
   coverage: SriGrid = COMPO_SRI_GRID,
 ): TimelinePoint[] {
   const out: TimelinePoint[] = [];
   const near = nearPin(samples, pinLat, pinLon, TRACK_MAX_KM + OVER_KM);
   const radius = OVER_KM * 0.75;
   for (let t = 0; t <= TIMELINE_MIN; t += TIMELINE_STEP) {
-    let at = { lat: pinLat, lon: pinLon };
+    const at =
+      motion && t > 0
+        ? backTrajectory(pinLat, pinLon, t, motion)
+        : { lat: pinLat, lon: pinLon };
+    const slIn = inSriComposite(at.lat, at.lon, coverage);
+    const hours = t / 60;
+    const disp = motion && t > 0 ? haversineKm(pinLat, pinLon, at.lat, at.lon) : 0;
+    const grow = motion ? 0.15 * disp : 0;
+    const reach = radius + Math.min(grow, 6);
+
+    const arriving: RadarSample[] = [];
     if (motion && t > 0) {
-      const back = (motion.bearing + 180) % 360;
-      at = destPoint(pinLat, pinLon, back, motion.speedKmh * (t / 60));
+      for (const s of near) {
+        if (sampleArrivesPin(s, pinLat, pinLon, hours, reach, motion, at)) arriving.push(s);
+      }
     }
-    if (!inSriComposite(at.lat, at.lon, coverage)) {
-      out.push({ t, level: 0, rate: 0, unknown: true });
+
+    if (!slIn) {
+      if (arriving.length === 0) {
+        out.push({ t, level: 0, rate: 0, unknown: true });
+        continue;
+      }
+    } else if (!motion || t === 0) {
+      if (!inSriComposite(pinLat, pinLon, coverage) && t === 0) {
+        out.push({ t, level: 0, rate: 0, unknown: true });
+        continue;
+      }
+      const present = maxRateWithin(near, at.lat, at.lon, reach);
+      const rate = present > 0 ? meanRateWithin(near, at.lat, at.lon, reach) : 0;
+      out.push({ t, level: levelFromRate(rate), rate: Math.round(rate * 10) / 10 });
       continue;
     }
-    const grow = motion ? 0.15 * motion.speedKmh * (t / 60) : 0;
-    const reach = radius + Math.min(grow, 6);
-    // Detection/ETA: any rain in the disc (max). Class on the strip: neighbourhood mean.
-    const present = maxRateWithin(near, at.lat, at.lon, reach);
-    const rate = present > 0 ? meanRateWithin(near, at.lat, at.lon, reach) : 0;
+
+    let present = 0;
+    let sum = 0;
+    for (const s of arriving) {
+      const r = sampleRate(s);
+      if (r > present) present = r;
+      sum += r;
+    }
+    const rate = arriving.length > 0 && present > 0 ? sum / arriving.length : 0;
     out.push({ t, level: levelFromRate(rate), rate: Math.round(rate * 10) / 10 });
   }
   return out;
@@ -484,29 +724,63 @@ function massFromMembers(members: RadarSample[]): Mass | null {
   };
 }
 
-/** Cut a domain-spanning blob into ~SPLIT_TILE_KM tiles so local motion survives. */
-function splitOversizedMass(members: RadarSample[]): Mass[] {
-  const lat0 = members.reduce((s, p) => s + p.lat, 0) / members.length;
-  const dLat = SPLIT_TILE_KM / 111;
-  const dLon = SPLIT_TILE_KM / (111 * Math.max(Math.cos((lat0 * Math.PI) / 180), 0.25));
-  const buckets = new Map<string, RadarSample[]>();
+/**
+ * Distinct convective cores: klasa ≥ 3 and strictly brighter than every
+ * neighbour inside the 2-cell link. A uniform plateau has none — that stays
+ * one mass so a translating front is not pinned to a lon/lat lattice.
+ */
+function findStrictCores(samples: RadarSample[]): RadarSample[] {
+  const cores: RadarSample[] = [];
+  for (const s of samples) {
+    if (s.level < CORE_MIN_LEVEL) continue;
+    let peak = true;
+    for (const o of samples) {
+      if (o === s) continue;
+      if (haversineKm(s.lat, s.lon, o.lat, o.lon) > LINK_KM) continue;
+      if (o.level >= s.level) {
+        peak = false;
+        break;
+      }
+    }
+    if (peak) cores.push(s);
+  }
+  return cores;
+}
+
+/** Split a connected component onto its cores instead of fixed 55 km tiles. */
+function splitByCores(members: RadarSample[]): Mass[] {
+  const cores = findStrictCores(members);
+  if (cores.length < 2) {
+    const m = massFromMembers(members);
+    return m ? [m] : [];
+  }
+  const buckets: RadarSample[][] = cores.map(() => []);
   for (const s of members) {
-    const ix = Math.round(s.lon / dLon);
-    const iy = Math.round(s.lat / dLat);
-    const key = `${ix},${iy}`;
-    const g = buckets.get(key);
-    if (g) g.push(s);
-    else buckets.set(key, [s]);
+    let best = 0;
+    let bestD = Infinity;
+    for (let i = 0; i < cores.length; i++) {
+      const c = cores[i]!;
+      const d = haversineKm(s.lat, s.lon, c.lat, c.lon);
+      if (d < bestD) {
+        bestD = d;
+        best = i;
+      }
+    }
+    buckets[best]!.push(s);
   }
   const out: Mass[] = [];
-  for (const part of buckets.values()) {
+  for (const part of buckets) {
     const m = massFromMembers(part);
     if (m) out.push(m);
+  }
+  if (out.length === 0) {
+    const m = massFromMembers(members);
+    return m ? [m] : [];
   }
   return out;
 }
 
-/** Connected components of echo — one contiguous front is one mass (or split if huge). */
+/** Connected components of echo — one contiguous front is one mass; multi-core blobs split on peaks. */
 function segmentMasses(samples: RadarSample[], linkKm: number): Mass[] {
   const pool = samples.filter((s) => s.level >= 1);
   const n = pool.length;
@@ -572,23 +846,7 @@ function segmentMasses(samples: RadarSample[], linkKm: number): Mass[] {
   const masses: Mass[] = [];
   for (const members of groups.values()) {
     if (members.length < 3) continue;
-    let minLat = 90;
-    let maxLat = -90;
-    let minLon = 180;
-    let maxLon = -180;
-    for (const s of members) {
-      if (s.lat < minLat) minLat = s.lat;
-      if (s.lat > maxLat) maxLat = s.lat;
-      if (s.lon < minLon) minLon = s.lon;
-      if (s.lon > maxLon) maxLon = s.lon;
-    }
-    const span = haversineKm(minLat, minLon, maxLat, maxLon);
-    if (span > MAX_MASS_SPAN_KM) {
-      masses.push(...splitOversizedMass(members));
-      continue;
-    }
-    const m = massFromMembers(members);
-    if (m) masses.push(m);
+    masses.push(...splitByCores(members));
   }
   return masses;
 }
@@ -677,7 +935,10 @@ function buildMassTrail(mass: Mass, layers: MassLayer[]): { time: number; mass: 
   return trail;
 }
 
-function motionForMass(trail: { time: number; mass: Mass }[]): MotionEst | null {
+function motionForMass(
+  trail: { time: number; mass: Mass }[],
+  cellKm: number,
+): MotionEst | null {
   if (trail.length < 2) return null;
   const last = trail.at(-1);
   if (!last) return null;
@@ -711,9 +972,10 @@ function motionForMass(trail: { time: number; mass: Mass }[]): MotionEst | null 
       samples: near.length >= 5 ? near : pool,
       maxLevel: t.mass.maxLevel,
       nearestKm: null,
+      nccCellKm: cellKm,
     };
   });
-  const field = systemMotion(coreFrames, last.mass.lat, last.mass.lon);
+  const field = systemMotion(coreFrames, last.mass.lat, last.mass.lon, cellKm);
 
   const trailOk =
     trailMot && trailMot.speed >= MIN_MOVE_SPEED && moved >= gateKm(TRAIL_TRUST_KM_30, dtSec);
@@ -898,6 +1160,9 @@ export function computeThreat(
   let threatTrack: CellTrack | null = null;
   let threatCellLevel = 0;
   let cellTrend: CellTrend = null;
+  const motionAnchors: MotionAnchor[] = [];
+
+  const motionKm = motionNccCellKm(usable);
 
   if (usable.length >= 2 && last) {
     const layers: MassLayer[] = usable.map((f) => ({
@@ -949,7 +1214,7 @@ export function computeThreat(
 
     for (const mass of nowMasses) {
       const trail = buildMassTrail(mass, layers);
-      const motion = motionForMass(trail);
+      const motion = motionForMass(trail, motionKm);
       if (!motion || motion.speed < MIN_MOVE_SPEED) continue;
       if (motion.confidence < MOTION_CONFIDENCE_MIN) continue;
 
@@ -989,6 +1254,12 @@ export function computeThreat(
         dNow,
         pinRelevant: dNow <= TRACK_MAX_KM,
       });
+      motionAnchors.push({
+        lat: mass.lat,
+        lon: mass.lon,
+        bearing: motion.bearing,
+        speedKmh: motion.speed,
+      });
     }
 
     // Glyphs: highest-confidence masses (pin-independent).
@@ -1002,8 +1273,11 @@ export function computeThreat(
     // Pin narrative only: closest mass to the pin owns ETA / copy — does not reshape arrows.
     const forPin = [...hits].sort((a, b) => a.dNow - b.dNow);
     const primary = forPin.find((h) => h.pinRelevant) ?? null;
+    const pinHits = forPin.filter((h) => h.pinRelevant);
+    if (pinHits.length > 0) {
+      missKm = Math.min(...pinHits.map((h) => h.miss));
+    }
     if (primary) {
-      missKm = primary.miss;
       approaching = primary.approaching;
       receding = primary.receding;
       if (primary.speed >= MIN_MOVE_SPEED) {
@@ -1018,13 +1292,14 @@ export function computeThreat(
     }
   }
 
-  // Motion for the pin: the primary mass's own track, else a regional NCC estimate of
-  // the whole field around the pin (±60 km). Without it we can only assume persistence.
-  let pinMotion: { bearing: number; speedKmh: number } | null =
+  // Motion for the pin: dense field from confident masses (IDW) with regional NCC
+  // as background. One primary vector is only the sheet's "coming from" copy.
+  let pinMotion: MotionVec | null =
     threatTrack && speedKmh !== null && speedKmh >= MIN_MOVE_SPEED
       ? { bearing: threatTrack.bearing, speedKmh }
       : null;
-  if (!pinMotion && usable.length >= 2 && nearestKm !== null) {
+  let regionalMotion: MotionVec | null = null;
+  if (usable.length >= 2 && nearestKm !== null) {
     // Centre the correlation window on the echo that matters (nearest to the pin),
     // not on the pin — the pin may be 80 km from the nearest rain.
     let center = { lat: place.lat, lon: place.lon };
@@ -1041,22 +1316,37 @@ export function computeThreat(
       const inward = bearingDeg(place.lat, place.lon, center.lat, center.lon);
       center = destPoint(center.lat, center.lon, inward, 20);
     }
-    const regional = systemMotion(usable, center.lat, center.lon);
+    const regional = systemMotion(usable, center.lat, center.lon, motionKm);
     if (
       regional &&
       regional.speed >= MIN_MOVE_SPEED &&
       regional.confidence >= REGIONAL_CONFIDENCE_MIN
     ) {
-      pinMotion = { bearing: regional.bearing, speedKmh: regional.speed };
-      if (speedKmh === null) {
-        speedKmh = regional.speed;
-        comingFrom = comingFromPl(regional.bearing);
-        toward = towardPl(regional.bearing);
+      regionalMotion = { bearing: regional.bearing, speedKmh: regional.speed };
+      if (!pinMotion) {
+        pinMotion = regionalMotion;
+        if (speedKmh === null) {
+          speedKmh = regional.speed;
+          comingFrom = comingFromPl(regional.bearing);
+          toward = towardPl(regional.bearing);
+        }
       }
     }
   }
-  const timeline = last ? pinTimeline(lastSamples, place.lat, place.lon, pinMotion) : [];
-  const tlFirst = pinMotion
+  const fieldBg = regionalMotion ?? pinMotion;
+  const motionField =
+    motionAnchors.length > 0 || fieldBg
+      ? buildMotionField(
+          motionAnchors,
+          place.lat,
+          place.lon,
+          nccCellKm(usable),
+          fieldBg,
+        )
+      : null;
+  const timelineMotion = motionField ?? pinMotion;
+  const timeline = last ? pinTimeline(lastSamples, place.lat, place.lon, timelineMotion) : [];
+  const tlFirst = timelineMotion
     ? (timeline.find((p) => p.t > 0 && !p.unknown && p.level >= 1) ?? null)
     : null;
   const tlMaxLevel = timeline.reduce<RadarLevel>((m, p) => (p.level > m ? p.level : m), 0);
@@ -1066,10 +1356,9 @@ export function computeThreat(
     etaMin = 0;
     willHit = true;
     receding = false;
-  } else if (pinMotion) {
-    // With a motion vector, hit / miss / ETA come from advecting the actual echo
-    // samples over the pin — not from where the mass *centroid* passes. A 50 km front
-    // whose centre passes 20 km beside you still rains on you.
+  } else if (timelineMotion) {
+    // With a motion field, hit / miss / ETA come from advecting each echo sample
+    // with its local vector — not from where the primary mass centroid passes.
     if (tlFirst) {
       willHit = true;
       receding = false;
@@ -1230,7 +1519,7 @@ export function computeThreat(
     tracks,
     matchedWarnings: matched,
     timeline,
-    timelineAdvected: pinMotion !== null,
+    timelineAdvected: timelineMotion !== null,
     lightningNearCell,
     cellTrend,
   };

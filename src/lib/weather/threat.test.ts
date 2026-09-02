@@ -9,16 +9,26 @@ import { bearingDeg, destPoint, haversineKm } from "./geo.ts";
 import { levelFromRate } from "./palette.ts";
 import { aggregate, BASE_CELL_LAT, BASE_CELL_LON, PL_RADAR_BBOX } from "./radar-grid.ts";
 import {
+  BACK_TRAJ_ITERS,
   computeThreat,
   GATE_DT_SEC,
+  LINK_KM,
   MATCH_KM_30,
   TRACK_MAX_KM,
   TRAIL_SOLO_KM_30,
   TRAIL_TRUST_KM_30,
+  backTrajectory,
+  buildMotionField,
   gateKm,
+  motionAt,
+  bestNccShift,
+  motionNccCellKm,
+  nccAtShift,
   nccCellKm,
   nccSampleCell,
+  pairMotionNcc,
   pinTimeline,
+  SRI_NCC_CELL_KM,
 } from "./threat.ts";
 import type { OfficialWarning, Place, RadarLevel, RadarMemoryFrame, RadarSample } from "./types.ts";
 
@@ -91,6 +101,113 @@ test("NCC bins at aggregate cellKm: 6 km samples are adjacent at 6, every-other 
   assert.equal(nccCellKm([frame(1_000, blob(50, 21, 2), 0)]), 3);
 });
 
+/** Native-ish SRI spacing (~1.16 km) so a 5-min 50 km/h hop is not a 3 km lattice jump. */
+function sriNativeBlob(lat: number, lon: number, level: RadarLevel = 3): RadarSample[] {
+  const samples: RadarSample[] = [];
+  const dLat = 1.16 / 111;
+  const dLon = 1.16 / (111 * Math.max(Math.cos((lat * Math.PI) / 180), 0.25));
+  for (let i = -5; i <= 5; i++) {
+    for (let j = -5; j <= 5; j++) {
+      samples.push({ lat: lat + i * dLat, lon: lon + j * dLon, level });
+    }
+  }
+  return samples;
+}
+
+test("SRI NCC bins at 2 km; pack cellKm stays 3 (nccCellKm threading)", () => {
+  assert.equal(SRI_NCC_CELL_KM, 2, "hunch: 2 km is enough vs full 1.16 km");
+  const f3 = [frame(1_000, blob(50, 21, 2), 0), frame(1_600, blob(50, 21, 2), 0)].map((f) => ({
+    ...f,
+    cellKm: 3,
+    nccCellKm: 2,
+  }));
+  const f6 = [frame(1_000, blob(50, 21, 2), 0), frame(1_600, blob(50, 21, 2), 0)].map((f) => ({
+    ...f,
+    cellKm: 6,
+  }));
+  assert.equal(nccCellKm(f3), 3, "dense field / pack stay on the 3 km analysis grid");
+  assert.equal(motionNccCellKm(f3), 2, "SRI motion NCC is 2 km");
+  assert.equal(nccCellKm(f6), 6);
+  assert.equal(motionNccCellKm(f6), 6, "coarsened pack still threads into NCC (no 2 km checkerboard)");
+});
+
+test("5-min 50 km/h SRI hop is recovered smoother than the 36 km/h 3 km quantum", () => {
+  const dt = 5 * 60;
+  const hours = dt / 3600;
+  const movedKm = 50 * hours;
+  const start = destPoint(city.lat, city.lon, 270, 20);
+  const end = destPoint(start.lat, start.lon, 90, movedKm);
+  const prev = sriNativeBlob(start.lat, start.lon, 3);
+  const next = sriNativeBlob(end.lat, end.lon, 3);
+  const fine = pairMotionNcc(prev, next, start.lat, start.lon, hours, SRI_NCC_CELL_KM);
+  const coarse = pairMotionNcc(prev, next, start.lat, start.lon, hours, 3);
+  assert.ok(fine, "2 km NCC must return a vector");
+  assert.ok(
+    fine.speed >= 42 && fine.speed <= 58,
+    `2 km NCC should recover ~50 km/h, got ${fine.speed.toFixed(1)}`,
+  );
+  assert.ok(
+    Math.abs(fine.speed - 50) < 8,
+    `2 km residual ${Math.abs(fine.speed - 50).toFixed(1)} km/h should beat a 36 km/h quantum`,
+  );
+  assert.ok(
+    Math.abs(fine.speed - 36) > 6,
+    `2 km speed ${fine.speed.toFixed(1)} must not sit on the 36 km/h 3 km quantum`,
+  );
+  if (coarse) {
+    assert.ok(
+      Math.abs(fine.speed - 50) < Math.abs(coarse.speed - 50) + 0.05,
+      `2 km (${fine.speed.toFixed(1)}) must be at least as close to 50 as 3 km (${coarse.speed.toFixed(1)})`,
+    );
+  }
+});
+
+test("overlap penalty: a 24-cell partial-overlap peak loses to a well-overlapped shift", () => {
+  const n = 40;
+  const a = new Float64Array(n * n);
+  const b = new Float64Array(n * n);
+  const paint = (g: Float64Array, x0: number, y0: number, x1: number, y1: number, v: number) => {
+    for (let y = y0; y <= y1; y++) {
+      for (let x = x0; x <= x1; x++) {
+        if (x >= 0 && y >= 0 && x < n && y < n) g[y * n + x] = v;
+      }
+    }
+  };
+  // Period-11 column pattern, true motion +2. +24 aliases (22 = 2×11) so
+  // overlap-only Pearson is also perfect on the 16-cell corner.
+  for (let y = 10; y <= 25; y++) {
+    for (let x = 0; x < n; x++) {
+      a[y * n + x] = 1 + (x % 11);
+      b[y * n + x] = 1 + ((x - 2 + 11) % 11);
+    }
+  }
+  // Stain in the well-overlapped region (outside a 24-cell overlap) so the
+  // alias can win on overlap-only Pearson.
+  paint(a, 20, 10, 22, 12, 1);
+
+  const rawSmall = nccAtShift(a, b, 2, 0, { gridN: n, overlapPenalty: false });
+  const rawBig = nccAtShift(a, b, 24, 0, { gridN: n, overlapPenalty: false });
+  assert.ok(rawBig >= 0.85, `24-cell overlap-only peak should look excellent, got ${rawBig.toFixed(3)}`);
+  assert.ok(
+    rawBig + 0.02 >= rawSmall,
+    `overlap-only 24-cell (${rawBig.toFixed(3)}) must be able to beat or match +2 (${rawSmall.toFixed(3)})`,
+  );
+
+  const penalized = nccAtShift(a, b, 24, 0, { gridN: n, overlapPenalty: true });
+  const penalizedSmall = nccAtShift(a, b, 2, 0, { gridN: n, overlapPenalty: true });
+  assert.ok(
+    penalizedSmall > penalized,
+    `penalty must flip the peak: +2 (${penalizedSmall.toFixed(3)}) > +24 (${penalized.toFixed(3)})`,
+  );
+
+  const picked = bestNccShift(a, b, 24, { gridN: n });
+  assert.ok(picked, "penalized search must still find a peak");
+  assert.ok(
+    Math.abs(picked.dix) <= 4 && Math.abs(picked.diy) <= 2,
+    `best shift must be the well-overlapped +2, got (${picked.dix}, ${picked.diy})`,
+  );
+});
+
 function latticeHitsForNcc(count: number) {
   const hits: { lat: number; lon: number; rate: number }[] = [];
   const nLon = Math.floor((PL_RADAR_BBOX.maxLon - PL_RADAR_BBOX.minLon) / BASE_CELL_LON);
@@ -103,6 +220,10 @@ function latticeHitsForNcc(count: number) {
   }
   return hits;
 }
+
+test("identity links at 2 cells (~6–7 km), not the old 16 km glue", () => {
+  assert.ok(LINK_KM >= 6 && LINK_KM <= 7, `LINK_KM should be 2 × 3 km cells, got ${LINK_KM}`);
+});
 
 test("motion gates are speed·Δt of the old 30-min 10 / 14 / 45 km constants", () => {
   assert.equal(GATE_DT_SEC, 30 * 60);
@@ -344,13 +465,19 @@ function warsawBarbell(dEastKm: number): { samples: RadarSample[]; cell: { lat: 
   const cell0 = destPoint(warsaw.lat, warsaw.lon, 180, 23);
   const cell = destPoint(cell0.lat, cell0.lon, 90, dEastKm);
   const weak = destPoint(cell.lat, cell.lon, 270, 22);
-  const mid = destPoint(cell.lat, cell.lon, 270, 11);
+  const spine: RadarSample[] = [];
+  for (let d = 3; d <= 19; d += 3) {
+    const mid = destPoint(cell.lat, cell.lon, 270, d);
+    spine.push(
+      { lat: mid.lat, lon: mid.lon, level: 1 },
+      { lat: mid.lat + 0.012, lon: mid.lon, level: 1 },
+      { lat: mid.lat - 0.012, lon: mid.lon, level: 1 },
+    );
+  }
   const samples = [
     ...tightBlob(cell.lat, cell.lon, 3),
     ...tightBlob(weak.lat, weak.lon, 1, 3),
-    { lat: mid.lat, lon: mid.lon, level: 1 as RadarLevel },
-    { lat: mid.lat + 0.012, lon: mid.lon, level: 1 as RadarLevel },
-    { lat: mid.lat - 0.012, lon: mid.lon, level: 1 as RadarLevel },
+    ...spine,
   ].filter((s) => haversineKm(warsaw.lat, warsaw.lon, s.lat, s.lon) > 8);
   return { samples, cell };
 }
@@ -469,7 +596,7 @@ test("a wide stratiform blob is one mass → one arrow", () => {
   const rain: RadarSample[] = [];
   for (let i = -6; i <= 6; i++) {
     for (let j = -4; j <= 4; j++) {
-      rain.push({ lat: 50.0 + i * 0.08, lon: 20.7 + j * 0.08, level: 2 });
+      rain.push({ lat: 50.0 + i * 0.045, lon: 20.7 + j * 0.045, level: 2 });
     }
   }
   const frames = [
@@ -515,8 +642,8 @@ test("east-edge pin on a west-heavy NE-moving front still reads southwest origin
     for (let i = -5; i <= 2; i++) {
       for (let j = -7; j <= 1; j++) {
         s.push({
-          lat: 50.0 + dLat + i * 0.08,
-          lon: 21.0 + dLon + j * 0.08,
+          lat: 50.0 + dLat + i * 0.045,
+          lon: 21.0 + dLon + j * 0.045,
           level: 2,
         });
       }
@@ -1174,4 +1301,192 @@ test("pin-only Szansa: echo in the old 25 km circle that misses the pin does not
   const close = computeThreat(city, closeFrames, []);
   assert.ok(close.nearestKm !== null && close.nearestKm > 8 && close.nearestKm < 15);
   assertPinOnlyMiss(close, "stationary miss inside CLOSE/IMMINENT");
+});
+
+test("iterated back-trajectory leaves the single hop on a sheared field", () => {
+  assert.equal(BACK_TRAJ_ITERS, 3);
+  const pin = { lat: city.lat, lon: city.lon };
+  const atPin = { lat: pin.lat, lon: pin.lon, bearing: 90, speedKmh: 30 };
+  const upstream = destPoint(pin.lat, pin.lon, 270, 45);
+  const far = { lat: upstream.lat, lon: upstream.lon, bearing: 90, speedKmh: 80 };
+  const field = buildMotionField([atPin, far], pin.lat, pin.lon, 3, null);
+  const hop = backTrajectory(pin.lat, pin.lon, 60, field, 1);
+  const iter = backTrajectory(pin.lat, pin.lon, 60, field, BACK_TRAJ_ITERS);
+  const sep = haversineKm(hop.lat, hop.lon, iter.lat, iter.lon);
+  assert.ok(sep > 8, `iterated departure must move off the Euler hop, got ${sep.toFixed(1)} km`);
+
+  const uniform = { bearing: 90, speedKmh: 50 };
+  const u1 = backTrajectory(pin.lat, pin.lon, 60, uniform, 1);
+  const u3 = backTrajectory(pin.lat, pin.lon, 60, uniform, 3);
+  assert.ok(
+    haversineKm(u1.lat, u1.lon, u3.lat, u3.lon) < 0.05,
+    "uniform field: iteration is the same hop",
+  );
+});
+
+test("pinTimeline follows the local field, not one primary vector for every sample", () => {
+  const west = destPoint(city.lat, city.lon, 270, 40);
+  const north = destPoint(city.lat, city.lon, 0, 25);
+  const samples = [...compactBlob(west.lat, west.lon, 3), ...compactBlob(north.lat, north.lon, 3)];
+  const anchors = [
+    { lat: north.lat, lon: north.lon, bearing: 0, speedKmh: 60 },
+    { lat: west.lat, lon: west.lon, bearing: 90, speedKmh: 60 },
+  ];
+  const field = buildMotionField(anchors, city.lat, city.lon, 3, {
+    bearing: 0,
+    speedKmh: 60,
+  });
+  const vWest = motionAt(field, west.lat, west.lon);
+  const vNorth = motionAt(field, north.lat, north.lon);
+  assert.ok(vWest && angleDiffDeg(vWest.bearing, 90) < 25, `west cell local bearing ${vWest?.bearing}`);
+  assert.ok(vNorth && angleDiffDeg(vNorth.bearing, 0) < 25, `north cell local bearing ${vNorth?.bearing}`);
+
+  const local = pinTimeline(samples, city.lat, city.lon, field);
+  const primaryOnly = pinTimeline(samples, city.lat, city.lon, { bearing: 0, speedKmh: 60 });
+  const localHit = local.find((p) => p.t > 0 && !p.unknown && p.level >= 1);
+  const primaryHit = primaryOnly.find((p) => p.t > 0 && !p.unknown && p.level >= 1);
+  assert.ok(localHit, "local field must bring the west mass over the pin");
+  assert.ok(
+    localHit.t >= 25 && localHit.t <= 55,
+    `west mass at 40 km / 60 km/h should arrive ~40 min, got ${localHit.t}`,
+  );
+  assert.ok(
+    !primaryHit,
+    `primary-only north vector must not invent a hit from the west mass; got t=${primaryHit?.t}`,
+  );
+});
+
+test("two masses, different vectors: pin timeline / ETA / miss follow the local field", () => {
+  // Primary A is closer and receding north. B is further west and approaching east.
+  // Old one-vector path uses A's north vector and misses B. Local field must hit B.
+  const frames = [0, 1, 2, 3].map((t) => {
+    const a = destPoint(city.lat, city.lon, 0, 20 + t * 4);
+    const b = destPoint(city.lat, city.lon, 270, 60 - t * (20 / 3));
+    const samples = [...compactBlob(a.lat, a.lon, 3), ...compactBlob(b.lat, b.lon, 3)];
+    const dA = haversineKm(city.lat, city.lon, a.lat, a.lon);
+    const dB = haversineKm(city.lat, city.lon, b.lat, b.lon);
+    return frame(t * 600, samples, Math.min(dA, dB));
+  });
+  const lastA = destPoint(city.lat, city.lon, 0, 32);
+  const lastB = destPoint(city.lat, city.lon, 270, 40);
+  assert.ok(
+    haversineKm(city.lat, city.lon, lastA.lat, lastA.lon) <
+      haversineKm(city.lat, city.lon, lastB.lat, lastB.lon),
+    "A must stay the nearer (primary) mass",
+  );
+
+  const threat = computeThreat(city, frames, []);
+  assert.ok(threat.tracks.length >= 2, `need both masses tracked, got ${threat.tracks.length}`);
+  assert.equal(threat.timelineAdvected, true);
+  assert.equal(threat.willHit, true, "west mass on the local field must hit; primary-only north misses");
+  assert.ok(
+    threat.etaMin !== null && threat.etaMin >= 25 && threat.etaMin <= 70,
+    `ETA should be B's ~40 min arrival, got ${threat.etaMin}`,
+  );
+  assert.equal(threat.receding, false, "incoming B must not inherit A's receding flag");
+  const tlHit = threat.timeline.find((p) => p.t > 0 && !p.unknown && p.level >= 1);
+  assert.ok(tlHit, "timeline must show rain from the west mass");
+  assert.ok(
+    threat.missKm === null || threat.missKm <= 13 || threat.willHit,
+    `miss must follow the hitting mass, not A's north miss; missKm=${threat.missKm}`,
+  );
+
+  const primaryOnly = pinTimeline(
+    frames.at(-1)!.samples,
+    city.lat,
+    city.lon,
+    { bearing: 0, speedKmh: 24 },
+  );
+  assert.ok(
+    !primaryOnly.some((p) => p.t > 0 && p.level >= 1),
+    "control: A's north vector alone must stay dry over the pin",
+  );
+});
+
+test("two cores ~10+ km apart stay two objects, not one 55 km tile", () => {
+  // 14 km N–S, both klasa 3, translating east. LINK_KM = 16 glues them; a 55 km
+  // tile would too. 2-cell link (~6–7 km) must keep two objects.
+  const origin = { lat: 52.0, lon: 19.0 };
+  const a0 = destPoint(origin.lat, origin.lon, 270, 40);
+  const b0 = destPoint(a0.lat, a0.lon, 0, 14);
+  const gap = haversineKm(a0.lat, a0.lon, b0.lat, b0.lon);
+  assert.ok(gap >= 10 && gap < 20, `cores should be ~14 km apart, got ${gap.toFixed(1)}`);
+
+  const frames = [0, 1, 2, 3].map((t) => {
+    const a = destPoint(a0.lat, a0.lon, 90, t * 8);
+    const b = destPoint(b0.lat, b0.lon, 90, t * 8);
+    return frame(
+      t * 600,
+      [...compactBlob(a.lat, a.lon, 3), ...compactBlob(b.lat, b.lon, 3)],
+      40,
+    );
+  });
+  const threat = computeThreat(city, frames, [], origin);
+  assert.ok(
+    threat.tracks.length >= 2,
+    `two cores must stay two objects, got ${threat.tracks.length} (16 km link / 55 km tile glued them)`,
+  );
+  const sep = haversineKm(
+    threat.tracks[0]!.now.lat,
+    threat.tracks[0]!.now.lon,
+    threat.tracks[1]!.now.lat,
+    threat.tracks[1]!.now.lon,
+  );
+  assert.ok(sep >= 10, `arrows ${sep.toFixed(1)} km apart — not one shared tile`);
+});
+
+test("uniform translating front has honest trail speed, not a lattice-pinned ~0", () => {
+  // ~180 km slab, all klasa 3, east at ~50 km/h. splitOversizedMass cuts 55 km
+  // lon/lat tiles; membership churn pins centroids so trail speed ≈ 0 / tiles
+  // invent a west arrow.
+  function slab(lon0: number): RadarSample[] {
+    const out: RadarSample[] = [];
+    for (let i = -3; i <= 3; i++) {
+      for (let j = -25; j <= 25; j++) {
+        out.push({ lat: 52.0 + i * 0.05, lon: lon0 + j * 0.05, level: 3 });
+      }
+    }
+    return out;
+  }
+  const dLon = 0.12;
+  const frames = [0, 1, 2, 3].map((t) => frame(t * 600, slab(17.0 + t * dLon), 40));
+  const threat = computeThreat(city, frames, [], { lat: 52.0, lon: 19.0 });
+  assert.ok(threat.tracks.length >= 1, "front must still yield a track");
+  for (const tr of threat.tracks) {
+    assert.ok(
+      tr.speedKmh >= 35 && tr.speedKmh <= 75,
+      `expected ~50 km/h, got ${tr.speedKmh.toFixed(1)} (lattice-pinned tile trail is ~0–25)`,
+    );
+    assert.ok(
+      tr.bearing > 50 && tr.bearing < 130,
+      `uniform east front must not invent a west tile, got ${tr.bearing.toFixed(0)}°`,
+    );
+  }
+});
+
+test("cellLevel is the inbound core, not the whole cluster max", () => {
+  // Klasa 3 heads for the pin; klasa 4 sits ~14 km north of it (same 16 km
+  // cluster / 55 km tile). Spodziewaj się must name the core, not the cluster max.
+  const inbound0 = destPoint(city.lat, city.lon, 270, 35);
+  const hot0 = destPoint(inbound0.lat, inbound0.lon, 0, 14);
+  assert.ok(haversineKm(inbound0.lat, inbound0.lon, hot0.lat, hot0.lon) >= 10);
+  const frames = [0, 1, 2, 3].map((t) => {
+    const inbound = destPoint(inbound0.lat, inbound0.lon, 90, t * 8);
+    const hot = destPoint(hot0.lat, hot0.lon, 90, t * 8);
+    const dIn = haversineKm(city.lat, city.lon, inbound.lat, inbound.lon);
+    return frame(
+      t * 600,
+      [...compactBlob(inbound.lat, inbound.lon, 3), ...compactBlob(hot.lat, hot.lon, 4)],
+      dIn,
+    );
+  });
+  const threat = computeThreat(city, frames, []);
+  assert.equal(threat.willHit, true, "klasa-3 core is on the pin");
+  assert.equal(
+    threat.cellLevel,
+    3,
+    `cellLevel must be the inbound core, not cluster max 4 (got ${threat.cellLevel})`,
+  );
+  assert.equal(threat.expect, "ulewę i porywisty wiatr");
+  assert.doesNotMatch(threat.detail, /silną ulewę/);
 });
