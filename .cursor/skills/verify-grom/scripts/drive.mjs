@@ -676,6 +676,10 @@ try {
     await screenshot(cdp, join(OUT, "00-failed-dialog.png"));
     throw new Error("settings dialog did not open");
   }
+  if (!dialog.includes("Miejsce") || !dialog.includes("Alerty")) {
+    await screenshot(cdp, join(OUT, "00-failed-dialog.png"));
+    throw new Error(`settings dialog missing Miejsce/Alerty split: ${JSON.stringify(dialog.slice(0, 240))}`);
+  }
   const dialogA11y = await evalExpr(
     cdp,
     `(() => {
@@ -688,7 +692,7 @@ try {
     await screenshot(cdp, join(OUT, "00-failed-dialog.png"));
     throw new Error(`settings dialog missing aria-modal=true: ${JSON.stringify(dialogA11y)}`);
   }
-  step(`dialog open: Lokalizacja i alerty; aria-modal=${dialogA11y.ariaModal}`);
+  step(`dialog open: Lokalizacja i alerty · Miejsce · Alerty; aria-modal=${dialogA11y.ariaModal}`);
   await screenshot(cdp, join(OUT, "02-settings-dialog.png"));
 
   step('click city chip "Kraków"');
@@ -847,7 +851,7 @@ ${
 - \`04-sheet-after.png\` — dialog closed, sheet unchanged`
       : `- \`01-warszawa-sheet.png\` — sheet after snapshot, default / prior pin
 - \`01b-warszawa-status-row.png\` — sheet scrolled to the grey status row
-- \`02-settings-dialog.png\` — dialog \`Lokalizacja i alerty\` open
+- \`02-settings-dialog.png\` — dialog \`Lokalizacja i alerty\` open with \`Miejsce\` / \`Alerty\`
 - \`03-krakow-sheet.png\` — sheet after Kraków chip
 - \`03b-krakow-status-row.png\` — Kraków sheet scrolled to the status row`
 }

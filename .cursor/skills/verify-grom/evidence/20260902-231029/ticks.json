@@ -1,0 +1,25 @@
+{
+  "when": "2026-09-02T23:10:33.772Z",
+  "warszawa": {
+    "present": true,
+    "aria": "Brak opadu od 01:05 do 02:35",
+    "ticks": [
+      "01:05",
+      "01:35",
+      "02:05",
+      "02:35"
+    ],
+    "hasNowCursor": true
+  },
+  "krakow": {
+    "present": true,
+    "aria": "Opad od 02:00 do 02:05, najsilniej ok. 02:00",
+    "ticks": [
+      "01:05",
+      "01:35",
+      "02:05",
+      "02:35"
+    ],
+    "hasNowCursor": true
+  }
+}

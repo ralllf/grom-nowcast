@@ -707,92 +707,89 @@ export function GromApp() {
               </Button>
             </div>
 
-            <p className="mt-3 text-sm leading-relaxed text-muted">
-              {settingsIntroCopy(geoHint, isEmbeddedPreview())}
-            </p>
-
-            <form
-              className="mt-4 flex gap-2"
-              onSubmit={(e) => {
-                e.preventDefault();
-                if (query.trim().length >= 2) searchMut.mutate(query.trim());
-              }}
-            >
-              <label className="relative min-w-0 flex-1">
-                <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted" />
-                <input
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
-                  placeholder="Szukaj miasta w Polsce"
-                  className="h-11 w-full rounded-xl border border-border bg-surface-2 pl-10 pr-3 text-sm text-fg placeholder:text-faint focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
-                />
-              </label>
-              <Button type="submit" disabled={searchMut.isPending}>
-                Szukaj
-              </Button>
-            </form>
-
-            {isNominatimSearchThrottled(searchMut.error) ? (
-              <p className="mt-2 text-sm text-muted" role="status">
-                {NOMINATIM_SEARCH_THROTTLED}
+            <section aria-labelledby="settings-miejsce" className="mt-4">
+              <h3 id="settings-miejsce" className="font-display text-base font-semibold">Miejsce</h3>
+              <p className="mt-2 text-sm leading-relaxed text-muted">
+                {settingsIntroCopy(geoHint, isEmbeddedPreview())}
               </p>
-            ) : null}
 
-            {searchMut.data && searchMut.data.length > 0 ? (
-              <ul className="mt-3 max-h-40 overflow-y-auto rounded-xl bg-surface-2">
-                {searchMut.data.map((p) => (
-                  <li key={`${p.lat}-${p.lon}-${p.label}`}>
-                    <button
-                      type="button"
-                      className={cn("w-full px-3 py-2.5 text-left text-sm hover:bg-bg", RAW_FOCUS)}
-                      onClick={() => pickPlace(p)}
-                    >
-                      {p.label}
-                      <span className="ml-2 text-xs text-muted">{p.state}</span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            ) : null}
+              <form
+                className="mt-4 flex gap-2"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (query.trim().length >= 2) searchMut.mutate(query.trim());
+                }}
+              >
+                <label className="relative min-w-0 flex-1">
+                  <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted" />
+                  <input
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                    placeholder="Szukaj miasta w Polsce"
+                    className="h-11 w-full rounded-xl border border-border bg-surface-2 pl-10 pr-3 text-sm text-fg placeholder:text-faint focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+                  />
+                </label>
+                <Button type="submit" disabled={searchMut.isPending}>
+                  Szukaj
+                </Button>
+              </form>
 
-            <div className="mt-4 flex flex-wrap gap-2">
-              {CITIES.slice(0, 12).map((c) => (
-                <button
-                  key={c.label}
+              {isNominatimSearchThrottled(searchMut.error) ? (
+                <p className="mt-2 text-sm text-muted" role="status">
+                  {NOMINATIM_SEARCH_THROTTLED}
+                </p>
+              ) : null}
+
+              {searchMut.data && searchMut.data.length > 0 ? (
+                <ul className="mt-3 max-h-40 overflow-y-auto rounded-xl bg-surface-2">
+                  {searchMut.data.map((p) => (
+                    <li key={`${p.lat}-${p.lon}-${p.label}`}>
+                      <button
+                        type="button"
+                        className={cn("w-full px-3 py-2.5 text-left text-sm hover:bg-bg", RAW_FOCUS)}
+                        onClick={() => pickPlace(p)}
+                      >
+                        {p.label}
+                        <span className="ml-2 text-xs text-muted">{p.state}</span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+
+              <div className="mt-3">
+                <Button
                   type="button"
-                  onClick={() => pickPlace(c)}
-                  className={cn(
-                    CHIP,
-                    place.label === c.label ? "bg-accent text-accent-fg" : "bg-surface-2 text-fg",
-                  )}
+                  variant="outline"
+                  size="sm"
+                  onClick={locate}
+                  disabled={geoPending}
                 >
-                  {c.label}
-                </button>
-              ))}
-            </div>
+                  <Crosshair className="size-4" />
+                  Użyj GPS
+                </Button>
+              </div>
 
-            <label className="mt-5 flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={imgwMap}
-                onChange={(e) => setImgwMap(e.target.checked)}
-                className="accent-accent"
-              />
-              Ostrzeżenia IMGW na mapie (powiat, stopień)
-            </label>
-            {overlays.length > 0 ? (
-              <label className="mt-3 flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={drizzleMap}
-                  onChange={(e) => setDrizzleMap(e.target.checked)}
-                  className="accent-accent"
-                />
-                Pokaż mżawkę na mapie (domyślnie wyłączona — jak liczby)
-              </label>
-            ) : null}
+              <div className="mt-4 flex flex-wrap gap-2">
+                {CITIES.slice(0, 12).map((c) => (
+                  <button
+                    key={c.label}
+                    type="button"
+                    onClick={() => pickPlace(c)}
+                    className={cn(
+                      CHIP,
+                      place.label === c.label ? "bg-accent text-accent-fg" : "bg-surface-2 text-fg",
+                    )}
+                  >
+                    {c.label}
+                  </button>
+                ))}
+              </div>
+            </section>
 
-            <div className="mt-5 rounded-xl bg-surface-2 px-3 py-3">
+            <section aria-labelledby="settings-alerty" className="mt-5">
+              <h3 id="settings-alerty" className="font-display text-base font-semibold">Alerty</h3>
+            <div className="mt-3 rounded-xl bg-surface-2 px-3 py-3">
               <div className="flex items-center justify-between gap-3">
                 <div>
                   <p className="text-sm font-medium">Alerty na pinezkę</p>
@@ -1031,6 +1028,7 @@ export function GromApp() {
                 </div>
               ) : null}
             </div>
+            </section>
 
             <p className="mt-4 text-xs leading-relaxed text-faint">
               Klatki radaru trzymamy chwilowo w pamięci urządzenia (ostatnie kilka skanów), żeby

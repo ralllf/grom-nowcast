@@ -4,7 +4,7 @@ Chance, ETA, TERYT, and alert copy are computed for one pin (~5 km), not the ale
 
 ## Sub-features
 
-- Settings dialog `Lokalizacja i alerty` (gear)
+- Settings dialog `Lokalizacja i alerty` (gear), split into **Miejsce** (search, GPS, city chips) and **Alerty** (enable, presets, quiet hours, Testuj alert)
 - Twelve city chips (Warszawa … Rzeszów) from `CITIES` — first 12 only; Gdynia and later are search-only
 - Search form: placeholder `Szukaj miasta w Polsce`, submit `Szukaj`
 - GPS crosshair `aria-label="Wybierz lokalizację"` → label `Twoja lokalizacja`
@@ -21,7 +21,7 @@ Click the gear (`Ustawienia`) or the crosshair. The dialog is a modal (`role="di
 This is the default shipped drive (`--feature location-pin`).
 
 1. Desktop 1280×800, `/`, wait until the sheet leaves `Skanuję radar…`. Quote the grey status row (`Radar HH:MM · N min · IMGW ✓/✕ · wyładowania ✓/✕`) and, if the 90-min strip is present, the Warsaw axis ticks (`HH:MM`, not `24 min`) plus the timeline aria sentence. The sheet must not show `Wyładowania chwilowo niedostępne` or `Ostrzeżenia IMGW chwilowo niedostępne` as separate sentences.
-2. Click `button[aria-label="Ustawienia"]`. Wait for `[role="dialog"][aria-labelledby="settings-title"][aria-modal="true"]` and heading `Lokalizacja i alerty`.
+2. Click `button[aria-label="Ustawienia"]`. Wait for `[role="dialog"][aria-labelledby="settings-title"][aria-modal="true"]` and heading `Lokalizacja i alerty`. Quote **Miejsce** and **Alerty** in the dialog (city chips live under Miejsce).
 3. Click the chip whose **exact** text is `Kraków` (TERYT `1261`, `50.0647, 19.945`).
 4. Wait until the dialog is gone and `#grom-threat-sheet` contains `Kraków` and does **not** contain `TERYT`.
 5. `Runtime.evaluate` `JSON.parse(localStorage.getItem('grom-settings-v1')).place.label` → `Kraków`.

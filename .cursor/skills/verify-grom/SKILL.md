@@ -74,7 +74,7 @@ Recipes. Prefer ARIA / ids / visible Polish copy. There are almost no `data-*` h
 | App | `/` only. `h1` = `GROM`, eyebrow `Nowcast PL` |
 | Threat sheet | `#grom-threat-sheet`. Mobile handle: `button[aria-controls="grom-threat-sheet"]` (`aria-label` = headline) |
 | Locate | `button[aria-label="Wybierz lokalizację"]` |
-| Settings | `button[aria-label="Ustawienia"]` → `[role="dialog"][aria-labelledby="settings-title"]` title `Lokalizacja i alerty` |
+| Settings | `button[aria-label="Ustawienia"]` → `[role="dialog"][aria-labelledby="settings-title"]` title `Lokalizacja i alerty`; headings `Miejsce` / `Alerty` |
 | Close dialog | `button[aria-label="Zamknij"]` |
 | Search | `input[placeholder="Szukaj miasta w Polsce"]` + submit `Szukaj` (≥2 chars, Nominatim `countrycodes=pl`) |
 | City chips | unlabeled `<button>` whose text is exactly `Warszawa`, `Kraków`, … (first 12 of `CITIES`) |
