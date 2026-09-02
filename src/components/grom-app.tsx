@@ -29,7 +29,7 @@ import { historyIsDegraded } from "@/lib/weather/radar-history";
 import { lightningCaption } from "@/lib/weather/perun";
 import { PL_RADAR_ORIGIN } from "@/lib/weather/radar-grid";
 import { overlayFallback } from "@/lib/weather/sri-overlay";
-import { radarPaintSource, radarPaintWho } from "@/lib/weather/wall-clock";
+import { formatRadarClock, radarPaintSource, radarPaintWho } from "@/lib/weather/wall-clock";
 import { isNominatimSearchThrottled, NOMINATIM_SEARCH_THROTTLED } from "@/lib/weather/nominatim";
 import { getSnapshot, getSriOverlay, searchPlaces } from "@/lib/weather/server";
 import { canTrustRadar, IMGW_WARNINGS_UNAVAILABLE } from "@/lib/weather/snapshot";
@@ -57,14 +57,6 @@ import {
 } from "@/lib/alert-delivery";
 import type { Place } from "@/lib/weather/types";
 import { useGrom } from "@/lib/store";
-
-function formatClock(ts: number | null) {
-  if (!ts) return "—";
-  return new Date(ts * 1000).toLocaleTimeString("pl-PL", {
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
 
 const ALERT_TONE: Record<AlertKind, string> = {
   incoming: "border-warn/60 bg-surface/95",
@@ -450,7 +442,7 @@ export function GromApp() {
               aria-label="Czas radaru"
             />
             <span className="w-12 text-right font-mono text-xs tabular-nums text-muted">
-              {formatClock(slider[activeIdx]?.time ?? null)}
+              {activeSlider?.time != null ? formatRadarClock(activeSlider.time) : "—"}
             </span>
             <span className="max-w-[9rem] truncate text-[10px] text-faint" aria-label="Źródło radaru na mapie">
               {radarPaintWho(radarPaint)}
