@@ -8,7 +8,7 @@
   --color-surface-2: #1a212c;
   --color-fg: #e8edf2;
   --color-muted: #8b95a3;
-  --color-faint: #5c6570;
+  --color-faint: #7a8593;
   --color-border: #2a3340;
   --color-accent: #6ec8d4;
   --color-accent-fg: #071114;
@@ -57,5 +57,13 @@
   button:not(:disabled),
   [role="button"]:not(:disabled) {
     cursor: pointer;
+  }
+  /* Raw buttons/ranges: same focus-visible ring language as ui/button.
+     Button itself sets outline-none + ring-2; this covers the rest. */
+  button:focus-visible,
+  [role="button"]:focus-visible,
+  input[type="range"]:focus-visible {
+    outline: 2px solid color-mix(in oklab, var(--color-accent) 50%, transparent);
+    outline-offset: 2px;
   }
 }

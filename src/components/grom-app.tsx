@@ -57,6 +57,15 @@ import {
 import type { Place } from "@/lib/weather/types";
 import { useGrom } from "@/lib/store";
 
+/** Same ring as ui/button — raw <button> / range, not the shared Button. */
+const RAW_FOCUS =
+  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50";
+/** Map / settings chips: 36px, whole control tappable. */
+const CHIP =
+  `inline-flex min-h-9 items-center justify-center rounded-full px-3 text-xs font-medium ${RAW_FOCUS}`;
+const MAP_CHIP =
+  `pointer-events-auto flex min-h-9 items-center gap-2 rounded-full bg-surface/90 px-3 text-xs shadow-[0_0_0_1px_rgba(255,255,255,0.08)] backdrop-blur-md ${RAW_FOCUS}`;
+
 const ALERT_TONE: Record<AlertKind, string> = {
   incoming: "border-warn/60 bg-surface/95",
   now: "border-danger bg-surface/95",
@@ -437,7 +446,7 @@ export function GromApp() {
               max={slider.length - 1}
               value={Math.min(frameIndex ?? slider.length - 1, slider.length - 1)}
               onChange={(e) => setFrameIndex(Number(e.target.value))}
-              className="h-1 w-40 accent-accent sm:w-56"
+              className={cn("h-1 w-40 accent-accent sm:w-56", RAW_FOCUS)}
               aria-label="Czas radaru"
             />
             <span className="w-12 text-right font-mono text-xs tabular-nums text-muted">
@@ -481,7 +490,7 @@ export function GromApp() {
               type="button"
               onClick={dismissAlert}
               aria-label="Zamknij alert"
-              className="shrink-0 rounded-full p-1 text-faint hover:bg-surface-2 hover:text-fg"
+              className={cn("shrink-0 rounded-full p-1 text-faint hover:bg-surface-2 hover:text-fg", RAW_FOCUS)}
             >
               <X className="size-4" />
             </button>
@@ -498,22 +507,22 @@ export function GromApp() {
           )}
         >
           {tracks.length > 0 ? (
-            <div className="pointer-events-auto flex items-center gap-2 rounded-full bg-surface/90 px-3 py-1.5 text-xs shadow-[0_0_0_1px_rgba(255,255,255,0.08)] backdrop-blur-md">
+            <div className="pointer-events-auto flex min-h-9 items-center gap-1 rounded-full bg-surface/90 px-1 text-xs shadow-[0_0_0_1px_rgba(255,255,255,0.08)] backdrop-blur-md">
               <button
                 type="button"
                 aria-pressed={tracksMap}
                 onClick={() => setTracksMap(!tracksMap)}
-                className="flex items-center gap-2"
+                className={cn("flex min-h-9 items-center gap-2 px-2", RAW_FOCUS)}
               >
                 <span
                   className="inline-block size-2.5 rounded-full ring-2 ring-fg"
-                  style={{ backgroundColor: tracksMap ? "#f0a202" : "#5c6570" }}
+                  style={{ backgroundColor: tracksMap ? "#f0a202" : "#7a8593" }}
                 />
                 <span className={tracksMap ? "text-fg" : "text-muted"}>tor komórki</span>
               </button>
               <button
                 type="button"
-                className="font-medium text-accent hover:text-fg"
+                className={cn("inline-flex min-h-9 items-center px-2 font-medium text-accent hover:text-fg", RAW_FOCUS)}
                 onClick={showRainMotion}
               >
                 pokaż
@@ -525,11 +534,11 @@ export function GromApp() {
               type="button"
               aria-pressed={imgwMap}
               onClick={() => setImgwMap(!imgwMap)}
-              className="pointer-events-auto flex items-center gap-2 rounded-full bg-surface/90 px-3 py-1.5 text-xs shadow-[0_0_0_1px_rgba(255,255,255,0.08)] backdrop-blur-md"
+              className={MAP_CHIP}
             >
               <span
                 className="inline-block size-2.5 rounded-sm ring-2 ring-fg"
-                style={{ backgroundColor: imgwMap ? "#e4572e" : "#5c6570" }}
+                style={{ backgroundColor: imgwMap ? "#e4572e" : "#7a8593" }}
               />
               <span className={imgwMap ? "text-fg" : "text-muted"}>IMGW</span>
             </button>
@@ -539,11 +548,11 @@ export function GromApp() {
               type="button"
               aria-pressed={drizzleMap}
               onClick={() => setDrizzleMap(!drizzleMap)}
-              className="pointer-events-auto flex items-center gap-2 rounded-full bg-surface/90 px-3 py-1.5 text-xs shadow-[0_0_0_1px_rgba(255,255,255,0.08)] backdrop-blur-md"
+              className={MAP_CHIP}
             >
               <span
                 className="inline-block size-2.5 rounded-full ring-2 ring-fg"
-                style={{ backgroundColor: drizzleMap ? "#36bae5" : "#5c6570" }}
+                style={{ backgroundColor: drizzleMap ? "#36bae5" : "#7a8593" }}
               />
               <span className={drizzleMap ? "text-fg" : "text-muted"}>Pokaż mżawkę</span>
             </button>
@@ -660,7 +669,7 @@ export function GromApp() {
                   <li key={`${p.lat}-${p.lon}-${p.label}`}>
                     <button
                       type="button"
-                      className="w-full px-3 py-2.5 text-left text-sm hover:bg-bg"
+                      className={cn("w-full px-3 py-2.5 text-left text-sm hover:bg-bg", RAW_FOCUS)}
                       onClick={() => pickPlace(p)}
                     >
                       {p.label}
@@ -678,7 +687,7 @@ export function GromApp() {
                   type="button"
                   onClick={() => pickPlace(c)}
                   className={cn(
-                    "h-9 rounded-full px-3 text-xs font-medium",
+                    CHIP,
                     place.label === c.label ? "bg-accent text-accent-fg" : "bg-surface-2 text-fg",
                   )}
                 >
@@ -745,7 +754,7 @@ export function GromApp() {
                         {" "}
                         <button
                           type="button"
-                          className="font-medium text-accent hover:text-fg"
+                          className={cn("font-medium text-accent hover:text-fg", RAW_FOCUS)}
                           onClick={() => void enableAlerts()}
                         >
                           Zezwól
@@ -766,7 +775,7 @@ export function GromApp() {
                             type="button"
                             onClick={() => setAlerts(alertPresetPatch(id))}
                             className={cn(
-                              "h-9 rounded-full px-3 text-xs font-medium",
+                              CHIP,
                               active
                                 ? "bg-accent text-accent-fg"
                                 : "bg-surface text-fg",
@@ -859,7 +868,7 @@ export function GromApp() {
                           step={5}
                           value={alerts.leadMin}
                           onChange={(e) => setAlerts({ leadMin: Number(e.target.value) })}
-                          className="mt-2 w-full accent-accent"
+                          className={cn("mt-2 w-full accent-accent", RAW_FOCUS)}
                           aria-label="Wyprzedzenie alertu w minutach"
                         />
                       </label>
@@ -873,7 +882,7 @@ export function GromApp() {
                               type="button"
                               onClick={() => setAlerts({ minLevel: lvl })}
                               className={cn(
-                                "h-9 rounded-full px-3 text-xs font-medium",
+                                CHIP,
                                 alerts.minLevel === lvl
                                   ? "bg-accent text-accent-fg"
                                   : "bg-surface text-fg",
@@ -895,7 +904,7 @@ export function GromApp() {
                           step={5}
                           value={alerts.minChancePct}
                           onChange={(e) => setAlerts({ minChancePct: Number(e.target.value) })}
-                          className="mt-2 w-full accent-accent"
+                          className={cn("mt-2 w-full accent-accent", RAW_FOCUS)}
                           aria-label="Minimalna szansa alertu"
                         />
                       </label>
@@ -908,7 +917,7 @@ export function GromApp() {
                       {alertLog.length > 0 ? (
                         <button
                           type="button"
-                          className="text-xs text-faint hover:text-fg"
+                          className={cn("text-xs text-faint hover:text-fg", RAW_FOCUS)}
                           onClick={clearAlertLog}
                         >
                           wyczyść
@@ -965,7 +974,7 @@ function HourSelect({ value, onChange }: { value: number; onChange: (h: number) 
     <select
       value={value}
       onChange={(e) => onChange(Number(e.target.value))}
-      className="h-8 rounded-lg border border-border bg-surface px-2 font-mono text-xs text-fg"
+      className={cn("h-8 rounded-lg border border-border bg-surface px-2 font-mono text-xs text-fg", RAW_FOCUS)}
     >
       {Array.from({ length: 24 }, (_, h) => (
         <option key={h} value={h}>
