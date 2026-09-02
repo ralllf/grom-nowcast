@@ -13,6 +13,7 @@ Full-viewport MapLibre map: OpenFreeMap Positron (Esri Light Gray fallback after
 - `pokaż` on that pill (fits bounds to nearest threatening track) — camera only; does not force arrows on
 - Track arrows on the overlay canvas (`aria-hidden`, `pointer-events-none`) — not hit-testable; empty until the chip is on
 - `focus` fly-to after `Pokaż ruch opadu na mapie`
+- Bottom-right map chrome (`#grom-map-chrome`), above peek (128px): zoom `Przybliż` / `Oddal`, on-map locate (`Wybierz lokalizację`, same action as the header), compact legend (4 rain swatches + amber track glyph + IMGW tint), scale bar, visible `OpenFreeMap / OSM` credit (`#grom-map-credit`). `attributionControl` stays false — credit is the chrome line, not a control under the sheet.
 
 ## How to get to it (user POV)
 

@@ -349,6 +349,39 @@ try {
   step(`status row: ${statusRow}`);
   step(`sheet ready, starts with pin copy: ${sheet.split("\n").slice(0, 4).join(" | ")}`);
 
+  const CHROME_JS = `(() => {
+    const box = (el) => {
+      if (!el) return null;
+      const r = el.getBoundingClientRect();
+      const st = getComputedStyle(el);
+      return {
+        w: Math.round(r.width),
+        h: Math.round(r.height),
+        top: Math.round(r.top),
+        bottom: Math.round(r.bottom),
+        visible: r.width > 0 && r.height > 0 && st.visibility !== "hidden" && st.display !== "none" && r.bottom > 0 && r.top < window.innerHeight,
+        text: (el.getAttribute("aria-label") || el.textContent || "").replace(/\\s+/g, " ").trim().slice(0, 80),
+      };
+    };
+    return {
+      zoomIn: box(document.querySelector('button[aria-label="Przybliż"]')),
+      zoomOut: box(document.querySelector('button[aria-label="Oddal"]')),
+      locate: box(document.querySelector('#grom-map-chrome button[aria-label="Wybierz lokalizację"]')),
+      legend: box(document.querySelector('[aria-label="Legenda opadu"]')),
+      credit: box(document.querySelector("#grom-map-credit")),
+    };
+  })()`;
+  const mapChrome = await evalExpr(cdp, CHROME_JS);
+  writeFileSync(join(OUT, "map-chrome.json"), JSON.stringify({ when: new Date().toISOString(), ...mapChrome }, null, 2));
+  const chromeMissing = ["zoomIn", "zoomOut", "locate", "legend", "credit"].filter((k) => !mapChrome?.[k]?.visible);
+  if (chromeMissing.length) {
+    await screenshot(cdp, join(OUT, "00-failed-map-chrome.png"));
+    throw new Error(`map chrome not on screen: ${chromeMissing.join(", ")} ${JSON.stringify(mapChrome)}`);
+  }
+  step(
+    `map chrome on screen: zoom ${mapChrome.zoomIn.text}/${mapChrome.zoomOut.text}, locate, legend, credit "${mapChrome.credit.text}"`,
+  );
+
   if (FEATURE === "radar-map") {
     let chip = { present: false, pressed: null };
     const tChip = Date.now();

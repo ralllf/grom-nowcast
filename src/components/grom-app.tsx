@@ -397,6 +397,8 @@ export function GromApp() {
         threatLevel={threat?.level ?? null}
         sheetDetent={sheetDetent}
         focus={focus}
+        onLocate={locate}
+        locatePending={geoPending}
         onPick={(lat, lon) => {
           if (Date.now() < ignoreMapClickUntil.current) return;
           setGeoError(null);
