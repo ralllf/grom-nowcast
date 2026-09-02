@@ -8,6 +8,8 @@ import {
   idzieOdTowardSuffix,
   nextSheetDetent,
   nowcastHeadline,
+  SHEET_CREDIT_LINE,
+  SHEET_DATA_DETAILS,
   SHEET_DETENT_CLASS,
   sheetPeekStatus,
   sheetSourceHonesty,
@@ -339,14 +341,13 @@ export function ThreatSheet({
           </p>
         ) : null}
 
-        <p className="mt-4 text-xs leading-relaxed text-faint">
-          Źródłem danych ostrzeżeń i sieci POLRAD jest Instytut Meteorologii i Gospodarki Wodnej –
-          Państwowy Instytut Badawczy. Dane radarowe zostały przetworzone (SRI mm/h IMGW, siatka
-          ~3 km; RainViewer dBZ → Marshall–Palmer gdy SRI niedostępne). Analiza: IMGW COMPO_SRI.
-          Mapa: IMGW SRI (4 klasy) / RainViewer fallback / OpenFreeMap / OSM. To nie jest oficjalny
-          alert RCB. Komórka burzowa
-          może powstać lokalnie nawet przy czystym radarze.
-        </p>
+        <p className="mt-4 text-xs leading-relaxed text-faint">{SHEET_CREDIT_LINE}</p>
+        <details className="mt-1 text-xs leading-relaxed text-faint">
+          <summary className="cursor-pointer list-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 [&::-webkit-details-marker]:hidden">
+            O danych ›
+          </summary>
+          <p className="mt-1.5">{SHEET_DATA_DETAILS}</p>
+        </details>
       </div>
     </article>
   );
