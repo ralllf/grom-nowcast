@@ -26,6 +26,7 @@ import { isActiveWarning } from "./imgw-time.ts";
 import { HAIL_RATE, LEVEL_MIN_RATE, levelFromRate } from "./palette.ts";
 import { calibrateChancePct, type ChanceRung } from "./chance.ts";
 import { COMPO_SRI_GRID, inSriComposite, type SriGrid } from "./sri.ts";
+import { nadPhrase } from "./cities.ts";
 
 export type { ChanceRung };
 
@@ -1193,12 +1194,12 @@ export function chanceLadder(input: ChanceLadderInput): { rung: ChanceRung; rawP
 function expectPl(maxLevel: number, hailAtPin = false): string | null {
   if (maxLevel >= 4) {
     return hailAtPin
-      ? "silną ulewę, porywy wiatru, możliwy grad"
-      : "silną ulewę, porywy wiatru";
+      ? "silnej ulewy, porywów wiatru, możliwego gradu"
+      : "silnej ulewy, porywów wiatru";
   }
-  if (maxLevel >= 3) return "ulewę i porywisty wiatr";
-  if (maxLevel >= 2) return "deszcz i mokrą jezdnię";
-  if (maxLevel >= 1) return "słaby deszcz";
+  if (maxLevel >= 3) return "ulewy i porywistego wiatru";
+  if (maxLevel >= 2) return "deszczu i mokrej jezdni";
+  if (maxLevel >= 1) return "słabego deszczu";
   return null;
 }
 
@@ -1235,6 +1236,7 @@ export function computeThreat(
   const pinLevel = levelFromRate(meanRateWithin(lastSamples, place.lat, place.lon, OVER_KM));
   const nearestKm = nearestWithin(lastSamples, place.lat, place.lon, TRACK_MAX_KM);
   const who = place.label;
+  const nadWho = nadPhrase(who);
 
   let approaching = false;
   let receding = false;
@@ -1531,11 +1533,11 @@ export function computeThreat(
 
   let detail: string;
   if (etaMin === 0 && (pinMaxLevel >= 1 || (nearestKm !== null && nearestKm <= PIN_KM))) {
-    detail = `Opad jest nad ${who} teraz.${expect ? ` Spodziewaj się: ${expect}.` : ""}${trendNote} ${formNote}`;
+    detail = `Opad jest ${nadWho} teraz.${expect ? ` Spodziewaj się: ${expect}.` : ""}${trendNote} ${formNote}`;
   } else if (receding && aboutPin) {
     detail = `${comingFrom ? `Idzie od ${comingFrom}` : "Komórka"} (${dist}) i odchodzi na ${toward ?? "bok"}.${expect ? ` Spodziewaj się: ${expect}.` : ""} Szansa ~${chance}%.${trendNote} ${formNote}`;
   } else if (willHit && comingFrom) {
-    const etaBit = etaMin && etaMin > 0 ? ` Dojście nad ${who}: ok. ${etaMin} min.` : "";
+    const etaBit = etaMin && etaMin > 0 ? ` Dojście ${nadWho}: ok. ${etaMin} min.` : "";
     detail = `Idzie od ${comingFrom}${speedKmh ? ` (~${Math.round(speedKmh)} km/h)` : ""}, echo ${dist}.${etaBit}${expect ? ` Spodziewaj się: ${expect}.` : ""} Szansa ~${chance}%. To ruch echa, nie pewność.${trendNote} ${formNote}`;
   } else if (
     comingFrom &&
@@ -1551,7 +1553,7 @@ export function computeThreat(
       activeMatch[0]?.body ?? upcoming[0]?.body ?? "Instytut wydał ostrzeżenie dla powiatu.";
     detail = `${body} Dla ${who} szansa z radaru ~${chance}% na ~45 min.`;
   } else if (level === "clear") {
-    detail = `Nad ${who} radar nie widzi groźnej komórki w promieniu ${TRACK_MAX_KM} km. Szansa ~${chance}% na ok. 45 min. ${formNote}`;
+    detail = `${nadWho.charAt(0).toUpperCase()}${nadWho.slice(1)} radar nie widzi groźnej komórki w promieniu ${TRACK_MAX_KM} km. Szansa ~${chance}% na ok. 45 min. ${formNote}`;
   } else {
     detail = `Szansa ~${chance}% dla ${who}. ${formNote}`;
   }

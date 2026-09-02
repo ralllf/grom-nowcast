@@ -62,7 +62,7 @@ const incoming = (etaMin: number, level: RadarLevel = 3, extra: Partial<Threat> 
     chancePct: 70,
     comingFrom: "zachodu",
     toward: "wschód",
-    expect: "ulewę i porywisty wiatr",
+    expect: "ulewy i porywistego wiatru",
     ...extra,
   });
 
@@ -76,7 +76,7 @@ const overPin = (level: RadarLevel = 3) =>
     pinLevel: level,
     cellLevel: level,
     chancePct: 85,
-    expect: "ulewę i porywisty wiatr",
+    expect: "ulewy i porywistego wiatru",
   });
 
 const clear = () => threat();
@@ -160,7 +160,7 @@ test("incoming copy reads like a sentence", () => {
   assert.ok(r.event);
   assert.equal(r.event.title, "Ulewa i wiatr za ok. 18 min");
   assert.match(r.event.body, /^Idzie od zachodu \(~40 km\/h\) na Kraków\. Szansa ~70%\./);
-  assert.match(r.event.body, /Spodziewaj się: ulewę i porywisty wiatr\./);
+  assert.match(r.event.body, /Spodziewaj się: ulewy i porywistego wiatru\./);
   assert.equal(r.event.id.endsWith(":incoming"), true);
 });
 
@@ -529,6 +529,28 @@ test("decayed over the pin all-clears after pinLevel stays below minLevel", () =
   assert.match(done.events[1]!, /^allclear\|Przeszło · Kraków\|Opad odszedł/);
   assert.doesNotMatch(done.events[1]!, /minęła/);
   assert.doesNotMatch(done.events[1]!, /Radar czysty w promieniu/);
+});
+
+test("now title uses instrumental nad, not nominative city", () => {
+  const warszawa = evaluateAlert(overPin(), on, EMPTY_ALERT_MEMORY, T0, {
+    placeLabel: "Warszawa",
+    radarTime: T0 / 1000,
+  });
+  assert.ok(warszawa.event);
+  assert.equal(warszawa.event.title, "Ulewa i wiatr nad Warszawą");
+  assert.doesNotMatch(warszawa.event.title, /nad Warszawa$/);
+  const krakow = evaluateAlert(overPin(), on, EMPTY_ALERT_MEMORY, T0, {
+    placeLabel: "Kraków",
+    radarTime: T0 / 1000,
+  });
+  assert.ok(krakow.event);
+  assert.equal(krakow.event.title, "Ulewa i wiatr nad Krakowem");
+  const pin = evaluateAlert(overPin(), on, EMPTY_ALERT_MEMORY, T0, {
+    placeLabel: "Punkt na mapie",
+    radarTime: T0 / 1000,
+  });
+  assert.ok(pin.event);
+  assert.equal(pin.event.title, "Ulewa i wiatr nad Twoją pinezką");
 });
 
 test("klasa 4 with lightning near the cell says Gwałtowna burza and names the strikes", () => {

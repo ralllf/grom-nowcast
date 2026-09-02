@@ -32,6 +32,7 @@ import {
   pinTimeline,
   SRI_NCC_CELL_KM,
 } from "./threat.ts";
+import { DEFAULT_PLACE } from "./cities.ts";
 import type { OfficialWarning, Place, RadarLevel, RadarMemoryFrame, RadarSample } from "./types.ts";
 
 function angleDiffDeg(a: number, b: number) {
@@ -305,7 +306,7 @@ test("incoming cell from the west gets ETA, comingFrom and a visible track", () 
   assert.ok(threat.expect?.includes("deszcz") || threat.expect?.includes("ulew"));
   assert.match(threat.detail, /Idzie od zachodu/);
   assert.match(threat.detail, /Spodziewaj się/);
-  assert.match(threat.detail, /Dojście nad Testowo/);
+  assert.match(threat.detail, /Dojście nad Twoją pinezką/);
 });
 
 test("precip already over the pin is ETA teraz", () => {
@@ -964,7 +965,7 @@ test("a strong cell 20 km away plus drizzle over the pin is not 'nad Tobą'", ()
   assert.equal(threat.maxLevel, 3, "context max within 25 km is still the strong cell");
   assert.notEqual(threat.level, "now", `expected not 'now', got ${threat.level}`);
   assert.equal(threat.etaMin, 0, "drizzle over the pin is still 'teraz'");
-  assert.equal(threat.expect, "słaby deszcz");
+  assert.equal(threat.expect, "słabego deszczu");
 });
 
 test("weak pin echo + approaching klasa-4 cell: no hail, one story, not Szansa 90", () => {
@@ -1595,6 +1596,49 @@ test("cellLevel is the inbound core, not the whole cluster max", () => {
     3,
     `cellLevel must be the inbound core, not cluster max 4 (got ${threat.cellLevel})`,
   );
-  assert.equal(threat.expect, "ulewę i porywisty wiatr");
-  assert.doesNotMatch(threat.detail, /silną ulewę/);
+  assert.equal(threat.expect, "ulewy i porywistego wiatru");
+  assert.doesNotMatch(threat.detail, /silnej ulewy/);
+});
+
+function incomingWestOf(place: Place) {
+  return computeThreat(
+    place,
+    [frame(1_000, blob(place.lat, place.lon - 0.6), 43), frame(1_600, blob(place.lat, place.lon - 0.45), 32)],
+    [],
+  );
+}
+
+test("nad + city is instrumental — Warszawa / Kraków, never nominative", () => {
+  const warszawa = incomingWestOf(DEFAULT_PLACE);
+  assert.match(warszawa.detail, /Dojście nad Warszawą/);
+  assert.doesNotMatch(warszawa.detail, /nad Warszawa(?![ą])/);
+  const krakow = incomingWestOf({
+    lat: 50.0647,
+    lon: 19.945,
+    label: "Kraków",
+    city: "Kraków",
+    terc: "1261",
+  });
+  assert.match(krakow.detail, /Dojście nad Krakowem/);
+  assert.doesNotMatch(krakow.detail, /nad Kraków(?![e])/);
+});
+
+test("nad + map pin / unknown city falls back to pinezka", () => {
+  const pin = incomingWestOf({ lat: 50.0, lon: 21.0, label: "Punkt na mapie" });
+  assert.match(pin.detail, /Dojście nad Twoją pinezką/);
+  assert.doesNotMatch(pin.detail, /nad Punkt na mapie/);
+  const unknown = incomingWestOf(city);
+  assert.match(unknown.detail, /Dojście nad Twoją pinezką/);
+  assert.doesNotMatch(unknown.detail, /nad Testowo/);
+});
+
+test("Spodziewaj się uses genitive expect strings", () => {
+  const inbound = incomingWestOf(city);
+  assert.equal(inbound.expect, "ulewy i porywistego wiatru");
+  assert.match(inbound.detail, /Spodziewaj się: ulewy i porywistego wiatru\./);
+  const hits = nativeDiscHits(city.lat, city.lon, () => 12);
+  const { samples } = aggregate(hits);
+  const downpour = computeThreat(city, [frame(1_000, samples, 0), frame(1_600, samples, 0)], []);
+  assert.equal(downpour.expect, "silnej ulewy, porywów wiatru");
+  assert.match(downpour.detail, /Spodziewaj się: silnej ulewy, porywów wiatru\./);
 });
