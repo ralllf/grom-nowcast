@@ -49,6 +49,22 @@ function sleep(ms) {
   return new Promise((r) => setTimeout(r, ms));
 }
 
+const STATUS_ROW_RE =
+  /Radar (?:\d{1,2}:\d{2} · \d+ min|✕) · IMGW [✓✕] · wyładowania [✓✕]/;
+const AMBER_OUTAGE_SENTENCES = [
+  "Wyładowania chwilowo niedostępne",
+  "Ostrzeżenia IMGW chwilowo niedostępne",
+];
+
+function hasAmberOutageSentences(text) {
+  return AMBER_OUTAGE_SENTENCES.some((s) => text.includes(s));
+}
+
+function quoteStatusRow(text) {
+  const m = text.match(STATUS_ROW_RE);
+  return m ? m[0] : null;
+}
+
 class Cdp {
   constructor(ws) {
     this.ws = ws;
@@ -551,6 +567,19 @@ try {
     ws.close();
   } else {
   await screenshot(cdp, join(OUT, "01-warszawa-sheet.png"));
+  await evalExpr(
+    cdp,
+    `(() => {
+      const sheet = document.querySelector("#grom-threat-sheet");
+      if (!sheet) return null;
+      sheet.scrollTop = sheet.scrollHeight;
+      for (const el of sheet.querySelectorAll(".overflow-y-auto")) el.scrollTop = el.scrollHeight;
+      return sheet.scrollHeight;
+    })()`,
+  );
+  await sleep(200);
+  await screenshot(cdp, join(OUT, "01b-warszawa-status-row.png"));
+  step("Warszawa sheet scrolled to status row");
 
   const beforeLabel = await evalExpr(
     cdp,
@@ -649,6 +678,18 @@ try {
     place: stored,
   });
   await screenshot(cdp, join(OUT, "03-krakow-sheet.png"));
+  await evalExpr(
+    cdp,
+    `(() => {
+      const sheet = document.querySelector("#grom-threat-sheet");
+      if (!sheet) return null;
+      sheet.scrollTop = sheet.scrollHeight;
+      for (const el of sheet.querySelectorAll(".overflow-y-auto")) el.scrollTop = el.scrollHeight;
+      return sheet.scrollHeight;
+    })()`,
+  );
+  await sleep(200);
+  await screenshot(cdp, join(OUT, "03b-krakow-status-row.png"));
 
   notes.ok = true;
   notes.finishedAt = new Date().toISOString();
@@ -702,26 +743,12 @@ ${
 - \`03-test-banner.png\` — \`Testuj alert\` banner
 - \`04-sheet-after.png\` — dialog closed, sheet unchanged`
       : `- \`01-warszawa-sheet.png\` — sheet after snapshot, default / prior pin
+- \`01b-warszawa-status-row.png\` — sheet scrolled to the grey status row
 - \`02-settings-dialog.png\` — dialog \`Lokalizacja i alerty\` open
-- \`03-krakow-sheet.png\` — sheet after Kraków chip`
+- \`03-krakow-sheet.png\` — sheet after Kraków chip
+- \`03b-krakow-status-row.png\` — Kraków sheet scrolled to the status row`
 }
 
 Mocks: none. Radar snapshot is the live IMGW/RainViewer boundary already checked by doctor.
 `;
-}
-
-const STATUS_ROW_RE =
-  /Radar (?:\d{1,2}:\d{2} · \d+ min|✕) · IMGW [✓✕] · wyładowania [✓✕]/;
-const AMBER_OUTAGE_SENTENCES = [
-  "Wyładowania chwilowo niedostępne",
-  "Ostrzeżenia IMGW chwilowo niedostępne",
-];
-
-function hasAmberOutageSentences(text) {
-  return AMBER_OUTAGE_SENTENCES.some((s) => text.includes(s));
-}
-
-function quoteStatusRow(text) {
-  const m = text.match(STATUS_ROW_RE);
-  return m ? m[0] : null;
 }
