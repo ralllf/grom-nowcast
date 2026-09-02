@@ -9,13 +9,14 @@ import {
   type AlertSettings,
 } from "./alerts.ts";
 import { haversineKm } from "./geo.ts";
+import { MAX_RADAR_SAMPLES } from "./radar-grid.ts";
 import { computeThreat } from "./threat.ts";
 import type { RadarLevel, RadarMemoryFrame } from "./types.ts";
 
 export const HINDCAST_LEADS = [10, 20, 30, 40, 50, 60] as const;
 export const HINDCAST_ORIGIN = { lat: 52.1, lon: 19.35 };
-/** Same 9 000-sample coarsen rule as server.ts `aggregate()` — logged, not applied here. */
-export const MAX_RADAR_SAMPLES = 9_000;
+/** Same coarsen rule as `aggregate()` — logged, not applied here. */
+export { MAX_RADAR_SAMPLES };
 
 export const RESEARCH_ALERT_CONFIG = {
   name: "research" as const,

@@ -11,11 +11,17 @@ export const PL_RADAR_BBOX = {
 
 export const PL_RADAR_ORIGIN = { lat: 52.1, lon: 19.35 };
 
-/** Cap on samples per frame; hit → coarsen the aggregation grid (never drop regions). */
-export const MAX_RADAR_SAMPLES = 9_000;
 /** Aggregation cell (degrees). ~3 km at 52°N: 0.027° lat, 0.044° lon. */
 export const BASE_CELL_LAT = 0.027;
 export const BASE_CELL_LON = 0.044;
+/**
+ * Cap on samples per frame; hit → coarsen the aggregation grid (never drop regions).
+ * 9 000 was ~16 % of the PL bbox and jumped to 6 km, which checkerboards the
+ * 3 km NCC window (calc review 06 §1). Stay on 3 km for a full COMPO_SRI
+ * composite (800×800 / ~1.16 km → at most this many 3 km cells).
+ */
+export const MAX_RADAR_SAMPLES =
+  Math.ceil((56.3 - 48) / BASE_CELL_LAT) * Math.ceil((25.3 - 11.6) / BASE_CELL_LON);
 
 export type RawHit = { lat: number; lon: number; rate: number };
 
