@@ -74,6 +74,8 @@ export type Place = {
   lat: number;
   lon: number;
   label: string;
+  /** Instrumental for `nad X` (Warszawą, Krakowem). Chip / place line stay `label`. */
+  instrumental?: string;
   city?: string;
   county?: string;
   state?: string;

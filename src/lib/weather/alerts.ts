@@ -1,3 +1,4 @@
+import { nadPhrase } from "./cities.ts";
 import type { RadarLevel, Threat } from "./types.ts";
 import { radarAgeCaption, radarAgeMin, wallClockMin } from "./wall-clock.ts";
 
@@ -327,7 +328,7 @@ export function evaluateAlert(
           ...base,
           id: `${episode}:now`,
           kind: "now",
-          title: `${noun} nad ${opts.placeLabel}`,
+          title: `${noun} ${nadPhrase(opts.placeLabel)}`,
           body: `Opad jest nad pinezką teraz.${expect}${lightningBit}${radarSuffix(opts.radarTime, now, opts.analysisSource)}`,
         },
       };
