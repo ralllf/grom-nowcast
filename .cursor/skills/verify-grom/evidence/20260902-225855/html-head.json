@@ -1,0 +1,37 @@
+{
+  "base": "http://127.0.0.1:8080/",
+  "title": true,
+  "manifest_link": "tanstack-start-dev-client-entry\"/><link rel=\"manifest\" href=\"/manifest.json\"/><link rel=\"icon\" type=\"image/svg+xml\" href=\"/favicon",
+  "theme_color": "nce=\"default\"/><title>GROM</title><meta name=\"theme-color\" content=\"#e8edf2\"/><meta name=\"description\" content=\"Alert burzowy na m",
+  "quotes": {
+    "manifest": "<link rel=\"manifest\" href=\"/manifest.json\"/>",
+    "theme_color": "<meta name=\"theme-color\" content=\"#e8edf2\"/>"
+  },
+  "present": {
+    "manifest_link": true,
+    "theme_color_e8edf2": true,
+    "ink_theme": false
+  },
+  "assets": {
+    "/manifest.json": {
+      "status": 200,
+      "content_type": "application/json",
+      "bytes": 776
+    },
+    "/icon.svg": {
+      "status": 200,
+      "content_type": "image/svg+xml",
+      "bytes": 244
+    },
+    "/icon-192.png": {
+      "status": 200,
+      "content_type": "image/png",
+      "bytes": 1066
+    },
+    "/icon-512.png": {
+      "status": 200,
+      "content_type": "image/png",
+      "bytes": 3352
+    }
+  }
+}

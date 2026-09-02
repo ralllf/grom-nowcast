@@ -1,3 +1,4 @@
+import { prefersReducedMotion, titleFlashIntervalMs } from "./reduced-motion";
 import type { AlertEvent, AlertKind } from "./weather/alerts";
 
 /**
@@ -112,6 +113,8 @@ export function stopTitleFlash() {
 export function startTitleFlash(event: AlertEvent) {
   if (typeof document === "undefined") return;
   stopTitleFlash();
+  if (prefersReducedMotion()) return;
+  const interval = titleFlashIntervalMs(false);
   baseTitle = document.title;
   stopFlashAt = Date.now() + 5 * 60_000;
   const alt = `⚡ ${event.title}`;
@@ -123,7 +126,7 @@ export function startTitleFlash(event: AlertEvent) {
     }
     on = !on;
     document.title = on ? alt : (baseTitle ?? document.title);
-  }, 1500);
+  }, interval);
 }
 
 export type DeliveryOptions = {

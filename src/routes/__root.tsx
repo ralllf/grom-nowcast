@@ -9,14 +9,16 @@ export const Route = createRootRoute({
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1, viewport-fit=cover" },
       { title: APP_NAME },
-      { name: "theme-color", content: "#07090c" },
+      { name: "theme-color", content: "#e8edf2" },
       {
         name: "description",
         content: "Alert burzowy na minuty, nie na godziny. Radar na żywo i ostrzeżenia IMGW.",
       },
     ],
     links: [
+      { rel: "manifest", href: "/manifest.json" },
       { rel: "icon", type: "image/svg+xml", href: "/favicon.svg" },
+      { rel: "apple-touch-icon", href: "/icon-192.png" },
       { rel: "stylesheet", href: appCss },
       {
         rel: "stylesheet",

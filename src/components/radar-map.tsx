@@ -19,6 +19,7 @@ import { drawMapOverlay } from "@/lib/weather/map-overlay";
 import type { CellTrack, LightningStrike, ThreatLevel } from "@/lib/weather/types";
 import { strikeOpacity } from "@/lib/weather/perun";
 import { pickRadarLayer, type OverlayCorners } from "@/lib/weather/sri-overlay";
+import { cameraDuration } from "@/lib/reduced-motion";
 import { cn } from "@/lib/utils";
 
 const SM_UP = "(min-width: 640px)";
@@ -293,7 +294,7 @@ export function RadarMap({
     if (!map || !readyRef.current) return;
     map.easeTo({
       center: [liveRef.current.lon, liveRef.current.lat],
-      duration: 700,
+      duration: cameraDuration(700),
       offset: placeChangeOffset(cameraSheetPx(sheetDetentRef.current)),
     });
     paintOverlay(canvasRef.current, map, liveRef.current, true);
@@ -334,7 +335,7 @@ export function RadarMap({
         [minLon, minLat],
         [maxLon, maxLat],
       ],
-      { padding: sheetFitPadding(cameraSheetPx(sheetDetent)), maxZoom: 8.6, duration: 1000 },
+      { padding: sheetFitPadding(cameraSheetPx(sheetDetent)), maxZoom: 8.6, duration: cameraDuration(1000) },
     );
   }, [focus, sheetDetent]);
 
