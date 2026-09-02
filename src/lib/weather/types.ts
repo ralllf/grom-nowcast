@@ -131,6 +131,8 @@ export type TimelinePoint = {
   level: RadarLevel;
   /** mm/h */
   rate: number;
+  /** Back-trajectory left the SRI composite — not a dry miss. */
+  unknown?: boolean;
 };
 
 export type Threat = {

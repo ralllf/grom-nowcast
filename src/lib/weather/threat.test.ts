@@ -14,6 +14,7 @@ import {
   TRAIL_SOLO_KM_30,
   TRAIL_TRUST_KM_30,
   gateKm,
+  pinTimeline,
 } from "./threat.ts";
 import type { OfficialWarning, Place, RadarLevel, RadarMemoryFrame, RadarSample } from "./types.ts";
 
@@ -761,6 +762,35 @@ test("weak pin echo + approaching klasa-4 cell: no hail, one story, not Szansa 9
     `headline+detail must be one story: title=${threat.title} detail=${threat.detail}`,
   );
   assert.notEqual(threat.chancePct, 90, `Szansa ${threat.chancePct} is the 90 rung for a weak pin`);
+});
+
+test("back-trajectory west of the SRI composite is unknown, not a dry miss", () => {
+  const szczecin: Place = { lat: 53.4285, lon: 14.5528, label: "Szczecin", terc: "3262" };
+  const echoWest = blob(53.43, 13.2, 3);
+  const frames = [frame(0, blob(53.43, 13.05, 3), 95), frame(600, echoWest, 85)];
+  const threat = computeThreat(szczecin, frames, []);
+  assert.ok(threat.nearestKm !== null && threat.nearestKm < 100, `Szczecin should see 13.2°E echo, nearest=${threat.nearestKm}`);
+
+  const off = pinTimeline([], 53.4, 11.0, { bearing: 90, speedKmh: 70 });
+  const later = off.filter((p) => p.t > 0);
+  assert.ok(later.some((p) => p.unknown), "a step west of the composite must be unknown");
+  assert.ok(
+    later.filter((p) => p.unknown).every((p) => p.level === 0),
+    "unknown is not a rain hit",
+  );
+  const interiorDry = pinTimeline([], 52.23, 21.01, { bearing: 90, speedKmh: 40 });
+  assert.ok(interiorDry.some((p) => p.t > 0 && !p.unknown && p.level === 0));
+  assert.ok(interiorDry.filter((p) => p.t > 0).every((p) => !p.unknown), "Warszawa back-steps stay in coverage");
+});
+
+test("unknown coverage steps do not count as a dry miss that clears willHit", () => {
+  const geoPin: Place = { lat: 53.4, lon: 12.15, label: "Krawędź", terc: "3201" };
+  const frames = [0, 1, 2, 3].map((t) => frame(t * 300, blob(53.4, 12.45 + t * 0.05, 3), 25));
+  const threat = computeThreat(geoPin, frames, [], geoPin);
+  assert.ok(
+    threat.timeline.some((p) => p.unknown),
+    `expected an off-composite step, got ${threat.timeline.map((p) => `${p.t}:${p.unknown ? "u" : p.level}`).join(",")}`,
+  );
 });
 
 test("pin timeline: dry now, rain arrives when the advected cell reaches the pin", () => {

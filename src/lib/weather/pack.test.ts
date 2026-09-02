@@ -8,6 +8,15 @@ const samples: RadarSample[] = [
   { lat: 50.0, lon: 21.0, level: 4, rate: 25.1 },
 ];
 
+test("pack/unpack keeps a composite sample west of 13°E", () => {
+  const west: RadarSample = { lat: 53.4285, lon: 12.2, level: 2, rate: 4.1 };
+  const back = unpackSamples(packSamples([west]));
+  assert.equal(back.length, 1);
+  assert.ok(Math.abs(back[0]!.lat - west.lat) < 0.0006);
+  assert.ok(Math.abs(back[0]!.lon - west.lon) < 0.0006, `packed lon ${back[0]!.lon} lost the west of 13°E`);
+  assert.ok(back[0]!.lon < 13);
+});
+
 test("pack/unpack round-trips samples to 0.001° and 0.1 mm/h", () => {
   const back = unpackSamples(packSamples(samples));
   assert.equal(back.length, 2);
