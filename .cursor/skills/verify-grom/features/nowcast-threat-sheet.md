@@ -4,7 +4,7 @@ The bottom card (`#grom-threat-sheet`) is the product: chance, ETA, and echo for
 
 ## Sub-features
 
-- Headline + place label + optional `TERYT ####`
+- Headline + place label (city / pinezka only — no TERYT)
 - Stats `Szansa`, `ETA` (`teraz` / `N min` / `minie` / `—`), `Echo` (`N km` + intensity)
 - Copy block: `Idzie od … → na …`, `Spodziewaj się:`, `Komórka rośnie` / `Komórka słabnie`
 - Timeline `role="img"` `aria-label="Oś czasu opadu"` (19 bars / 5 min) and caption `z ruchu echa` vs `bez ruchu — jak teraz`
