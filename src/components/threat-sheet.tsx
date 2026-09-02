@@ -8,6 +8,7 @@ import {
   nextSheetDetent,
   nowcastHeadline,
   SHEET_DETENT_CLASS,
+  sheetPeekStatus,
   sheetSourceHonesty,
   sheetStatusRow,
   toggleSheetDetent,
@@ -69,6 +70,8 @@ type Props = {
   radarTime: number | null;
   /** True when the PERUN download bounced — folded into the status row. */
   lightningUnavailable?: boolean;
+  /** Browser offline, or a snapshot fetch that failed as offline. */
+  offline?: boolean;
   onDetentChange?: (detent: SheetDetent) => void;
 };
 
@@ -86,6 +89,7 @@ export function ThreatSheet({
   onShowRainMotion,
   radarTime,
   lightningUnavailable = false,
+  offline = false,
   onDetentChange,
 }: Props) {
   const [detent, setDetent] = useState<SheetDetent>("peek");
@@ -128,7 +132,9 @@ export function ThreatSheet({
     queryError: error,
     warningsUnavailable,
     lightningUnavailable,
+    offline,
   });
+  const peekStatus = sheetPeekStatus(statusRow, offline);
 
   useEffect(() => {
     const desktop = window.matchMedia(SM_UP).matches;
@@ -189,21 +195,34 @@ export function ThreatSheet({
       >
         <span className="mx-auto mt-2.5 mb-1 h-1 w-10 rounded-full bg-faint" aria-hidden />
         {!open ? (
-          <div className="flex items-end justify-between gap-3 px-4 pt-1 pb-3">
-            <div className="min-w-0 text-left">
-              <h2 className="truncate font-display text-xl font-semibold leading-none tracking-tight">
-                {headline}
-              </h2>
-              <p className="mt-1.5 truncate text-sm text-muted">{place.label}</p>
-              {imgwLine ? (
-                <p className="mt-0.5 truncate text-[11px] text-warn">{imgwLine}</p>
-              ) : null}
+          <div className="px-4 pt-1 pb-3">
+            <div className="flex items-end justify-between gap-3">
+              <div className="min-w-0 text-left">
+                <h2 className="truncate font-display text-xl font-semibold leading-none tracking-tight">
+                  {headline}
+                </h2>
+                <p className="mt-1.5 truncate text-sm text-muted">{place.label}</p>
+                {imgwLine ? (
+                  <p className="mt-0.5 truncate text-[11px] text-warn">{imgwLine}</p>
+                ) : null}
+              </div>
+              <dl className="flex shrink-0 gap-3 text-center">
+                <PeekStat label="Szansa" value={chance} />
+                <PeekStat label="Za ile" value={eta} />
+                <PeekStat label="Echo" value={echo} />
+              </dl>
             </div>
-            <dl className="flex shrink-0 gap-3 text-center">
-              <PeekStat label="Szansa" value={chance} />
-              <PeekStat label="Za ile" value={eta} />
-              <PeekStat label="Echo" value={echo} />
-            </dl>
+            {peekStatus ? (
+              <p
+                className={
+                  peekStatus.tone === "warn"
+                    ? "mt-1 truncate text-[11px] text-warn"
+                    : "mt-1 truncate text-[11px] text-faint"
+                }
+              >
+                {peekStatus.text}
+              </p>
+            ) : null}
           </div>
         ) : null}
       </button>

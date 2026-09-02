@@ -26,7 +26,7 @@ import {
   shouldCloseSettingsOnKey,
   tabWrapTarget,
 } from "@/components/settings-dialog-logic";
-import { imgwAsideCountLine, type SheetDetent } from "@/components/threat-sheet-logic";
+import { imgwAsideCountLine, isOfflineFailure, type SheetDetent } from "@/components/threat-sheet-logic";
 import { cn } from "@/lib/utils";
 import { CITIES } from "@/lib/weather/cities";
 import { haversineKm } from "@/lib/weather/geo";
@@ -125,6 +125,9 @@ export function GromApp() {
   const [permission, setPermission] = useState<NotifyPermission>("default");
 
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [browserOnline, setBrowserOnline] = useState(
+    typeof navigator === "undefined" ? true : navigator.onLine,
+  );
   const [query, setQuery] = useState("");
   const [geoError, setGeoError] = useState<string | null>(null);
   const [geoHint, setGeoHint] = useState<string | null>(null);
@@ -145,6 +148,16 @@ export function GromApp() {
   useEffect(() => {
     useGrom.getState().hydrate();
     setPermission(notifyPermission());
+  }, []);
+
+  useEffect(() => {
+    const sync = () => setBrowserOnline(navigator.onLine);
+    window.addEventListener("online", sync);
+    window.addEventListener("offline", sync);
+    return () => {
+      window.removeEventListener("online", sync);
+      window.removeEventListener("offline", sync);
+    };
   }, []);
 
   useEffect(() => {
@@ -608,6 +621,11 @@ export function GromApp() {
             onDetentChange={setSheetDetent}
             radarTime={radarTime}
             lightningUnavailable={snapshot?.lightningUnavailable ?? !snapshot}
+            offline={isOfflineFailure({
+              browserOnline,
+              queryError: snapshotQuery.isError,
+              error: snapshotQuery.error,
+            })}
           />
 
           <aside className="pointer-events-auto hidden max-h-72 overflow-y-auto rounded-3xl bg-surface/85 p-4 shadow-[0_0_0_1px_rgba(255,255,255,0.08)] backdrop-blur-md sm:block">

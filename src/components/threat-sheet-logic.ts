@@ -30,6 +30,31 @@ export function sheetSourceHonesty(opts: {
 
 export type SheetStatusTone = "mute" | "warn";
 
+export type SheetStatusRow = {
+  text: string;
+  tone: SheetStatusTone;
+};
+
+/** Browser offline, or a fetch that failed as a network/offline error — not a 500. */
+export function isOfflineFailure(opts: {
+  browserOnline?: boolean;
+  queryError?: boolean;
+  error?: unknown;
+}): boolean {
+  if (opts.browserOnline === false) return true;
+  if (!opts.queryError) return false;
+  const raw = opts.error;
+  const msg =
+    raw instanceof Error
+      ? `${raw.name} ${raw.message}`
+      : typeof raw === "string"
+        ? raw
+        : JSON.stringify(raw ?? "");
+  return /failed to fetch|networkerror|offline|load failed|network request failed|err_internet_disconnected|err_network_changed/i.test(
+    msg,
+  );
+}
+
 /** One grey instrument row. Amber only when the radar itself is stale or down. */
 export function sheetStatusRow(opts: {
   radarTime: number | null;
@@ -38,20 +63,39 @@ export function sheetStatusRow(opts: {
   queryError?: boolean;
   warningsUnavailable?: boolean;
   lightningUnavailable?: boolean;
-}): { text: string; tone: SheetStatusTone } | null {
+  offline?: boolean;
+}): SheetStatusRow | null {
   const radarDown = Boolean(opts.queryError || opts.radarUnavailable);
-  if (opts.radarTime == null && !radarDown) return null;
+  const offline = Boolean(opts.offline);
+  if (opts.radarTime == null && !radarDown && !offline) return null;
 
   const ageMin = Math.round(radarAgeMin(opts.radarTime, opts.nowMs));
   const stale = opts.radarTime != null && ageMin > STALE_RADAR_MIN;
+
+  if (offline) {
+    const last = opts.radarTime == null ? "Bez sieci" : `Bez sieci · ostatni radar ${formatRadarClock(opts.radarTime)}`;
+    return {
+      text: stale ? `${last} · alert wstrzymany` : last,
+      tone: stale ? "warn" : "mute",
+    };
+  }
+
+  const held = stale ? " · alert wstrzymany" : "";
   const radarPart =
     opts.radarTime == null ? "Radar ✕" : `Radar ${formatRadarClock(opts.radarTime)} · ${ageMin} min`;
   const imgwPart = opts.warningsUnavailable ? "IMGW ✕" : "IMGW ✓";
   const lightningPart = opts.lightningUnavailable ? "wyładowania ✕" : "wyładowania ✓";
   return {
-    text: `${radarPart} · ${imgwPart} · ${lightningPart}`,
+    text: `${radarPart}${held} · ${imgwPart} · ${lightningPart}`,
     tone: radarDown || stale ? "warn" : "mute",
   };
+}
+
+/** Peek only shows the row when radar is stale/down or the browser is offline. */
+export function sheetPeekStatus(row: SheetStatusRow | null, offline: boolean): SheetStatusRow | null {
+  if (!row) return null;
+  if (row.tone === "warn" || offline) return row;
+  return null;
 }
 
 export function cellTrendLine(trend: CellTrend | undefined): string | null {
