@@ -9,9 +9,11 @@ import {
   imgwAsideCountLine,
   lightningCaption,
   sheetSourceHonesty,
+  sheetStatusRow,
   shouldAutoExpandSheet,
   threatLevelChip,
 } from "./threat-sheet-logic.ts";
+import { STALE_RADAR_MIN } from "../lib/weather/alerts.ts";
 import { IMGW_WARNINGS_UNAVAILABLE, RADAR_UNAVAILABLE } from "../lib/weather/snapshot.ts";
 import type { Threat } from "@/lib/weather/types";
 
@@ -228,13 +230,127 @@ describe("threat-sheet user copy", () => {
     assert.doesNotMatch(SHEET_SRC, /\bETA\b/);
   });
 
-  it("names the painted map source, not analysisSource", () => {
-    assert.match(SHEET_SRC, /radarPaint/);
-    assert.match(SHEET_SRC, /radarAgeCaption\(radarTime, nowMs, radarPaint\)/);
-    assert.doesNotMatch(SHEET_SRC, /radarAgeCaption\(radarTime, nowMs, analysisSource\)/);
-    assert.match(APP_SRC, /radarPaint=\{radarPaint\}/);
+  it("names the painted map source on the map chip, not analysisSource", () => {
     assert.match(APP_SRC, /aria-label="Źródło radaru na mapie"/);
+    assert.match(APP_SRC, /radarPaintWho\(radarPaint\)/);
     assert.doesNotMatch(APP_SRC, /analysisSource=\{snapshot\?\.radar\.analysisSource\}/);
+    assert.doesNotMatch(SHEET_SRC, /analysisSource/);
+  });
+
+  it("collapses IMGW and PERUN outages into one status row, not amber alert sentences", () => {
+    assert.match(SHEET_SRC, /sheetStatusRow\(/);
+    assert.match(SHEET_SRC, /statusRow\.text/);
+    assert.doesNotMatch(SHEET_SRC, /Wyładowania chwilowo niedostępne/);
+    assert.doesNotMatch(SHEET_SRC, /Ostrzeżenia IMGW chwilowo niedostępne/);
+    assert.doesNotMatch(SHEET_SRC, /honesty\.imgw \?/);
+    assert.doesNotMatch(SHEET_SRC, /lightningNote/);
+    assert.doesNotMatch(
+      SHEET_SRC,
+      /lightningUnavailable\s*\n\s*\? "mt-2 text-center text-\[11px\] text-warn"/,
+    );
+  });
+});
+
+describe("sheetStatusRow", () => {
+  const radar = Date.UTC(2026, 7, 31, 18, 30, 0) / 1000;
+  const nowMs = Date.UTC(2026, 7, 31, 18, 36, 0);
+
+  it("prints Radar clock · age · IMGW ✕ · wyładowania ✕", () => {
+    const row = sheetStatusRow({
+      radarTime: radar,
+      nowMs,
+      warningsUnavailable: true,
+      lightningUnavailable: true,
+    });
+    assert.ok(row);
+    assert.equal(row.text, "Radar 20:30 · 6 min · IMGW ✕ · wyładowania ✕");
+    assert.equal(row.tone, "mute");
+  });
+
+  it("marks IMGW and lightning with ✓ when both feeds are up", () => {
+    const row = sheetStatusRow({
+      radarTime: radar,
+      nowMs,
+      warningsUnavailable: false,
+      lightningUnavailable: false,
+    });
+    assert.ok(row);
+    assert.equal(row.text, "Radar 20:30 · 6 min · IMGW ✓ · wyładowania ✓");
+    assert.equal(row.tone, "mute");
+  });
+
+  it("stays grey when only IMGW or PERUN is down — those are not weather warnings", () => {
+    const imgwDown = sheetStatusRow({
+      radarTime: radar,
+      nowMs,
+      warningsUnavailable: true,
+      lightningUnavailable: false,
+    });
+    assert.equal(imgwDown?.tone, "mute");
+    assert.match(imgwDown?.text ?? "", /IMGW ✕/);
+    assert.doesNotMatch(imgwDown?.text ?? "", /Ostrzeżenia IMGW chwilowo niedostępne/);
+
+    const perunDown = sheetStatusRow({
+      radarTime: radar,
+      nowMs,
+      warningsUnavailable: false,
+      lightningUnavailable: true,
+    });
+    assert.equal(perunDown?.tone, "mute");
+    assert.match(perunDown?.text ?? "", /wyładowania ✕/);
+    assert.doesNotMatch(perunDown?.text ?? "", /Wyładowania chwilowo niedostępne/);
+  });
+
+  it("is amber only when the radar itself is down", () => {
+    const row = sheetStatusRow({
+      radarTime: null,
+      nowMs,
+      radarUnavailable: true,
+      warningsUnavailable: true,
+      lightningUnavailable: true,
+    });
+    assert.ok(row);
+    assert.equal(row.tone, "warn");
+    assert.equal(row.text, "Radar ✕ · IMGW ✕ · wyładowania ✕");
+  });
+
+  it("is amber when radar age is past the stale gate", () => {
+    const staleNow = Date.UTC(2026, 7, 31, 19, 1, 0);
+    const row = sheetStatusRow({
+      radarTime: radar,
+      nowMs: staleNow,
+      warningsUnavailable: true,
+      lightningUnavailable: true,
+    });
+    assert.ok(row);
+    assert.equal(row.tone, "warn");
+    assert.ok(Math.round((staleNow / 1000 - radar) / 60) > STALE_RADAR_MIN);
+    assert.match(row.text, /^Radar 20:30 · 31 min/);
+  });
+
+  it("query error is amber radar-down, not an IMGW sentence", () => {
+    const row = sheetStatusRow({
+      radarTime: null,
+      nowMs,
+      queryError: true,
+      warningsUnavailable: false,
+      lightningUnavailable: false,
+    });
+    assert.equal(row?.tone, "warn");
+    assert.match(row?.text ?? "", /Radar ✕/);
+    assert.doesNotMatch(row?.text ?? "", /ostrzeż/i);
+  });
+
+  it("returns null while radar time is still unknown and not failed", () => {
+    assert.equal(
+      sheetStatusRow({
+        radarTime: null,
+        nowMs,
+        warningsUnavailable: false,
+        lightningUnavailable: true,
+      }),
+      null,
+    );
   });
 });
 

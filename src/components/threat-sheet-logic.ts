@@ -1,8 +1,9 @@
 import type { CellTrend, Threat, ThreatLevel } from "@/lib/weather/types";
+import { STALE_RADAR_MIN } from "../lib/weather/alerts.ts";
 import { lightningCaption } from "../lib/weather/perun.ts";
 import { IMGW_WARNINGS_UNAVAILABLE, RADAR_UNAVAILABLE } from "../lib/weather/snapshot.ts";
 import { cellTrendCopy } from "../lib/weather/trend.ts";
-import { wallClockMin } from "../lib/weather/wall-clock.ts";
+import { formatRadarClock, radarAgeMin, wallClockMin } from "../lib/weather/wall-clock.ts";
 
 export { lightningCaption };
 
@@ -23,6 +24,32 @@ export function sheetSourceHonesty(opts: {
   return {
     radar: opts.queryError || opts.radarUnavailable ? RADAR_UNAVAILABLE : null,
     imgw: opts.warningsUnavailable ? IMGW_WARNINGS_UNAVAILABLE : null,
+  };
+}
+
+export type SheetStatusTone = "mute" | "warn";
+
+/** One grey instrument row. Amber only when the radar itself is stale or down. */
+export function sheetStatusRow(opts: {
+  radarTime: number | null;
+  nowMs: number;
+  radarUnavailable?: boolean;
+  queryError?: boolean;
+  warningsUnavailable?: boolean;
+  lightningUnavailable?: boolean;
+}): { text: string; tone: SheetStatusTone } | null {
+  const radarDown = Boolean(opts.queryError || opts.radarUnavailable);
+  if (opts.radarTime == null && !radarDown) return null;
+
+  const ageMin = Math.round(radarAgeMin(opts.radarTime, opts.nowMs));
+  const stale = opts.radarTime != null && ageMin > STALE_RADAR_MIN;
+  const radarPart =
+    opts.radarTime == null ? "Radar ✕" : `Radar ${formatRadarClock(opts.radarTime)} · ${ageMin} min`;
+  const imgwPart = opts.warningsUnavailable ? "IMGW ✕" : "IMGW ✓";
+  const lightningPart = opts.lightningUnavailable ? "wyładowania ✕" : "wyładowania ✓";
+  return {
+    text: `${radarPart} · ${imgwPart} · ${lightningPart}`,
+    tone: radarDown || stale ? "warn" : "mute",
   };
 }
 
