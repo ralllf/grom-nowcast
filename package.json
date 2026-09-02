@@ -9,7 +9,7 @@
     "build": "vite build",
     "preview": "vite preview --host 0.0.0.0 --port 8080",
     "typecheck": "tsc --noEmit",
-    "test": "node --experimental-strip-types --test src/lib/weather/*.test.ts src/components/threat-sheet.test.ts src/components/map-boot.test.ts",
+    "test": "node --experimental-strip-types --test src/lib/weather/*.test.ts src/components/threat-sheet.test.ts src/components/map-boot.test.ts src/components/tap-targets.test.ts",
     "hindcast": "node --experimental-strip-types scripts/hindcast.ts"
   },
   "dependencies": {

@@ -1,0 +1,84 @@
+{
+  "when": "2026-09-02T21:18:45.132Z",
+  "warszawa": {
+    "labels": [
+      "Szansa",
+      "Za ile",
+      "Echo"
+    ],
+    "stats": [
+      {
+        "label": "Szansa",
+        "shown": "Szansa",
+        "value": "10%"
+      },
+      {
+        "label": "Za ile",
+        "shown": "Za ile",
+        "value": "—"
+      },
+      {
+        "label": "Echo",
+        "shown": "Echo",
+        "value": "40 km"
+      },
+      {
+        "label": "Szansa",
+        "shown": "SZANSA",
+        "value": "10%"
+      },
+      {
+        "label": "Za ile",
+        "shown": "ZA ILE",
+        "value": "—"
+      },
+      {
+        "label": "Echo",
+        "shown": "ECHO",
+        "value": "40 km"
+      }
+    ],
+    "sheetHasETA": false
+  },
+  "krakow": {
+    "pin": "Kraków",
+    "labels": [
+      "Szansa",
+      "Za ile",
+      "Echo"
+    ],
+    "stats": [
+      {
+        "label": "Szansa",
+        "shown": "Szansa",
+        "value": "90%"
+      },
+      {
+        "label": "Za ile",
+        "shown": "Za ile",
+        "value": "teraz"
+      },
+      {
+        "label": "Echo",
+        "shown": "Echo",
+        "value": "6 km"
+      },
+      {
+        "label": "Szansa",
+        "shown": "SZANSA",
+        "value": "90%"
+      },
+      {
+        "label": "Za ile",
+        "shown": "ZA ILE",
+        "value": "teraz"
+      },
+      {
+        "label": "Echo",
+        "shown": "ECHO",
+        "value": "6 km · umiarkowany"
+      }
+    ],
+    "sheetHasETA": false
+  }
+}

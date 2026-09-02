@@ -157,7 +157,7 @@ export function ThreatSheet({
     >
       <button
         type="button"
-        className="flex w-full shrink-0 touch-none flex-col items-stretch sm:hidden"
+        className="flex w-full shrink-0 touch-none flex-col items-stretch focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 sm:hidden"
         aria-expanded={open}
         aria-controls="grom-threat-sheet"
         aria-label={headline}
@@ -254,7 +254,7 @@ export function ThreatSheet({
           <button
             type="button"
             onClick={onShowRainMotion}
-            className="mt-3 w-full rounded-xl bg-surface-2 px-3 py-2 text-xs font-medium text-accent hover:text-fg"
+            className="mt-3 flex min-h-9 w-full items-center justify-center rounded-xl bg-surface-2 px-3 text-xs font-medium text-accent hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50"
           >
             Pokaż ruch opadu na mapie
             {threat?.nearestKm != null ? ` · ${threat.nearestKm.toFixed(0)} km` : ""}
@@ -282,7 +282,7 @@ export function ThreatSheet({
             <span>{geoError}</span>
             <button
               type="button"
-              className="shrink-0 text-faint hover:text-fg"
+              className="shrink-0 text-faint hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50"
               onClick={onClearGeoError}
               aria-label="Zamknij komunikat"
             >
