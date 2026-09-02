@@ -437,36 +437,219 @@ function meanRateWithin(samples: RadarSample[], lat: number, lon: number, maxKm:
   return n === 0 ? 0 : sum / n;
 }
 
+export type MotionVec = { bearing: number; speedKmh: number };
+export type MotionAnchor = MotionVec & { lat: number; lon: number };
+
+/** Inverse-distance cutoff when painting per-mass vectors onto the NCC grid. */
+export const MOTION_IDW_CUTOFF_KM = 80;
+/** Fixed-point back-trajectory iterations (Germann & Zawadzki 2002, cheap SL). */
+export const BACK_TRAJ_ITERS = 3;
+
 /**
- * Rain at the pin for the next 90 minutes by backward advection: the air that will be
- * over the pin at time t is now at pin − v·t. With no usable motion, persistence.
+ * Dense motion on the existing NCC grid (3 km unless a frame carried a coarser cellKm).
+ * Cells near a mass use inverse-distance of that mass's vector; the rest get `background`
+ * (regional NCC, else the primary pin vector).
+ */
+export type MotionField = {
+  lat0: number;
+  lon0: number;
+  cellKm: number;
+  ux: Float64Array;
+  uy: Float64Array;
+  background: MotionVec | null;
+  anchors: MotionAnchor[];
+};
+
+export function isMotionField(
+  motion: MotionField | MotionVec,
+): motion is MotionField {
+  return "ux" in motion;
+}
+
+function vecToUv(v: MotionVec): { ux: number; uy: number } {
+  const r = (v.bearing * Math.PI) / 180;
+  return { ux: v.speedKmh * Math.sin(r), uy: v.speedKmh * Math.cos(r) };
+}
+
+function uvToVec(ux: number, uy: number): MotionVec {
+  return {
+    speedKmh: Math.hypot(ux, uy),
+    bearing: ((Math.atan2(ux, uy) * 180) / Math.PI + 360) % 360,
+  };
+}
+
+function idwUv(
+  anchors: MotionAnchor[],
+  lat: number,
+  lon: number,
+  cutoffKm: number,
+): { ux: number; uy: number } | null {
+  let nx = 0;
+  let ny = 0;
+  let wsum = 0;
+  for (const a of anchors) {
+    const d = haversineKm(lat, lon, a.lat, a.lon);
+    if (d > cutoffKm) continue;
+    const w = 1 / (d * d + 1);
+    const uv = vecToUv(a);
+    nx += w * uv.ux;
+    ny += w * uv.uy;
+    wsum += w;
+  }
+  if (wsum <= 0) return null;
+  return { ux: nx / wsum, uy: ny / wsum };
+}
+
+export function buildMotionField(
+  anchors: MotionAnchor[],
+  lat0: number,
+  lon0: number,
+  cellKm: number,
+  background: MotionVec | null,
+): MotionField {
+  const ux = new Float64Array(GRID_N * GRID_N);
+  const uy = new Float64Array(GRID_N * GRID_N);
+  ux.fill(Number.NaN);
+  uy.fill(Number.NaN);
+  const dLat = kmToLatDeg(cellKm);
+  const dLon = kmToLonDeg(cellKm, lat0);
+  const bg = background ? vecToUv(background) : null;
+  for (let iy = 0; iy < GRID_N; iy++) {
+    for (let ix = 0; ix < GRID_N; ix++) {
+      const lat = lat0 + (iy - GRID_HALF_CELLS) * dLat;
+      const lon = lon0 + (ix - GRID_HALF_CELLS) * dLon;
+      const idw = idwUv(anchors, lat, lon, MOTION_IDW_CUTOFF_KM);
+      const i = iy * GRID_N + ix;
+      if (idw) {
+        ux[i] = idw.ux;
+        uy[i] = idw.uy;
+      } else if (bg) {
+        ux[i] = bg.ux;
+        uy[i] = bg.uy;
+      }
+    }
+  }
+  return { lat0, lon0, cellKm, ux, uy, background, anchors };
+}
+
+/** Local vector at a lon/lat — grid lookup, then on-the-fly IDW, then background. */
+export function motionAt(
+  motion: MotionField | MotionVec,
+  lat: number,
+  lon: number,
+): MotionVec | null {
+  if (!isMotionField(motion)) return motion;
+  const cell = nccSampleCell(lat, lon, motion.lat0, motion.lon0, motion.cellKm);
+  if (cell) {
+    const i = cell.iy * GRID_N + cell.ix;
+    const x = motion.ux[i]!;
+    const y = motion.uy[i]!;
+    if (Number.isFinite(x) && Number.isFinite(y)) return uvToVec(x, y);
+  }
+  const idw = idwUv(motion.anchors, lat, lon, MOTION_IDW_CUTOFF_KM);
+  if (idw) return uvToVec(idw.ux, idw.uy);
+  return motion.background;
+}
+
+/**
+ * Departure point of air that arrives at the pin after `tMin` minutes.
+ * `iterations = 1` is a single Euler hop using v(pin); 2–3 is the cheap SL fixed point.
+ */
+export function backTrajectory(
+  pinLat: number,
+  pinLon: number,
+  tMin: number,
+  motion: MotionField | MotionVec,
+  iterations: number = BACK_TRAJ_ITERS,
+): { lat: number; lon: number } {
+  if (tMin <= 0) return { lat: pinLat, lon: pinLon };
+  const hours = tMin / 60;
+  let at = { lat: pinLat, lon: pinLon };
+  const steps = Math.max(1, iterations);
+  for (let i = 0; i < steps; i++) {
+    const v = motionAt(motion, at.lat, at.lon);
+    if (!v || v.speedKmh < 0.1) return i === 0 ? { lat: pinLat, lon: pinLon } : at;
+    at = destPoint(pinLat, pinLon, (v.bearing + 180) % 360, v.speedKmh * hours);
+  }
+  return at;
+}
+
+function sampleArrivesPin(
+  s: RadarSample,
+  pinLat: number,
+  pinLon: number,
+  hours: number,
+  reach: number,
+  motion: MotionField | MotionVec,
+  fallbackAt: { lat: number; lon: number },
+): boolean {
+  const v = motionAt(motion, s.lat, s.lon);
+  if (v && v.speedKmh >= 0.1) {
+    const dest = destPoint(s.lat, s.lon, v.bearing, v.speedKmh * hours);
+    return haversineKm(dest.lat, dest.lon, pinLat, pinLon) <= reach;
+  }
+  return haversineKm(s.lat, s.lon, fallbackAt.lat, fallbackAt.lon) <= reach;
+}
+
+/**
+ * Rain at the pin for the next 90 minutes by backward advection on a motion field:
+ * the air over the pin at time t left from an iterated departure (semi-Lagrangian),
+ * and each sample is moved with its *local* vector — not one pinMotion for the lot.
+ * A lone `{ bearing, speedKmh }` is a uniform field (old one-vector path).
  * A step off the SRI composite is `unknown`, not a dry (rate 0) miss.
  */
 export function pinTimeline(
   samples: RadarSample[],
   pinLat: number,
   pinLon: number,
-  motion: { bearing: number; speedKmh: number } | null,
+  motion: MotionField | MotionVec | null,
   coverage: SriGrid = COMPO_SRI_GRID,
 ): TimelinePoint[] {
   const out: TimelinePoint[] = [];
   const near = nearPin(samples, pinLat, pinLon, TRACK_MAX_KM + OVER_KM);
   const radius = OVER_KM * 0.75;
   for (let t = 0; t <= TIMELINE_MIN; t += TIMELINE_STEP) {
-    let at = { lat: pinLat, lon: pinLon };
+    const at =
+      motion && t > 0
+        ? backTrajectory(pinLat, pinLon, t, motion)
+        : { lat: pinLat, lon: pinLon };
+    const slIn = inSriComposite(at.lat, at.lon, coverage);
+    const hours = t / 60;
+    const disp = motion && t > 0 ? haversineKm(pinLat, pinLon, at.lat, at.lon) : 0;
+    const grow = motion ? 0.15 * disp : 0;
+    const reach = radius + Math.min(grow, 6);
+
+    const arriving: RadarSample[] = [];
     if (motion && t > 0) {
-      const back = (motion.bearing + 180) % 360;
-      at = destPoint(pinLat, pinLon, back, motion.speedKmh * (t / 60));
+      for (const s of near) {
+        if (sampleArrivesPin(s, pinLat, pinLon, hours, reach, motion, at)) arriving.push(s);
+      }
     }
-    if (!inSriComposite(at.lat, at.lon, coverage)) {
-      out.push({ t, level: 0, rate: 0, unknown: true });
+
+    if (!slIn) {
+      if (arriving.length === 0) {
+        out.push({ t, level: 0, rate: 0, unknown: true });
+        continue;
+      }
+    } else if (!motion || t === 0) {
+      if (!inSriComposite(pinLat, pinLon, coverage) && t === 0) {
+        out.push({ t, level: 0, rate: 0, unknown: true });
+        continue;
+      }
+      const present = maxRateWithin(near, at.lat, at.lon, reach);
+      const rate = present > 0 ? meanRateWithin(near, at.lat, at.lon, reach) : 0;
+      out.push({ t, level: levelFromRate(rate), rate: Math.round(rate * 10) / 10 });
       continue;
     }
-    const grow = motion ? 0.15 * motion.speedKmh * (t / 60) : 0;
-    const reach = radius + Math.min(grow, 6);
-    // Detection/ETA: any rain in the disc (max). Class on the strip: neighbourhood mean.
-    const present = maxRateWithin(near, at.lat, at.lon, reach);
-    const rate = present > 0 ? meanRateWithin(near, at.lat, at.lon, reach) : 0;
+
+    let present = 0;
+    let sum = 0;
+    for (const s of arriving) {
+      const r = sampleRate(s);
+      if (r > present) present = r;
+      sum += r;
+    }
+    const rate = arriving.length > 0 && present > 0 ? sum / arriving.length : 0;
     out.push({ t, level: levelFromRate(rate), rate: Math.round(rate * 10) / 10 });
   }
   return out;
@@ -898,6 +1081,7 @@ export function computeThreat(
   let threatTrack: CellTrack | null = null;
   let threatCellLevel = 0;
   let cellTrend: CellTrend = null;
+  const motionAnchors: MotionAnchor[] = [];
 
   if (usable.length >= 2 && last) {
     const layers: MassLayer[] = usable.map((f) => ({
@@ -989,6 +1173,12 @@ export function computeThreat(
         dNow,
         pinRelevant: dNow <= TRACK_MAX_KM,
       });
+      motionAnchors.push({
+        lat: mass.lat,
+        lon: mass.lon,
+        bearing: motion.bearing,
+        speedKmh: motion.speed,
+      });
     }
 
     // Glyphs: highest-confidence masses (pin-independent).
@@ -1002,8 +1192,11 @@ export function computeThreat(
     // Pin narrative only: closest mass to the pin owns ETA / copy — does not reshape arrows.
     const forPin = [...hits].sort((a, b) => a.dNow - b.dNow);
     const primary = forPin.find((h) => h.pinRelevant) ?? null;
+    const pinHits = forPin.filter((h) => h.pinRelevant);
+    if (pinHits.length > 0) {
+      missKm = Math.min(...pinHits.map((h) => h.miss));
+    }
     if (primary) {
-      missKm = primary.miss;
       approaching = primary.approaching;
       receding = primary.receding;
       if (primary.speed >= MIN_MOVE_SPEED) {
@@ -1018,13 +1211,14 @@ export function computeThreat(
     }
   }
 
-  // Motion for the pin: the primary mass's own track, else a regional NCC estimate of
-  // the whole field around the pin (±60 km). Without it we can only assume persistence.
-  let pinMotion: { bearing: number; speedKmh: number } | null =
+  // Motion for the pin: dense field from confident masses (IDW) with regional NCC
+  // as background. One primary vector is only the sheet's "coming from" copy.
+  let pinMotion: MotionVec | null =
     threatTrack && speedKmh !== null && speedKmh >= MIN_MOVE_SPEED
       ? { bearing: threatTrack.bearing, speedKmh }
       : null;
-  if (!pinMotion && usable.length >= 2 && nearestKm !== null) {
+  let regionalMotion: MotionVec | null = null;
+  if (usable.length >= 2 && nearestKm !== null) {
     // Centre the correlation window on the echo that matters (nearest to the pin),
     // not on the pin — the pin may be 80 km from the nearest rain.
     let center = { lat: place.lat, lon: place.lon };
@@ -1047,16 +1241,31 @@ export function computeThreat(
       regional.speed >= MIN_MOVE_SPEED &&
       regional.confidence >= REGIONAL_CONFIDENCE_MIN
     ) {
-      pinMotion = { bearing: regional.bearing, speedKmh: regional.speed };
-      if (speedKmh === null) {
-        speedKmh = regional.speed;
-        comingFrom = comingFromPl(regional.bearing);
-        toward = towardPl(regional.bearing);
+      regionalMotion = { bearing: regional.bearing, speedKmh: regional.speed };
+      if (!pinMotion) {
+        pinMotion = regionalMotion;
+        if (speedKmh === null) {
+          speedKmh = regional.speed;
+          comingFrom = comingFromPl(regional.bearing);
+          toward = towardPl(regional.bearing);
+        }
       }
     }
   }
-  const timeline = last ? pinTimeline(lastSamples, place.lat, place.lon, pinMotion) : [];
-  const tlFirst = pinMotion
+  const fieldBg = regionalMotion ?? pinMotion;
+  const motionField =
+    motionAnchors.length > 0 || fieldBg
+      ? buildMotionField(
+          motionAnchors,
+          place.lat,
+          place.lon,
+          nccCellKm(usable),
+          fieldBg,
+        )
+      : null;
+  const timelineMotion = motionField ?? pinMotion;
+  const timeline = last ? pinTimeline(lastSamples, place.lat, place.lon, timelineMotion) : [];
+  const tlFirst = timelineMotion
     ? (timeline.find((p) => p.t > 0 && !p.unknown && p.level >= 1) ?? null)
     : null;
   const tlMaxLevel = timeline.reduce<RadarLevel>((m, p) => (p.level > m ? p.level : m), 0);
@@ -1066,10 +1275,9 @@ export function computeThreat(
     etaMin = 0;
     willHit = true;
     receding = false;
-  } else if (pinMotion) {
-    // With a motion vector, hit / miss / ETA come from advecting the actual echo
-    // samples over the pin — not from where the mass *centroid* passes. A 50 km front
-    // whose centre passes 20 km beside you still rains on you.
+  } else if (timelineMotion) {
+    // With a motion field, hit / miss / ETA come from advecting each echo sample
+    // with its local vector — not from where the primary mass centroid passes.
     if (tlFirst) {
       willHit = true;
       receding = false;
@@ -1230,7 +1438,7 @@ export function computeThreat(
     tracks,
     matchedWarnings: matched,
     timeline,
-    timelineAdvected: pinMotion !== null,
+    timelineAdvected: timelineMotion !== null,
     lightningNearCell,
     cellTrend,
   };

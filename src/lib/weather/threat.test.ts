@@ -9,13 +9,17 @@ import { bearingDeg, destPoint, haversineKm } from "./geo.ts";
 import { levelFromRate } from "./palette.ts";
 import { aggregate, BASE_CELL_LAT, BASE_CELL_LON, PL_RADAR_BBOX } from "./radar-grid.ts";
 import {
+  BACK_TRAJ_ITERS,
   computeThreat,
   GATE_DT_SEC,
   MATCH_KM_30,
   TRACK_MAX_KM,
   TRAIL_SOLO_KM_30,
   TRAIL_TRUST_KM_30,
+  backTrajectory,
+  buildMotionField,
   gateKm,
+  motionAt,
   nccCellKm,
   nccSampleCell,
   pinTimeline,
@@ -1174,4 +1178,104 @@ test("pin-only Szansa: echo in the old 25 km circle that misses the pin does not
   const close = computeThreat(city, closeFrames, []);
   assert.ok(close.nearestKm !== null && close.nearestKm > 8 && close.nearestKm < 15);
   assertPinOnlyMiss(close, "stationary miss inside CLOSE/IMMINENT");
+});
+
+test("iterated back-trajectory leaves the single hop on a sheared field", () => {
+  assert.equal(BACK_TRAJ_ITERS, 3);
+  const pin = { lat: city.lat, lon: city.lon };
+  const atPin = { lat: pin.lat, lon: pin.lon, bearing: 90, speedKmh: 30 };
+  const upstream = destPoint(pin.lat, pin.lon, 270, 45);
+  const far = { lat: upstream.lat, lon: upstream.lon, bearing: 90, speedKmh: 80 };
+  const field = buildMotionField([atPin, far], pin.lat, pin.lon, 3, null);
+  const hop = backTrajectory(pin.lat, pin.lon, 60, field, 1);
+  const iter = backTrajectory(pin.lat, pin.lon, 60, field, BACK_TRAJ_ITERS);
+  const sep = haversineKm(hop.lat, hop.lon, iter.lat, iter.lon);
+  assert.ok(sep > 8, `iterated departure must move off the Euler hop, got ${sep.toFixed(1)} km`);
+
+  const uniform = { bearing: 90, speedKmh: 50 };
+  const u1 = backTrajectory(pin.lat, pin.lon, 60, uniform, 1);
+  const u3 = backTrajectory(pin.lat, pin.lon, 60, uniform, 3);
+  assert.ok(
+    haversineKm(u1.lat, u1.lon, u3.lat, u3.lon) < 0.05,
+    "uniform field: iteration is the same hop",
+  );
+});
+
+test("pinTimeline follows the local field, not one primary vector for every sample", () => {
+  const west = destPoint(city.lat, city.lon, 270, 40);
+  const north = destPoint(city.lat, city.lon, 0, 25);
+  const samples = [...compactBlob(west.lat, west.lon, 3), ...compactBlob(north.lat, north.lon, 3)];
+  const anchors = [
+    { lat: north.lat, lon: north.lon, bearing: 0, speedKmh: 60 },
+    { lat: west.lat, lon: west.lon, bearing: 90, speedKmh: 60 },
+  ];
+  const field = buildMotionField(anchors, city.lat, city.lon, 3, {
+    bearing: 0,
+    speedKmh: 60,
+  });
+  const vWest = motionAt(field, west.lat, west.lon);
+  const vNorth = motionAt(field, north.lat, north.lon);
+  assert.ok(vWest && angleDiffDeg(vWest.bearing, 90) < 25, `west cell local bearing ${vWest?.bearing}`);
+  assert.ok(vNorth && angleDiffDeg(vNorth.bearing, 0) < 25, `north cell local bearing ${vNorth?.bearing}`);
+
+  const local = pinTimeline(samples, city.lat, city.lon, field);
+  const primaryOnly = pinTimeline(samples, city.lat, city.lon, { bearing: 0, speedKmh: 60 });
+  const localHit = local.find((p) => p.t > 0 && !p.unknown && p.level >= 1);
+  const primaryHit = primaryOnly.find((p) => p.t > 0 && !p.unknown && p.level >= 1);
+  assert.ok(localHit, "local field must bring the west mass over the pin");
+  assert.ok(
+    localHit.t >= 25 && localHit.t <= 55,
+    `west mass at 40 km / 60 km/h should arrive ~40 min, got ${localHit.t}`,
+  );
+  assert.ok(
+    !primaryHit,
+    `primary-only north vector must not invent a hit from the west mass; got t=${primaryHit?.t}`,
+  );
+});
+
+test("two masses, different vectors: pin timeline / ETA / miss follow the local field", () => {
+  // Primary A is closer and receding north. B is further west and approaching east.
+  // Old one-vector path uses A's north vector and misses B. Local field must hit B.
+  const frames = [0, 1, 2, 3].map((t) => {
+    const a = destPoint(city.lat, city.lon, 0, 20 + t * 4);
+    const b = destPoint(city.lat, city.lon, 270, 60 - t * (20 / 3));
+    const samples = [...compactBlob(a.lat, a.lon, 3), ...compactBlob(b.lat, b.lon, 3)];
+    const dA = haversineKm(city.lat, city.lon, a.lat, a.lon);
+    const dB = haversineKm(city.lat, city.lon, b.lat, b.lon);
+    return frame(t * 600, samples, Math.min(dA, dB));
+  });
+  const lastA = destPoint(city.lat, city.lon, 0, 32);
+  const lastB = destPoint(city.lat, city.lon, 270, 40);
+  assert.ok(
+    haversineKm(city.lat, city.lon, lastA.lat, lastA.lon) <
+      haversineKm(city.lat, city.lon, lastB.lat, lastB.lon),
+    "A must stay the nearer (primary) mass",
+  );
+
+  const threat = computeThreat(city, frames, []);
+  assert.ok(threat.tracks.length >= 2, `need both masses tracked, got ${threat.tracks.length}`);
+  assert.equal(threat.timelineAdvected, true);
+  assert.equal(threat.willHit, true, "west mass on the local field must hit; primary-only north misses");
+  assert.ok(
+    threat.etaMin !== null && threat.etaMin >= 25 && threat.etaMin <= 70,
+    `ETA should be B's ~40 min arrival, got ${threat.etaMin}`,
+  );
+  assert.equal(threat.receding, false, "incoming B must not inherit A's receding flag");
+  const tlHit = threat.timeline.find((p) => p.t > 0 && !p.unknown && p.level >= 1);
+  assert.ok(tlHit, "timeline must show rain from the west mass");
+  assert.ok(
+    threat.missKm === null || threat.missKm <= 13 || threat.willHit,
+    `miss must follow the hitting mass, not A's north miss; missKm=${threat.missKm}`,
+  );
+
+  const primaryOnly = pinTimeline(
+    frames.at(-1)!.samples,
+    city.lat,
+    city.lon,
+    { bearing: 0, speedKmh: 24 },
+  );
+  assert.ok(
+    !primaryOnly.some((p) => p.t > 0 && p.level >= 1),
+    "control: A's north vector alone must stay dry over the pin",
+  );
 });
