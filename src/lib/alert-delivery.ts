@@ -1,3 +1,4 @@
+import { prefersReducedMotion, titleFlashIntervalMs } from "./reduced-motion";
 import type { AlertEvent, AlertKind } from "./weather/alerts";
 
 /**
@@ -111,6 +112,9 @@ export function stopTitleFlash() {
 /** Alternate the tab title with the alert for up to 5 minutes or until the tab is focused. */
 export function startTitleFlash(event: AlertEvent) {
   if (typeof document === "undefined") return;
+  if (prefersReducedMotion()) return;
+  const interval = titleFlashIntervalMs();
+  if (interval == null) return;
   stopTitleFlash();
   baseTitle = document.title;
   stopFlashAt = Date.now() + 5 * 60_000;
@@ -123,7 +127,7 @@ export function startTitleFlash(event: AlertEvent) {
     }
     on = !on;
     document.title = on ? alt : (baseTitle ?? document.title);
-  }, 1500);
+  }, interval);
 }
 
 export type DeliveryOptions = {
