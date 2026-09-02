@@ -8,7 +8,7 @@ import { formatRadarClock, radarAgeMin, wallClockMin } from "../lib/weather/wall
 
 export { lightningCaption };
 
-/** One always-visible credit. Jargon lives in `SHEET_DATA_DETAILS` behind O danych. */
+/** Expanded-sheet credit (not peek — map chrome already names OSM). Jargon is in `SHEET_DATA_DETAILS`. */
 export const SHEET_CREDIT_LINE = "Dane: IMGW-PIB · mapa OpenFreeMap/OSM";
 
 /** Legal / method copy — POLRAD, dBZ, Marshall–Palmer, COMPO_SRI. Not body copy. */

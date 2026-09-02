@@ -360,6 +360,7 @@ describe("sheet attribution (§3 / 10b#6)", () => {
     assert.doesNotMatch(visible, /\bdBZ\b/);
     assert.doesNotMatch(visible, /Marshall–Palmer/);
     assert.doesNotMatch(visible, /POLRAD/);
+    assert.doesNotMatch(SHEET_SRC, /<details[^>]*\bopen\b/);
   });
 
   it("puts POLRAD / dBZ / Marshall–Palmer / COMPO_SRI behind O danych ›", async () => {
