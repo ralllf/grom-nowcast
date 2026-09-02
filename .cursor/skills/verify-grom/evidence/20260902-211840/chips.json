@@ -1,0 +1,36 @@
+{
+  "when": "2026-09-02T21:19:54.762Z",
+  "map": {
+    "pokaz": {
+      "text": "pokaż",
+      "width": 52,
+      "height": 36
+    },
+    "drizzle": {
+      "text": "Pokaż mżawkę",
+      "width": 129,
+      "height": 36
+    },
+    "imgw": null,
+    "tracks": {
+      "text": "tor komórki",
+      "width": 105,
+      "height": 36
+    },
+    "faintToken": "#7a8593",
+    "faintComputed": "rgb(122, 133, 147)"
+  },
+  "cities": {
+    "Warszawa": {
+      "width": 85,
+      "height": 36
+    },
+    "Kraków": {
+      "width": 70,
+      "height": 36
+    },
+    "Czuły": null,
+    "Normalny": null,
+    "Tylko pewne": null
+  }
+}
