@@ -4,12 +4,17 @@ import { z } from "zod";
 import { lonLatToTile, tilePixelToLonLat } from "./geo";
 import { ANALYSIS_COLOR_OPTIONS, dbzFromRgba, rateFromDbz } from "./palette";
 import {
+  ClientRateLimit,
   LruCache,
   NOMINATIM_CACHE_MAX,
   NOMINATIM_CACHE_TTL_MS,
   NOMINATIM_MIN_GAP_MS,
+  NOMINATIM_SEARCH_LIMIT,
+  NOMINATIM_SEARCH_WINDOW_MS,
   NOMINATIM_UA,
   RequestThrottle,
+  clientKeyFromHeaders,
+  searchPlacesForClient,
 } from "./nominatim";
 import { fetchPerunPolska, type FetchText, type LightningScan } from "./perun";
 import { aggregate, inPolandRadar, maxLevelOf, PL_RADAR_BBOX, type RawHit } from "./radar-grid";
@@ -36,7 +41,9 @@ const mapsCache: { at: number; data: RainViewerMaps | null } = { at: 0, data: nu
 const warningCache: { at: number; data: OfficialWarning[] | null } = { at: 0, data: null };
 const lightningCache: { at: number; data: LightningScan | null } = { at: 0, data: null };
 const placeCache = new LruCache<Place>(NOMINATIM_CACHE_MAX);
+const searchCache = new LruCache<Place[]>(NOMINATIM_CACHE_MAX);
 const nominatimGate = new RequestThrottle(NOMINATIM_MIN_GAP_MS);
+const searchLimiter = new ClientRateLimit(NOMINATIM_SEARCH_LIMIT, NOMINATIM_SEARCH_WINDOW_MS);
 
 async function fetchJson<T>(url: string, timeoutMs = 12_000): Promise<T> {
   const ctrl = new AbortController();
@@ -228,10 +235,7 @@ type NominatimSearch = {
   extratags?: Record<string, string>;
 };
 
-export async function searchNominatim(query: string): Promise<Place[]> {
-  const q = query.trim();
-  if (q.length < 2) return [];
-  await nominatimGate.wait();
+async function loadSearchPlaces(q: string): Promise<Place[]> {
   const url =
     `https://nominatim.openstreetmap.org/search?format=jsonv2&q=${encodeURIComponent(q)}` +
     `&countrycodes=pl&addressdetails=1&extratags=1&limit=6&accept-language=pl`;
@@ -255,6 +259,24 @@ export async function searchNominatim(query: string): Promise<Place[]> {
       });
     }),
   );
+}
+
+export async function searchNominatim(query: string, clientId = "anon"): Promise<Place[]> {
+  return searchPlacesForClient(query, clientId, {
+    fetchHits: loadSearchPlaces,
+    cache: searchCache,
+    gate: nominatimGate,
+    limiter: searchLimiter,
+  });
+}
+
+async function searchClientKey(): Promise<string> {
+  try {
+    const { getRequestHeaders, getRequestIP } = await import("@tanstack/react-start/server");
+    return getRequestIP({ xForwardedFor: true }) ?? clientKeyFromHeaders(getRequestHeaders());
+  } catch {
+    return "anon";
+  }
 }
 
 /**
@@ -465,7 +487,7 @@ const searchInput = z.object({ query: z.string().min(2).max(80) });
 
 export const searchPlaces = createServerFn({ method: "POST" })
   .validator(searchInput)
-  .handler(async ({ data }) => searchNominatim(data.query));
+  .handler(async ({ data }) => searchNominatim(data.query, await searchClientKey()));
 
 const overlayInput = z.object({
   time: z.number(),
