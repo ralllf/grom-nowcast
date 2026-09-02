@@ -1,0 +1,16 @@
+{
+  "badgeInnerText": "CZYSTO",
+  "badgeTextContent": "czysto",
+  "badgeClass": "inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium tracking-wide uppercase bg-ok/15 text-ok",
+  "sheetHead": [
+    "Warszawa",
+    "",
+    "TERYT 1465",
+    "Czysto",
+    "CZYSTO",
+    "",
+    "Idzie od północy → na południe · 72 km/h",
+    ""
+  ],
+  "processTZ": "unset"
+}

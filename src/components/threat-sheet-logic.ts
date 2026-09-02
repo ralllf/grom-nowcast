@@ -50,8 +50,16 @@ export function etaLabel(threat: Threat | null, ageMin = 0): string {
   return "—";
 }
 
+const LEVEL_CHIP: Record<ThreatLevel, string> = {
+  now: "teraz",
+  imminent: "zaraz",
+  nearby: "blisko",
+  watch: "uwaga",
+  clear: "czysto",
+};
+
 export function threatLevelChip(level: ThreatLevel): string {
-  return level === "now" ? "teraz" : level;
+  return LEVEL_CHIP[level];
 }
 
 export function shouldAutoExpandSheet(level: ThreatLevel | undefined, desktop: boolean): boolean {
