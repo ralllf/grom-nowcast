@@ -90,7 +90,7 @@ Recipes. Prefer ARIA / ids / visible Polish copy. There are almost no `data-*` h
 | IMGW list | `aside` `h3` `Ostrzeżenia IMGW` (desktop only) |
 | Map pick | MapLibre canvas (not the `aria-hidden` overlay canvas). Click → place label `Punkt na mapie` |
 
-**Default pin** (empty `localStorage`): Warszawa, TERYT `1465`. After a chip click the dialog closes; sheet shows the new label + `TERYT …`; `localStorage.grom-settings-v1.place.label` matches.
+**Default pin** (empty `localStorage`): Warszawa, TERYT `1465` in settings. After a chip click the dialog closes; sheet shows the new label (no `TERYT`); `localStorage.grom-settings-v1.place.label` matches. TERYT stays in settings / nowcast matching, not on the sheet.
 
 Feature files: [features/README.md](features/README.md). Drive **one** mapped feature per run unless asked otherwise.
 

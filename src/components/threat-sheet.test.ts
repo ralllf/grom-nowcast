@@ -190,6 +190,12 @@ describe("threatLevelChip", () => {
 });
 
 describe("threat-sheet user copy", () => {
+  it("does not print TERYT for a Warszawa pin — place stays the city name", () => {
+    assert.match(SHEET_SRC, /\{place\.label\}/);
+    assert.doesNotMatch(SHEET_SRC, /TERYT \{place\.terc\}/);
+    assert.doesNotMatch(SHEET_SRC, />TERYT /);
+  });
+
   it("does not leak leadMin into the honesty paragraph", () => {
     const honesty = SHEET_SRC.match(
       /Szansa, ETA i alert są dla pinezki[\s\S]*?opad dojdzie\./,

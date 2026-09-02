@@ -199,9 +199,6 @@ export function ThreatSheet({
             <div className="flex flex-wrap items-center gap-2">
               <MapPin className="size-4 text-accent" />
               <p className="text-sm font-medium">{place.label}</p>
-              {place.terc ? (
-                <span className="font-mono text-xs text-faint">TERYT {place.terc}</span>
-              ) : null}
             </div>
             <h2 className="mt-2 font-display text-3xl font-semibold leading-none tracking-tight text-balance">
               {headline}

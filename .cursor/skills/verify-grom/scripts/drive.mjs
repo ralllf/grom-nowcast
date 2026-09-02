@@ -247,6 +247,10 @@ try {
     await screenshot(cdp, join(OUT, "00-failed-ready.png"));
     throw new Error(`sheet not ready after snapshot wait: ${JSON.stringify(sheet.slice(0, 200))}`);
   }
+  if (/TERYT/i.test(sheet)) {
+    await screenshot(cdp, join(OUT, "00-failed-teryt-leak.png"));
+    throw new Error(`sheet leaked TERYT: ${JSON.stringify(sheet.slice(0, 240))}`);
+  }
   step(`sheet ready, starts with pin copy: ${sheet.split("\n").slice(0, 4).join(" | ")}`);
 
   if (FEATURE === "radar-map") {
@@ -550,12 +554,16 @@ try {
   while (Date.now() - tPin < 15000) {
     const dlgGone = await evalExpr(cdp, `!document.querySelector('[role="dialog"][aria-labelledby="settings-title"]')`);
     after = (await evalExpr(cdp, `document.querySelector('#grom-threat-sheet')?.innerText || ''`)) || "";
-    if (dlgGone && after.includes("Kraków") && after.includes("TERYT 1261")) break;
+    if (dlgGone && after.includes("Kraków") && !/TERYT/i.test(after)) break;
     await sleep(250);
   }
-  if (!after.includes("Kraków") || !after.includes("TERYT 1261")) {
+  if (!after.includes("Kraków")) {
     await screenshot(cdp, join(OUT, "00-failed-krakow.png"));
-    throw new Error(`pin did not become Kraków / TERYT 1261: ${JSON.stringify(after.slice(0, 240))}`);
+    throw new Error(`pin did not become Kraków: ${JSON.stringify(after.slice(0, 240))}`);
+  }
+  if (/TERYT/i.test(after)) {
+    await screenshot(cdp, join(OUT, "00-failed-teryt-leak.png"));
+    throw new Error(`sheet leaked TERYT: ${JSON.stringify(after.slice(0, 240))}`);
   }
   const stored = await evalExpr(
     cdp,
@@ -564,7 +572,7 @@ try {
   if (stored?.label !== "Kraków" || stored?.terc !== "1261") {
     throw new Error(`localStorage place mismatch: ${JSON.stringify(stored)}`);
   }
-  step("sheet shows Kraków + TERYT 1261; dialog closed");
+  step("sheet shows Kraków (no TERYT); dialog closed");
   notes.sideEffects.push({
     storage: "grom-settings-v1",
     place: stored,
@@ -574,7 +582,7 @@ try {
   notes.ok = true;
   notes.finishedAt = new Date().toISOString();
   notes.result =
-    "Clicked Ustawienia, chose Kraków chip, threat sheet and localStorage both show Kraków TERYT 1261.";
+    "Clicked Ustawienia, chose Kraków chip, threat sheet shows Kraków without TERYT; localStorage still has terc 1261.";
   await cdp.send("Browser.close").catch(() => {});
   ws.close();
   }
