@@ -6,7 +6,15 @@ import {
   evaluateAlert,
 } from "./alerts.ts";
 import { bearingDeg, destPoint, haversineKm } from "./geo.ts";
-import { computeThreat, TRACK_MAX_KM } from "./threat.ts";
+import {
+  computeThreat,
+  GATE_DT_SEC,
+  MATCH_KM_30,
+  TRACK_MAX_KM,
+  TRAIL_SOLO_KM_30,
+  TRAIL_TRUST_KM_30,
+  gateKm,
+} from "./threat.ts";
 import type { OfficialWarning, Place, RadarLevel, RadarMemoryFrame, RadarSample } from "./types.ts";
 
 function angleDiffDeg(a: number, b: number) {
@@ -46,6 +54,69 @@ const zgorzelec: Place = {
   label: "Zgorzelec",
   terc: "0225",
 };
+
+test("motion gates are speed·Δt of the old 30-min 10 / 14 / 45 km constants", () => {
+  assert.equal(GATE_DT_SEC, 30 * 60);
+  assert.equal(TRAIL_TRUST_KM_30, 10);
+  assert.equal(TRAIL_SOLO_KM_30, 14);
+  assert.equal(MATCH_KM_30, 45);
+  assert.equal(gateKm(TRAIL_TRUST_KM_30, GATE_DT_SEC), 10);
+  assert.equal(gateKm(TRAIL_SOLO_KM_30, GATE_DT_SEC), 14);
+  assert.equal(gateKm(MATCH_KM_30, GATE_DT_SEC), 45);
+
+  const dt5 = 5 * 60;
+  const moved50 = 50 * (dt5 / 3600);
+  assert.ok(moved50 < TRAIL_TRUST_KM_30, "50 km/h over 5 min fails the old 10 km gate");
+  assert.ok(moved50 >= gateKm(TRAIL_TRUST_KM_30, dt5), "50 km/h over 5 min must clear speed·Δt trust");
+  assert.ok(45 > gateKm(MATCH_KM_30, dt5), "45 km over 5 min must not associate");
+});
+
+test("5-min pair at 50 km/h is trusted", () => {
+  const dt = 5 * 60;
+  const movedKm = 50 * (dt / 3600);
+  const start = destPoint(city.lat, city.lon, 270, 35);
+  const end = destPoint(start.lat, start.lon, 90, movedKm);
+  const frames = [
+    frame(1_000, blob(start.lat, start.lon, 3), 35),
+    frame(1_000 + dt, blob(end.lat, end.lon, 3), 31),
+  ];
+  const threat = computeThreat(city, frames, []);
+  assert.ok(threat.tracks.length >= 1, "50 km/h over 5 min must draw a track");
+  assert.ok(
+    threat.speedKmh !== null && threat.speedKmh >= 35 && threat.speedKmh <= 70,
+    `expected ~50 km/h, got ${threat.speedKmh}`,
+  );
+});
+
+test("5-min pair cannot match at 45 km", () => {
+  const dt = 5 * 60;
+  const start = destPoint(city.lat, city.lon, 270, 10);
+  const far = destPoint(start.lat, start.lon, 90, 45);
+  const frames = [
+    frame(1_000, compactBlob(start.lat, start.lon, 3), 10),
+    frame(1_000 + dt, compactBlob(far.lat, far.lon, 3), 35),
+  ];
+  const threat = computeThreat(city, frames, []);
+  assert.equal(threat.tracks.length, 0, "45 km / 5 min is not a storm, it is a jump");
+  if (threat.speedKmh !== null) {
+    assert.ok(threat.speedKmh <= 95, `impossible ${threat.speedKmh} km/h from a 45 km / 5 min pair`);
+  }
+});
+
+test("30-min pair still trusts at 10 km and stays picky at 14 km for trail-only", () => {
+  assert.equal(gateKm(TRAIL_TRUST_KM_30, 30 * 60), 10);
+  assert.equal(gateKm(TRAIL_SOLO_KM_30, 30 * 60), 14);
+  // Same 4-frame 30-min span the RainViewer path already uses; 20.4→20.54 ≈ 10 km.
+  const frames = [
+    frame(0, blob(50.0, 20.4, 3), 43),
+    frame(600, blob(50.0, 20.45, 3), 39),
+    frame(1_200, blob(50.0, 20.5, 3), 36),
+    frame(1_800, blob(50.0, 20.54, 3), 33),
+  ];
+  const threat = computeThreat(city, frames, []);
+  assert.ok(threat.tracks.length >= 1, "10 km over 30 min must still be trusted");
+  assert.ok(threat.speedKmh !== null && threat.speedKmh >= 15 && threat.speedKmh <= 30);
+});
 
 test("incoming cell from the west gets ETA, comingFrom and a visible track", () => {
   const frames = [frame(1_000, blob(50.0, 20.4), 43), frame(1_600, blob(50.0, 20.55), 32)];

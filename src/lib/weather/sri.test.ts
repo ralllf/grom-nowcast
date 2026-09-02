@@ -6,6 +6,8 @@ import {
   hitsFromSriGrid,
   parseSriListing,
   POLCOMP_SRI_GRID,
+  SRI_CADENCE_SEC,
+  SRI_HISTORY_FRAMES,
   sriFilenameTime,
   sriGeorefFromCorners,
   sriPixelToLonLat,
@@ -32,6 +34,36 @@ test("parseSriListing keeps only .sri.h5 names, oldest first, 5-min cadence", ()
   assert.equal(files[1]!.time - files[0]!.time, 5 * 60);
   assert.equal(files[2]!.time - files[1]!.time, 5 * 60);
   assert.equal(files[0]!.time, Date.UTC(2026, 7, 31, 12, 45, 0) / 1000);
+});
+
+test("SRI history is 7 frames (30 min of 5-min SRI)", () => {
+  assert.equal(SRI_HISTORY_FRAMES, 7);
+  assert.equal((SRI_HISTORY_FRAMES - 1) * SRI_CADENCE_SEC, 30 * 60);
+});
+
+test("listing slice keeps the newest 7 when the datastore has more", () => {
+  const names = [
+    "2026090208000000dBR.sri.h5",
+    "2026090208050000dBR.sri.h5",
+    "2026090208100000dBR.sri.h5",
+    "2026090208150000dBR.sri.h5",
+    "2026090208200000dBR.sri.h5",
+    "2026090208250000dBR.sri.h5",
+    "2026090208300000dBR.sri.h5",
+    "2026090208350000dBR.sri.h5",
+    "2026090208400000dBR.sri.h5",
+    "2026090208450000dBR.sri.h5",
+  ];
+  const html = names
+    .map((n) => `<li><a href="datastore/getfiledown/Oper/Polrad/Produkty/POLCOMP/COMPO_SRI.comp.sri/${n}">${n}</a></li>`)
+    .join("\n");
+  const files = parseSriListing(html);
+  assert.equal(files.length, 10);
+  const take = files.slice(-SRI_HISTORY_FRAMES);
+  assert.equal(take.length, 7);
+  assert.equal(take[0]!.name, "2026090208150000dBR.sri.h5");
+  assert.equal(take.at(-1)!.name, "2026090208450000dBR.sri.h5");
+  assert.equal(take.at(-1)!.time - take[0]!.time, 30 * 60);
 });
 
 test("sriFilenameTime reads the ODIM UTC stamp and ignores non-H5 names", () => {
