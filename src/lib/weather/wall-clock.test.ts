@@ -1,5 +1,8 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import test from "node:test";
+import { fileURLToPath } from "node:url";
 import { overlayFallback } from "./sri-overlay.ts";
 import {
   formatRadarClock,
@@ -11,6 +14,11 @@ import {
   wallClockAxisLabel,
   wallClockMin,
 } from "./wall-clock.ts";
+
+const APP_SRC = readFileSync(
+  join(dirname(fileURLToPath(import.meta.url)), "../../components/grom-app.tsx"),
+  "utf8",
+);
 
 test("frame-time 18 min minus age 11 min is 7 min from now", () => {
   assert.equal(wallClockMin(18, 11), 7);
@@ -41,6 +49,12 @@ test("formatRadarClock is Europe/Warsaw, not the process TZ", () => {
   const cet = Date.UTC(2026, 0, 15, 15, 15, 0) / 1000;
   assert.equal(formatRadarClock(cest), "17:15");
   assert.equal(formatRadarClock(cet), "16:15");
+});
+
+test("map slider clock is formatRadarClock, not an unpinned locale clock", () => {
+  assert.match(APP_SRC, /aria-label="Czas radaru"/);
+  assert.match(APP_SRC, /aria-label="Czas radaru"[\s\S]{0,500}formatRadarClock\(/);
+  assert.doesNotMatch(APP_SRC, /function formatClock/);
 });
 
 test("sheet caption prints the radar clock and its age", () => {

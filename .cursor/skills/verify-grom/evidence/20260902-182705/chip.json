@@ -1,0 +1,16 @@
+{
+  "badgeInnerText": "CLEAR",
+  "badgeTextContent": "clear",
+  "badgeClass": "inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium tracking-wide uppercase bg-ok/15 text-ok",
+  "sheetHead": [
+    "Warszawa",
+    "",
+    "TERYT 1465",
+    "Czysto",
+    "CLEAR",
+    "",
+    "Echo ok. 36 km od Warszawa. Szansa ~10%. Komórka może też urosnąć na miejscu — tego radar nie zapowie.",
+    ""
+  ],
+  "processTZ": "unset"
+}

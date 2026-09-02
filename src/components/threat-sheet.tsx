@@ -6,6 +6,7 @@ import {
   nowcastHeadline,
   sheetSourceHonesty,
   shouldAutoExpandSheet,
+  threatLevelChip,
 } from "@/components/threat-sheet-logic";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
@@ -205,7 +206,7 @@ export function ThreatSheet({
               {headline}
             </h2>
           </div>
-          {threat ? <Badge tone={TONE[threat.level]}>{threat.level}</Badge> : null}
+          {threat ? <Badge tone={TONE[threat.level]}>{threatLevelChip(threat.level)}</Badge> : null}
         </div>
 
         {threat && (threat.comingFrom || threat.expect || trendLine) ? (

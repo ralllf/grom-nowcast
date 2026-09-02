@@ -1,0 +1,23 @@
+{
+  "sliderPresent": true,
+  "sliderValue": "6",
+  "sliderMax": "6",
+  "sliderClock": "19:25",
+  "sliderSource": "Radar IMGW",
+  "sheetRadar": "Radar IMGW 19:25 · sprzed 2 min",
+  "sheetHead": [
+    "Warszawa",
+    "",
+    "TERYT 1465",
+    "Czysto",
+    "CLEAR",
+    "",
+    "Nad Warszawa radar nie widzi groźnej komórki w promieniu 100 km. Szansa ~10% na ok. 45 min. Komórka może też urosnąć na miejscu — tego radar nie zapowie.",
+    "",
+    "SZANSA",
+    "10%",
+    "ETA",
+    "—"
+  ],
+  "processTZ": "UTC"
+}
