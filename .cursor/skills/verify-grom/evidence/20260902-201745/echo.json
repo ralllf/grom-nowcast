@@ -1,0 +1,39 @@
+{
+  "loaded": {
+    "headline": [
+      "Czysto",
+      "Czysto"
+    ],
+    "echoStats": [
+      {
+        "label": "Echo",
+        "value": "11 km"
+      },
+      {
+        "label": "Echo",
+        "value": "11 km"
+      }
+    ],
+    "sheetHasSkanuje": false,
+    "sheetHasEchoBrak": false,
+    "sheetHead": [
+      "Warszawa",
+      "",
+      "TERYT 1465",
+      "Czysto",
+      "CZYSTO",
+      "",
+      "Idzie od północy → na południe · 66 km/h",
+      "",
+      "Spodziewaj się: słabego deszczu",
+      "",
+      "Idzie od północy, echo ok. 11 km od Warszawa. Tor minie Warszawa ok. 112 km obok. Spodziewaj się w okolicy: słabego deszczu. Nad samym punktem szansa ~10%. Komórka może też urosnąć na miejscu — tego radar nie zapowie.",
+      "",
+      "SZANSA",
+      "10%",
+      "ETA",
+      "—"
+    ]
+  },
+  "when": "2026-09-02T20:18:47.583Z"
+}

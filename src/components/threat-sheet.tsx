@@ -2,6 +2,7 @@ import { MapPin, X } from "lucide-react";
 import { useEffect, useRef, useState, type PointerEvent } from "react";
 import {
   cellTrendLine,
+  echoLabel,
   etaLabel,
   nowcastHeadline,
   sheetSourceHonesty,
@@ -96,7 +97,7 @@ export function ThreatSheet({
   const eta = etaLabel(threat, ageMin);
   const radarCaption = radarAgeCaption(radarTime, nowMs, radarPaint);
   const detail = threat ? rewriteArrivalMinutes(threat.detail, threat.etaMin, ageMin) : null;
-  const echo = threat?.nearestKm != null ? `${threat.nearestKm.toFixed(0)} km` : "brak";
+  const echo = echoLabel(threat);
   const echoFull =
     threat?.nearestKm != null
       ? `${echo}${threat.pinLevel > 0 ? ` · ${levelLabelPl(threat.pinLevel)}` : ""}`

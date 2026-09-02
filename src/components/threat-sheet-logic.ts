@@ -50,6 +50,13 @@ export function etaLabel(threat: Threat | null, ageMin = 0): string {
   return "—";
 }
 
+/** Echo distance on the sheet. Em dash while scanning — "brak" while loading reads as all-clear. */
+export function echoLabel(threat: Threat | null): string {
+  if (!threat) return "—";
+  if (threat.nearestKm != null) return `${threat.nearestKm.toFixed(0)} km`;
+  return "brak";
+}
+
 const LEVEL_CHIP: Record<ThreatLevel, string> = {
   now: "teraz",
   imminent: "zaraz",
