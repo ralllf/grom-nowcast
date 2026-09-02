@@ -4,6 +4,7 @@ import { dirname, join } from "node:path";
 import { describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
 import {
+  echoLabel,
   etaLabel,
   imgwAsideCountLine,
   lightningCaption,
@@ -145,6 +146,31 @@ describe("imgwAsideCountLine", () => {
   it("prints the real count only after IMGW settled", () => {
     assert.equal(imgwAsideCountLine({ stormWarningCount: 0, warningsUnavailable: false }), "0 burzowych w kraju");
     assert.equal(imgwAsideCountLine({ stormWarningCount: 3, warningsUnavailable: false }), "3 burzowych w kraju");
+  });
+});
+
+describe("echoLabel", () => {
+  it("prints an em dash while threat is still null, not brak", () => {
+    assert.equal(echoLabel(null), "—");
+    assert.notEqual(echoLabel(null), "brak");
+  });
+
+  it("still says brak when a real threat has no echo", () => {
+    assert.equal(echoLabel(threat({ nearestKm: null })), "brak");
+  });
+
+  it("prints distance once an echo exists", () => {
+    assert.equal(echoLabel(threat({ nearestKm: 12.4 })), "12 km");
+  });
+
+  it("wires both Echo stats through echoLabel", () => {
+    assert.match(SHEET_SRC, /const echo = echoLabel\(threat\)/);
+    assert.match(SHEET_SRC, /PeekStat label="Echo" value=\{echo\}/);
+    assert.match(SHEET_SRC, /Stat label="Echo" value=\{echoFull\}/);
+    assert.doesNotMatch(
+      SHEET_SRC,
+      /threat\?\.nearestKm != null \? `\$\{threat\.nearestKm\.toFixed\(0\)\} km` : "brak"/,
+    );
   });
 });
 
