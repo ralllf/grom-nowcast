@@ -52,8 +52,8 @@ Klatki **nie idą do gita ani bazy**. Klient trzyma ostatnie skany w Zustand (RA
 
 ## Komórki i wektory
 
-1. **Tożsamość masy:** flood-fill / friends-of-friends po próbkach `level ≥ 1` (link ~20 km). Jedna spójna masa echa = jeden obiekt.
-2. **Ruch echa:** trop centroidu masy + NCC. Mega-masa (>140 km) → **split na kafelki ~55 km** (nie wyrzucamy całego frontu). Strzałka przy pewności ≥ **72**, zgodności trop↔NCC, stabilnej liczbie próbek w tropie. Max **3** strzałki (po pewności).
+1. **Tożsamość masy:** flood-fill / friends-of-friends po próbkach `level ≥ 1` (link 2 komórki, ≈ 6–7 km). Rdzenie = lokalne maksima ≥ klasa 3. Jedna spójna masa / jeden rdzeń = jeden obiekt — nie tniemy frontu na kafelki 55 km.
+2. **Ruch echa:** trop centroidu masy + NCC. Strzałka przy pewności ≥ **72**, zgodności trop↔NCC, stabilnej liczbie próbek w tropie. Max **3** strzałki (po pewności).
 3. **Kotwica na mapie:** środek masy. Długość ≈ prędkość × 30 min.
 4. **Pinezka nie przebudowuje kresków.** Snapshot radaru jest wspólny dla kraju; wybór miejsca = ostrzeżenia + ETA/szansa na tych samych klatkach.
 5. Prędkość z przesunięcia siatki / bazy ~30 min. Poniżej ~4 km/h = prawie stoi.

@@ -29,8 +29,14 @@ const OVER_KM = 8;
 /** Pin timeline: horizon and step (minutes). */
 const TIMELINE_MIN = 90;
 const TIMELINE_STEP = 5;
-/** Friends-of-friends link for connected echo (z=5 spacing ~12 km; allow one gap). */
-const LINK_KM = 16;
+/**
+ * Friends-of-friends link for identity — 2 cells at the 3 km analysis grid
+ * (≈ 6–7 km). 16 km used to bridge 5-cell gaps and glue a rainy day into one
+ * mega-mass that splitOversizedMass then cut into 55 km lon/lat tiles.
+ */
+export const LINK_KM = 6.5;
+/** Local maxima at or above this klasa are tracked cores. */
+const CORE_MIN_LEVEL = 3;
 /** 30 min — the window the 10 / 14 / 45 km constants were tuned for (RainViewer). */
 export const GATE_DT_SEC = 30 * 60;
 /** trailOk displacement at GATE_DT_SEC. */
@@ -53,10 +59,6 @@ const MAX_TRACKS = 3;
 const CORE_RADIUS_KM = 18;
 /** Arrow forward shaft = this many minutes of travel at estimated speed. */
 const ARROW_AHEAD_MIN = 30;
-/** Reject single masses larger than this — they get split into local tiles instead. */
-const MAX_MASS_SPAN_KM = 140;
-/** Spatial tile size when splitting an oversized connected component. */
-const SPLIT_TILE_KM = 55;
 /** Ignore tiny chips — they jitter and invent fake bearings. */
 const MIN_MASS_SAMPLES = 12;
 /** Hide arrows below this motion confidence (0–100). */
@@ -667,29 +669,63 @@ function massFromMembers(members: RadarSample[]): Mass | null {
   };
 }
 
-/** Cut a domain-spanning blob into ~SPLIT_TILE_KM tiles so local motion survives. */
-function splitOversizedMass(members: RadarSample[]): Mass[] {
-  const lat0 = members.reduce((s, p) => s + p.lat, 0) / members.length;
-  const dLat = SPLIT_TILE_KM / 111;
-  const dLon = SPLIT_TILE_KM / (111 * Math.max(Math.cos((lat0 * Math.PI) / 180), 0.25));
-  const buckets = new Map<string, RadarSample[]>();
+/**
+ * Distinct convective cores: klasa ≥ 3 and strictly brighter than every
+ * neighbour inside the 2-cell link. A uniform plateau has none — that stays
+ * one mass so a translating front is not pinned to a lon/lat lattice.
+ */
+function findStrictCores(samples: RadarSample[]): RadarSample[] {
+  const cores: RadarSample[] = [];
+  for (const s of samples) {
+    if (s.level < CORE_MIN_LEVEL) continue;
+    let peak = true;
+    for (const o of samples) {
+      if (o === s) continue;
+      if (haversineKm(s.lat, s.lon, o.lat, o.lon) > LINK_KM) continue;
+      if (o.level >= s.level) {
+        peak = false;
+        break;
+      }
+    }
+    if (peak) cores.push(s);
+  }
+  return cores;
+}
+
+/** Split a connected component onto its cores instead of fixed 55 km tiles. */
+function splitByCores(members: RadarSample[]): Mass[] {
+  const cores = findStrictCores(members);
+  if (cores.length < 2) {
+    const m = massFromMembers(members);
+    return m ? [m] : [];
+  }
+  const buckets: RadarSample[][] = cores.map(() => []);
   for (const s of members) {
-    const ix = Math.round(s.lon / dLon);
-    const iy = Math.round(s.lat / dLat);
-    const key = `${ix},${iy}`;
-    const g = buckets.get(key);
-    if (g) g.push(s);
-    else buckets.set(key, [s]);
+    let best = 0;
+    let bestD = Infinity;
+    for (let i = 0; i < cores.length; i++) {
+      const c = cores[i]!;
+      const d = haversineKm(s.lat, s.lon, c.lat, c.lon);
+      if (d < bestD) {
+        bestD = d;
+        best = i;
+      }
+    }
+    buckets[best]!.push(s);
   }
   const out: Mass[] = [];
-  for (const part of buckets.values()) {
+  for (const part of buckets) {
     const m = massFromMembers(part);
     if (m) out.push(m);
+  }
+  if (out.length === 0) {
+    const m = massFromMembers(members);
+    return m ? [m] : [];
   }
   return out;
 }
 
-/** Connected components of echo — one contiguous front is one mass (or split if huge). */
+/** Connected components of echo — one contiguous front is one mass; multi-core blobs split on peaks. */
 function segmentMasses(samples: RadarSample[], linkKm: number): Mass[] {
   const pool = samples.filter((s) => s.level >= 1);
   const n = pool.length;
@@ -755,23 +791,7 @@ function segmentMasses(samples: RadarSample[], linkKm: number): Mass[] {
   const masses: Mass[] = [];
   for (const members of groups.values()) {
     if (members.length < 3) continue;
-    let minLat = 90;
-    let maxLat = -90;
-    let minLon = 180;
-    let maxLon = -180;
-    for (const s of members) {
-      if (s.lat < minLat) minLat = s.lat;
-      if (s.lat > maxLat) maxLat = s.lat;
-      if (s.lon < minLon) minLon = s.lon;
-      if (s.lon > maxLon) maxLon = s.lon;
-    }
-    const span = haversineKm(minLat, minLon, maxLat, maxLon);
-    if (span > MAX_MASS_SPAN_KM) {
-      masses.push(...splitOversizedMass(members));
-      continue;
-    }
-    const m = massFromMembers(members);
-    if (m) masses.push(m);
+    masses.push(...splitByCores(members));
   }
   return masses;
 }
