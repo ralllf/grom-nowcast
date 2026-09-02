@@ -30,6 +30,7 @@ import { lightningCaption } from "@/lib/weather/perun";
 import { PL_RADAR_ORIGIN } from "@/lib/weather/radar-grid";
 import { overlayFallback } from "@/lib/weather/sri-overlay";
 import { radarPaintSource, radarPaintWho } from "@/lib/weather/wall-clock";
+import { isNominatimSearchThrottled, NOMINATIM_SEARCH_THROTTLED } from "@/lib/weather/nominatim";
 import { getSnapshot, getSriOverlay, searchPlaces } from "@/lib/weather/server";
 import { canTrustRadar, IMGW_WARNINGS_UNAVAILABLE } from "@/lib/weather/snapshot";
 import { computeThreat } from "@/lib/weather/threat";
@@ -663,6 +664,12 @@ export function GromApp() {
                 Szukaj
               </Button>
             </form>
+
+            {isNominatimSearchThrottled(searchMut.error) ? (
+              <p className="mt-2 text-sm text-muted" role="status">
+                {NOMINATIM_SEARCH_THROTTLED}
+              </p>
+            ) : null}
 
             {searchMut.data && searchMut.data.length > 0 ? (
               <ul className="mt-3 max-h-40 overflow-y-auto rounded-xl bg-surface-2">
