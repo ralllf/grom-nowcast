@@ -65,6 +65,27 @@ function quoteStatusRow(text) {
   return m ? m[0] : null;
 }
 
+const CLOCK_TICK_RE = /^\d{2}:\d{2}$/;
+const TIMELINE_ARIA_RE = /^(Opad od \d{2}:\d{2} do \d{2}:\d{2}, najsilniej ok\. \d{2}:\d{2}|Brak opadu od \d{2}:\d{2} do \d{2}:\d{2})$/;
+
+const TICKS_JS = `(() => {
+  const sheet = document.querySelector("#grom-threat-sheet");
+  if (!sheet) return null;
+  const img = sheet.querySelector('[role="img"]');
+  const axis = sheet.querySelector("[data-timeline-axis]");
+  const ticks = [...(axis?.querySelectorAll("span") || [])].map((s) => s.textContent.trim());
+  return {
+    present: !!(img || axis),
+    aria: img?.getAttribute("aria-label") || null,
+    ticks,
+    hasNowCursor: !!sheet.querySelector("[data-now-cursor]"),
+  };
+})()`;
+
+function ticksLookLikeMinutes(ticks) {
+  return ticks.some((t) => /min|teraz/i.test(t) || !CLOCK_TICK_RE.test(t));
+}
+
 class Cdp {
   constructor(ws) {
     this.ws = ws;
@@ -303,6 +324,26 @@ try {
   if (!statusRow) {
     await screenshot(cdp, join(OUT, "00-failed-status-row.png"));
     throw new Error(`sheet missing status row: ${JSON.stringify(sheet.slice(0, 400))}`);
+  }
+  const ticks = await evalExpr(cdp, TICKS_JS);
+  if (ticks?.present) {
+    writeFileSync(join(OUT, "ticks.json"), JSON.stringify({ when: new Date().toISOString(), pin: "Warszawa", ...ticks }, null, 2));
+    if (!ticks.aria || ticks.aria === "Oś czasu opadu" || !TIMELINE_ARIA_RE.test(ticks.aria)) {
+      await screenshot(cdp, join(OUT, "00-failed-timeline-aria.png"));
+      throw new Error(`timeline aria is mute or not a clock sentence: ${JSON.stringify(ticks)}`);
+    }
+    if (!ticks.ticks?.length || ticksLookLikeMinutes(ticks.ticks)) {
+      await screenshot(cdp, join(OUT, "00-failed-timeline-ticks.png"));
+      throw new Error(`timeline ticks are not HH:MM Warsaw clocks: ${JSON.stringify(ticks)}`);
+    }
+    if (!ticks.hasNowCursor) {
+      await screenshot(cdp, join(OUT, "00-failed-now-cursor.png"));
+      throw new Error(`now-cursor missing on the 90-min strip: ${JSON.stringify(ticks)}`);
+    }
+    step(`timeline ticks: ${ticks.ticks.join(" · ")}`);
+    step(`timeline aria: ${ticks.aria}`);
+  } else {
+    step("timeline not on sheet (no 90-min strip)");
   }
   step(`trio labels: ${trio.labels.join(" · ")}`);
   step(`status row: ${statusRow}`);
@@ -673,6 +714,23 @@ try {
     throw new Error(`Kraków sheet status row missing or amber sentences present: ${JSON.stringify(after.slice(0, 400))}`);
   }
   step(`Kraków status row: ${statusKrakow}`);
+  const ticksKrakow = await evalExpr(cdp, TICKS_JS);
+  if (ticksKrakow?.present) {
+    writeFileSync(
+      join(OUT, "ticks.json"),
+      JSON.stringify(
+        { when: new Date().toISOString(), warszawa: ticks, krakow: ticksKrakow },
+        null,
+        2,
+      ),
+    );
+    if (!ticksKrakow.aria || !TIMELINE_ARIA_RE.test(ticksKrakow.aria) || ticksLookLikeMinutes(ticksKrakow.ticks || [])) {
+      await screenshot(cdp, join(OUT, "00-failed-timeline-ticks.png"));
+      throw new Error(`Kraków timeline ticks/aria not Warsaw clocks: ${JSON.stringify(ticksKrakow)}`);
+    }
+    step(`Kraków timeline ticks: ${ticksKrakow.ticks.join(" · ")}`);
+    step(`Kraków timeline aria: ${ticksKrakow.aria}`);
+  }
   notes.sideEffects.push({
     storage: "grom-settings-v1",
     place: stored,

@@ -1,5 +1,6 @@
-import type { CellTrend, Threat, ThreatLevel } from "@/lib/weather/types";
+import type { CellTrend, Threat, ThreatLevel, TimelinePoint } from "@/lib/weather/types";
 import { STALE_RADAR_MIN } from "../lib/weather/alerts.ts";
+import { levelLabelPl } from "../lib/weather/palette.ts";
 import { lightningCaption } from "../lib/weather/perun.ts";
 import { IMGW_WARNINGS_UNAVAILABLE, RADAR_UNAVAILABLE } from "../lib/weather/snapshot.ts";
 import { cellTrendCopy } from "../lib/weather/trend.ts";
@@ -162,6 +163,36 @@ export function nextSheetDetent(current: SheetDetent, dy: number): SheetDetent {
 
 export function toggleSheetDetent(current: SheetDetent): SheetDetent {
   return current === "peek" ? "half" : "peek";
+}
+
+/** "Opad od 20:40 do 21:10, najsilniej ok. 20:55" — clocks, not a mute axis name. */
+export function timelineAriaLabel(
+  points: Array<Pick<TimelinePoint, "t" | "level" | "rate" | "unknown">>,
+  radarTimeSec: number,
+): string {
+  const wet = points.filter((p) => p.level > 0 && !p.unknown);
+  if (wet.length === 0) {
+    const start = formatRadarClock(radarTimeSec + (points[0]?.t ?? 0) * 60);
+    const end = formatRadarClock(radarTimeSec + (points.at(-1)?.t ?? 90) * 60);
+    return `Brak opadu od ${start} do ${end}`;
+  }
+  const first = wet[0]!;
+  const last = wet[wet.length - 1]!;
+  const peak = wet.reduce((best, p) =>
+    p.level > best.level || (p.level === best.level && p.rate > best.rate) ? p : best,
+  );
+  return `Opad od ${formatRadarClock(radarTimeSec + first.t * 60)} do ${formatRadarClock(radarTimeSec + last.t * 60)}, najsilniej ok. ${formatRadarClock(radarTimeSec + peak.t * 60)}`;
+}
+
+/** Clock plus intensity for a tapped bar — title tooltips never fire on touch. */
+export function timelineBarReadout(
+  point: Pick<TimelinePoint, "t" | "level" | "rate" | "unknown">,
+  radarTimeSec: number,
+): string {
+  const clock = formatRadarClock(radarTimeSec + point.t * 60);
+  if (point.unknown) return `${clock}: poza radarem`;
+  if (point.level > 0) return `${clock}: ${levelLabelPl(point.level)}, ~${point.rate} mm/h`;
+  return `${clock}: sucho`;
 }
 
 /** Nowcast lane only — IMGW never occupies the "nadciąga za 18 min" headline. */

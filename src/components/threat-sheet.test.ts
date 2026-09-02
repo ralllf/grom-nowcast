@@ -12,6 +12,8 @@ import {
   sheetStatusRow,
   shouldAutoExpandSheet,
   threatLevelChip,
+  timelineAriaLabel,
+  timelineBarReadout,
 } from "./threat-sheet-logic.ts";
 import { STALE_RADAR_MIN } from "../lib/weather/alerts.ts";
 import { IMGW_WARNINGS_UNAVAILABLE, RADAR_UNAVAILABLE } from "../lib/weather/snapshot.ts";
@@ -449,5 +451,60 @@ describe("sheetSourceHonesty", () => {
     assert.equal(h.radar, RADAR_UNAVAILABLE);
     assert.doesNotMatch(h.radar ?? "", /albo|ostrzeżeń/);
     assert.equal(h.imgw, null);
+  });
+});
+
+describe("timeline clocks and aria", () => {
+  const radar = Date.UTC(2026, 8, 1, 18, 30, 0) / 1000;
+
+  it("aria-label is a real sentence with Warsaw clocks, not empty Oś czasu opadu", () => {
+    const points = [
+      { t: 0, level: 0 as const, rate: 0 },
+      { t: 10, level: 2 as const, rate: 2 },
+      { t: 25, level: 4 as const, rate: 12 },
+      { t: 40, level: 1 as const, rate: 0.6 },
+      { t: 90, level: 0 as const, rate: 0 },
+    ];
+    const label = timelineAriaLabel(points, radar);
+    assert.equal(label, "Opad od 20:40 do 21:10, najsilniej ok. 20:55");
+    assert.doesNotMatch(label, /Oś czasu opadu/);
+  });
+
+  it("dry window still speaks clocks, not a mute axis name", () => {
+    const label = timelineAriaLabel(
+      [
+        { t: 0, level: 0 as const, rate: 0 },
+        { t: 90, level: 0 as const, rate: 0 },
+      ],
+      radar,
+    );
+    assert.equal(label, "Brak opadu od 20:30 do 22:00");
+    assert.doesNotMatch(label, /Oś czasu opadu/);
+  });
+
+  it("tap readout is clock plus intensity, not +N min", () => {
+    assert.equal(
+      timelineBarReadout({ t: 25, level: 4, rate: 12 }, radar),
+      "20:55: ulewny, ~12 mm/h",
+    );
+    assert.equal(timelineBarReadout({ t: 0, level: 0, rate: 0 }, radar), "20:30: sucho");
+    assert.equal(
+      timelineBarReadout({ t: 10, level: 0, rate: 0, unknown: true }, radar),
+      "20:40: poza radarem",
+    );
+    assert.doesNotMatch(timelineBarReadout({ t: 30, level: 2, rate: 3 }, radar), /\+\d+ min|teraz/);
+  });
+
+  it("sheet wires Warsaw clocks, now-cursor, aria sentence, and tap readout", () => {
+    assert.match(SHEET_SRC, /wallClockAxisLabel\(0, radarTime\)/);
+    assert.match(SHEET_SRC, /wallClockAxisLabel\(30, radarTime\)/);
+    assert.match(SHEET_SRC, /wallClockAxisLabel\(90, radarTime\)/);
+    assert.match(SHEET_SRC, /timelineAriaLabel\(/);
+    assert.match(SHEET_SRC, /data-now-cursor/);
+    assert.match(SHEET_SRC, /nowCursorFrac\(/);
+    assert.match(SHEET_SRC, /timelineBarReadout\(/);
+    assert.doesNotMatch(SHEET_SRC, /aria-label="Oś czasu opadu"/);
+    assert.doesNotMatch(SHEET_SRC, /wallClockAxisLabel\(0, ageMin\)/);
+    assert.doesNotMatch(SHEET_SRC, /\+\$\{wall\} min/);
   });
 });

@@ -69,8 +69,13 @@ export function rewriteArrivalMinutes(
     .replace(`za ~${frameEta} min`, beside);
 }
 
-export function wallClockAxisLabel(frameMin: number, ageMin: number, withUnit = false): string {
-  const wall = wallClockMin(frameMin, ageMin);
-  if (wall === 0) return "teraz";
-  return withUnit ? `${wall} min` : String(wall);
+/** HH:MM at `radarTime + frameMin`, Europe/Warsaw. Age must not shift this. */
+export function wallClockAxisLabel(frameMin: number, radarTimeSec: number): string {
+  return formatRadarClock(radarTimeSec + frameMin * 60);
+}
+
+/** Fraction (0–1) of the 90-min strip where wall-clock now sits. */
+export function nowCursorFrac(ageMin: number, spanMin = 90): number {
+  if (spanMin <= 0) return 0;
+  return Math.min(1, Math.max(0, ageMin / spanMin));
 }

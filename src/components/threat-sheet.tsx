@@ -12,16 +12,18 @@ import {
   sheetStatusRow,
   toggleSheetDetent,
   threatLevelChip,
+  timelineAriaLabel,
+  timelineBarReadout,
   type SheetDetent,
 } from "@/components/threat-sheet-logic";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { LEVEL_SWATCH, levelLabelPl } from "@/lib/weather/palette";
 import {
+  nowCursorFrac,
   radarAgeMin,
   rewriteArrivalMinutes,
   wallClockAxisLabel,
-  wallClockMin,
 } from "@/lib/weather/wall-clock";
 import type {
   CellTrack,
@@ -265,8 +267,13 @@ export function ThreatSheet({
           <Stat label="Echo" value={echoFull} />
         </dl>
 
-        {threat && threat.timeline.length > 0 ? (
-          <Timeline points={threat.timeline} advected={threat.timelineAdvected} ageMin={ageMin} />
+        {threat && threat.timeline.length > 0 && radarTime != null ? (
+          <Timeline
+            points={threat.timeline}
+            advected={threat.timelineAdvected}
+            radarTime={radarTime}
+            ageMin={ageMin}
+          />
         ) : null}
 
         {tracks.length > 0 && (threat?.nearestKm == null || threat.nearestKm > 25) ? (
@@ -334,41 +341,64 @@ const LEGEND: Array<{ level: RadarLevel; range: string }> = [
 function Timeline({
   points,
   advected,
+  radarTime,
   ageMin,
 }: {
   points: TimelinePoint[];
   advected: boolean;
+  radarTime: number;
   ageMin: number;
 }) {
+  const [picked, setPicked] = useState<number | null>(null);
   const any = points.some((p) => p.level > 0);
+  const aria = timelineAriaLabel(points, radarTime);
+  const pickedPoint = picked != null ? points.find((p) => p.t === picked) : undefined;
   return (
     <div className="mt-3 rounded-2xl bg-surface-2 px-3 py-2.5">
       <div className="flex items-center justify-between gap-2 text-xs">
         <span className="text-faint">Opad nad pinezką · 90 min · mm/h</span>
         <span className="text-faint">{advected ? "z ruchu echa" : "bez ruchu — jak teraz"}</span>
       </div>
-      <div className="mt-2 flex h-9 items-end gap-px" role="img" aria-label="Oś czasu opadu">
-        {points.map((p) => {
-          const wall = wallClockMin(p.t, ageMin);
-          const when = wall === 0 ? "teraz" : `+${wall} min`;
-          return (
-            <div
-              key={p.t}
-              title={`${when}: ${p.unknown ? "poza radarem" : p.level > 0 ? `${levelLabelPl(p.level)}, ~${p.rate} mm/h` : "sucho"}`}
-              className="flex-1 rounded-sm"
-              style={{
-                height: p.level > 0 ? `${25 + p.level * 18}%` : "4px",
-                backgroundColor: p.level > 0 ? LEVEL_SWATCH[p.level] : "var(--color-border)",
-              }}
-            />
-          );
-        })}
+      <div className="relative mt-2">
+        <div className="flex h-9 items-end gap-px" role="img" aria-label={aria}>
+          {points.map((p) => {
+            const readout = timelineBarReadout(p, radarTime);
+            return (
+              <button
+                key={p.t}
+                type="button"
+                aria-label={readout}
+                aria-pressed={picked === p.t}
+                onClick={() => setPicked((cur) => (cur === p.t ? null : p.t))}
+                className="min-w-0 flex-1 rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50"
+                style={{
+                  height: p.level > 0 ? `${25 + p.level * 18}%` : "4px",
+                  backgroundColor: p.level > 0 ? LEVEL_SWATCH[p.level] : "var(--color-border)",
+                }}
+              />
+            );
+          })}
+        </div>
+        <span
+          data-now-cursor
+          aria-hidden
+          className="pointer-events-none absolute inset-y-0 w-px bg-fg"
+          style={{ left: `${nowCursorFrac(ageMin) * 100}%` }}
+        />
       </div>
-      <div className="mt-1 flex justify-between font-mono text-[10px] text-faint">
-        <span>{wallClockAxisLabel(0, ageMin)}</span>
-        <span>{wallClockAxisLabel(30, ageMin)}</span>
-        <span>{wallClockAxisLabel(60, ageMin)}</span>
-        <span>{wallClockAxisLabel(90, ageMin, true)}</span>
+      {pickedPoint ? (
+        <p className="mt-1 font-mono text-xs tabular-nums text-muted">
+          {timelineBarReadout(pickedPoint, radarTime)}
+        </p>
+      ) : null}
+      <div
+        data-timeline-axis
+        className="mt-1 flex justify-between font-mono text-[10px] text-faint"
+      >
+        <span>{wallClockAxisLabel(0, radarTime)}</span>
+        <span>{wallClockAxisLabel(30, radarTime)}</span>
+        <span>{wallClockAxisLabel(60, radarTime)}</span>
+        <span>{wallClockAxisLabel(90, radarTime)}</span>
       </div>
       <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-faint">
         {LEGEND.map((l) => (
