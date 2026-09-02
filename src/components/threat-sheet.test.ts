@@ -9,6 +9,7 @@ import {
   lightningCaption,
   sheetSourceHonesty,
   shouldAutoExpandSheet,
+  threatLevelChip,
 } from "./threat-sheet-logic.ts";
 import { IMGW_WARNINGS_UNAVAILABLE, RADAR_UNAVAILABLE } from "../lib/weather/snapshot.ts";
 import type { Threat } from "@/lib/weather/types";
@@ -144,6 +145,24 @@ describe("imgwAsideCountLine", () => {
   it("prints the real count only after IMGW settled", () => {
     assert.equal(imgwAsideCountLine({ stormWarningCount: 0, warningsUnavailable: false }), "0 burzowych w kraju");
     assert.equal(imgwAsideCountLine({ stormWarningCount: 3, warningsUnavailable: false }), "3 burzowych w kraju");
+  });
+});
+
+describe("threatLevelChip", () => {
+  it("prints teraz for now, not English now", () => {
+    assert.equal(threatLevelChip("now"), "teraz");
+  });
+
+  it("leaves other threat levels as the enum key", () => {
+    assert.equal(threatLevelChip("imminent"), "imminent");
+    assert.equal(threatLevelChip("nearby"), "nearby");
+    assert.equal(threatLevelChip("watch"), "watch");
+    assert.equal(threatLevelChip("clear"), "clear");
+  });
+
+  it("wires the sheet Badge through threatLevelChip", () => {
+    assert.match(SHEET_SRC, /<Badge tone=\{TONE\[threat\.level\]\}>\{threatLevelChip\(threat\.level\)\}<\/Badge>/);
+    assert.doesNotMatch(SHEET_SRC, /<Badge tone=\{TONE\[threat\.level\]\}>\{threat\.level\}<\/Badge>/);
   });
 });
 
