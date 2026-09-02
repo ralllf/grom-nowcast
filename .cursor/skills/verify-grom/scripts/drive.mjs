@@ -50,7 +50,7 @@ function sleep(ms) {
 }
 
 const STATUS_ROW_RE =
-  /Radar (?:\d{1,2}:\d{2} · \d+ min|✕) · IMGW [✓✕] · wyładowania [✓✕]/;
+  /(?:Radar (?:\d{1,2}:\d{2} · \d+ min(?: · alert wstrzymany)?|✕) · IMGW [✓✕] · wyładowania [✓✕]|Bez sieci(?: · ostatni radar \d{1,2}:\d{2})?(?: · alert wstrzymany)?)/;
 const AMBER_OUTAGE_SENTENCES = [
   "Wyładowania chwilowo niedostępne",
   "Ostrzeżenia IMGW chwilowo niedostępne",

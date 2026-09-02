@@ -8,6 +8,8 @@ import {
   etaLabel,
   imgwAsideCountLine,
   lightningCaption,
+  isOfflineFailure,
+  sheetPeekStatus,
   sheetSourceHonesty,
   sheetStatusRow,
   shouldAutoExpandSheet,
@@ -315,6 +317,62 @@ describe("threat-sheet user copy", () => {
       /lightningUnavailable\s*\n\s*\? "mt-2 text-center text-\[11px\] text-warn"/,
     );
   });
+
+  it("shows stale/offline status in the peek block, not only expanded", () => {
+    const handle = SHEET_SRC.match(/sm:hidden[\s\S]*?<\/button>/);
+    assert.ok(handle, "expected the mobile peek handle");
+    assert.match(handle[0], /peekStatus/);
+    assert.match(handle[0], /peekStatus\.text/);
+    assert.match(SHEET_SRC, /sheetPeekStatus\(/);
+    assert.match(SHEET_SRC, /offline/);
+    assert.match(APP_SRC, /navigator\.onLine/);
+    assert.match(APP_SRC, /offline=\{/);
+  });
+});
+
+describe("isOfflineFailure", () => {
+  it("is true when the browser is offline", () => {
+    assert.equal(isOfflineFailure({ browserOnline: false }), true);
+    assert.equal(isOfflineFailure({ browserOnline: true }), false);
+  });
+
+  it("treats a fetch that failed as offline", () => {
+    assert.equal(
+      isOfflineFailure({
+        browserOnline: true,
+        queryError: true,
+        error: new TypeError("Failed to fetch"),
+      }),
+      true,
+    );
+    assert.equal(
+      isOfflineFailure({
+        browserOnline: true,
+        queryError: true,
+        error: new TypeError("NetworkError when attempting to fetch resource."),
+      }),
+      true,
+    );
+  });
+
+  it("does not call a server 500 offline", () => {
+    assert.equal(
+      isOfflineFailure({
+        browserOnline: true,
+        queryError: true,
+        error: new Error("Internal Server Error"),
+      }),
+      false,
+    );
+    assert.equal(
+      isOfflineFailure({
+        browserOnline: true,
+        queryError: false,
+        error: new TypeError("Failed to fetch"),
+      }),
+      false,
+    );
+  });
 });
 
 describe("sheetStatusRow", () => {
@@ -392,6 +450,77 @@ describe("sheetStatusRow", () => {
     assert.equal(row.tone, "warn");
     assert.ok(Math.round((staleNow / 1000 - radar) / 60) > STALE_RADAR_MIN);
     assert.match(row.text, /^Radar 20:30 · 31 min/);
+    assert.match(row.text, /alert wstrzymany/);
+  });
+
+  it("stale >30 min marks the peek/status amber", () => {
+    const staleNow = Date.UTC(2026, 7, 31, 19, 1, 0);
+    const row = sheetStatusRow({
+      radarTime: radar,
+      nowMs: staleNow,
+    });
+    const peek = sheetPeekStatus(row, false);
+    assert.ok(peek);
+    assert.equal(peek.tone, "warn");
+    assert.match(peek.text, /alert wstrzymany/);
+    assert.ok(Math.round((staleNow / 1000 - radar) / 60) > STALE_RADAR_MIN);
+  });
+
+  it("fresh radar stays grey and stays out of peek", () => {
+    const row = sheetStatusRow({
+      radarTime: radar,
+      nowMs,
+    });
+    assert.equal(row?.tone, "mute");
+    assert.doesNotMatch(row?.text ?? "", /alert wstrzymany/);
+    assert.equal(sheetPeekStatus(row, false), null);
+  });
+
+  it("offline copy is Bez sieci · ostatni radar HH:MM", () => {
+    const row = sheetStatusRow({
+      radarTime: radar,
+      nowMs,
+      offline: true,
+    });
+    assert.ok(row);
+    assert.equal(row.text, "Bez sieci · ostatni radar 20:30");
+    assert.equal(row.tone, "mute");
+    const peek = sheetPeekStatus(row, true);
+    assert.ok(peek);
+    assert.equal(peek.text, "Bez sieci · ostatni radar 20:30");
+  });
+
+  it("offline with no last radar still says Bez sieci", () => {
+    const row = sheetStatusRow({
+      radarTime: null,
+      nowMs,
+      offline: true,
+    });
+    assert.ok(row);
+    assert.equal(row.text, "Bez sieci");
+    assert.equal(sheetPeekStatus(row, true)?.text, "Bez sieci");
+  });
+
+  it("offline last radar past the stale gate is amber and holds alerts", () => {
+    const staleNow = Date.UTC(2026, 7, 31, 19, 1, 0);
+    const row = sheetStatusRow({
+      radarTime: radar,
+      nowMs: staleNow,
+      offline: true,
+    });
+    assert.equal(row?.tone, "warn");
+    assert.match(row?.text ?? "", /Bez sieci · ostatni radar 20:30/);
+    assert.match(row?.text ?? "", /alert wstrzymany/);
+    assert.equal(sheetPeekStatus(row, true)?.tone, "warn");
+  });
+
+  it("radar-down is amber in peek", () => {
+    const row = sheetStatusRow({
+      radarTime: null,
+      nowMs,
+      radarUnavailable: true,
+    });
+    assert.equal(sheetPeekStatus(row, false)?.tone, "warn");
   });
 
   it("query error is amber radar-down, not an IMGW sentence", () => {

@@ -8,10 +8,11 @@ The bottom card (`#grom-threat-sheet`) is the product: chance, ETA, and echo for
 - Stats `Szansa`, `Za ile` (`teraz` / `N min` / `minie` / `—`), `Echo` (`N km` + intensity)
 - Copy block: `Idzie od … → na …`, `Spodziewaj się:`, `Komórka rośnie` / `Komórka słabnie`
 - Timeline `role="img"` with a clock sentence (`Opad od HH:MM do HH:MM, najsilniej ok. HH:MM` or `Brak opadu od HH:MM do HH:MM`), Warsaw axis ticks, a now-cursor, and tap-to-read bars. Caption `z ruchu echa` vs `bez ruchu — jak teraz`
-- One grey status row: `Radar HH:MM · N min · IMGW ✓/✕ · wyładowania ✓/✕` (amber only when radar is stale or down)
+- One grey status row: `Radar HH:MM · N min · IMGW ✓/✕ · wyładowania ✓/✕` (amber only when radar is stale or down; stale also says `alert wstrzymany`)
+- Offline: `Bez sieci · ostatni radar HH:MM` (or `Bez sieci` with no last scan) — grey unless that last scan is itself stale
 - Map chip (not the sheet) names the painted source (`Radar IMGW` / `Radar`)
 - `Pokaż ruch opadu na mapie` when tracks exist and nearest echo is > 25 km
-- Mobile peek (collapsed, ~128px): same three stats; drag/tap handle (`aria-expanded`)
+- Mobile peek (collapsed, ~128px): same three stats; drag/tap handle (`aria-expanded`). Stale/down/offline status is also in peek, not only expanded.
 - Mobile detents: **peek** `max-h-[128px]` · **half** `max-h-[45dvh]` · **full** `max-h-[85dvh]`. Auto-expand at `now`/`imminent` goes to **half**, not 70dvh.
 
 ## How to get to it (user POV)
