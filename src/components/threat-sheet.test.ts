@@ -190,6 +190,19 @@ describe("threatLevelChip", () => {
 });
 
 describe("threat-sheet user copy", () => {
+  it("box owns Spodziewaj się / Komórka; grey paragraph is threat.detail only", () => {
+    assert.match(SHEET_SRC, /Spodziewaj się:[\s\S]{0,80}\{threat\.expect\}/);
+    assert.match(SHEET_SRC, /\{trendLine \? \(/);
+    assert.match(SHEET_SRC, /honesty\.radar \?\? detail \?\? threat\?\.detail/);
+    const grey = SHEET_SRC.match(
+      /<p className="mt-3 max-w-prose[\s\S]*?<\/p>/,
+    );
+    assert.ok(grey, "expected the muted detail paragraph");
+    assert.doesNotMatch(grey[0], /Spodziewaj się/);
+    assert.doesNotMatch(grey[0], /threat\.expect/);
+    assert.doesNotMatch(grey[0], /trendLine/);
+  });
+
   it("does not print TERYT for a Warszawa pin — place stays the city name", () => {
     assert.match(SHEET_SRC, /\{place\.label\}/);
     assert.doesNotMatch(SHEET_SRC, /TERYT \{place\.terc\}/);

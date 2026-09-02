@@ -305,7 +305,7 @@ test("incoming cell from the west gets ETA, comingFrom and a visible track", () 
   assert.ok(threat.etaMin !== null && threat.etaMin <= 50, `ETA too large: ${threat.etaMin}`);
   assert.ok(threat.expect?.includes("deszcz") || threat.expect?.includes("ulew"));
   assert.match(threat.detail, /Idzie od zachodu/);
-  assert.match(threat.detail, /Spodziewaj się/);
+  assert.doesNotMatch(threat.detail, /Spodziewaj się/);
   assert.match(threat.detail, /Dojście nad Twoją pinezką/);
 });
 
@@ -1222,7 +1222,7 @@ test("deepening cell on a 4-frame trail says Komórka rośnie", () => {
   ];
   const threat = computeThreat(city, frames, []);
   assert.equal(threat.cellTrend, "growing");
-  assert.match(threat.detail, /Komórka rośnie/);
+  assert.doesNotMatch(threat.detail, /Komórka rośnie/);
 });
 
 test("weakening cell on a 4-frame trail says Komórka słabnie", () => {
@@ -1234,7 +1234,7 @@ test("weakening cell on a 4-frame trail says Komórka słabnie", () => {
   ];
   const threat = computeThreat(city, frames, []);
   assert.equal(threat.cellTrend, "decaying");
-  assert.match(threat.detail, /Komórka słabnie/);
+  assert.doesNotMatch(threat.detail, /Komórka słabnie/);
 });
 
 test("steady translating cell has no growth line", () => {
@@ -1635,10 +1635,54 @@ test("nad + map pin / unknown city falls back to pinezka", () => {
 test("Spodziewaj się uses genitive expect strings", () => {
   const inbound = incomingWestOf(city);
   assert.equal(inbound.expect, "ulewy i porywistego wiatru");
-  assert.match(inbound.detail, /Spodziewaj się: ulewy i porywistego wiatru\./);
+  assert.doesNotMatch(inbound.detail, /Spodziewaj się/);
   const hits = nativeDiscHits(city.lat, city.lon, () => 12);
   const { samples } = aggregate(hits);
   const downpour = computeThreat(city, [frame(1_000, samples, 0), frame(1_600, samples, 0)], []);
   assert.equal(downpour.expect, "silnej ulewy, porywów wiatru");
-  assert.match(downpour.detail, /Spodziewaj się: silnej ulewy, porywów wiatru\./);
+  assert.doesNotMatch(downpour.detail, /Spodziewaj się/);
+});
+
+test("incoming and over-pin detail does not repeat the box expect sentence", () => {
+  const inbound = incomingWestOf(city);
+  assert.ok(inbound.expect, "box still owns Spodziewaj się");
+  assert.doesNotMatch(inbound.detail, /Spodziewaj się/);
+  assert.match(inbound.detail, /To ruch echa, nie pewność/);
+  assert.match(inbound.detail, /urosnąć na miejscu/);
+
+  const hits = nativeDiscHits(city.lat, city.lon, () => 12);
+  const { samples } = aggregate(hits);
+  const overPin = computeThreat(city, [frame(1_000, samples, 0), frame(1_600, samples, 0)], []);
+  assert.ok(overPin.expect, "over-pin box still owns Spodziewaj się");
+  assert.equal(overPin.etaMin, 0);
+  assert.doesNotMatch(overPin.detail, /Spodziewaj się/);
+  assert.match(overPin.detail, /urosnąć na miejscu/);
+});
+
+test("cell trend stays on the box — detail does not repeat Komórka rośnie / słabnie", () => {
+  const growing = computeThreat(
+    city,
+    [
+      frame(0, blobSized(50.0, 20.4, 2, 2), 43),
+      frame(600, blobSized(50.0, 20.55, 2, 2), 32),
+      frame(1_200, blobSized(50.0, 20.7, 3, 3), 21),
+      frame(1_800, blobSized(50.0, 20.85, 4, 3), 11),
+    ],
+    [],
+  );
+  assert.equal(growing.cellTrend, "growing");
+  assert.doesNotMatch(growing.detail, /Komórka rośnie/);
+
+  const decaying = computeThreat(
+    city,
+    [
+      frame(0, blobSized(50.0, 20.4, 4, 3), 43),
+      frame(600, blobSized(50.0, 20.55, 3, 3), 32),
+      frame(1_200, blobSized(50.0, 20.7, 3, 2), 21),
+      frame(1_800, blobSized(50.0, 20.85, 2, 2), 11),
+    ],
+    [],
+  );
+  assert.equal(decaying.cellTrend, "decaying");
+  assert.doesNotMatch(decaying.detail, /Komórka słabnie/);
 });

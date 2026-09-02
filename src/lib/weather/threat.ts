@@ -15,7 +15,6 @@ import type {
 import {
   GROWTH_MATH_ENABLED,
   applyGrowthToTimeline,
-  cellTrendCopy,
   cellTrendFromSnaps,
   lagrangianMeanRateSlope,
   type RateTrailSnap,
@@ -1525,29 +1524,25 @@ export function computeThreat(
   if (upcoming.length > 0 && level === "clear") level = "watch";
 
   const formNote = "Komórka może też urosnąć na miejscu — tego radar nie zapowie.";
-  const trendNote = (() => {
-    const line = cellTrendCopy(cellTrend);
-    return line ? ` ${line}.` : "";
-  })();
   const dist = nearestKm !== null ? `ok. ${nearestKm.toFixed(0)} km od ${who}` : `w okolicy ${who}`;
 
   let detail: string;
   if (etaMin === 0 && (pinMaxLevel >= 1 || (nearestKm !== null && nearestKm <= PIN_KM))) {
-    detail = `Opad jest ${nadWho} teraz.${expect ? ` Spodziewaj się: ${expect}.` : ""}${trendNote} ${formNote}`;
+    detail = `Opad jest ${nadWho} teraz. ${formNote}`;
   } else if (receding && aboutPin) {
-    detail = `${comingFrom ? `Idzie od ${comingFrom}` : "Komórka"} (${dist}) i odchodzi na ${toward ?? "bok"}.${expect ? ` Spodziewaj się: ${expect}.` : ""} Szansa ~${chance}%.${trendNote} ${formNote}`;
+    detail = `${comingFrom ? `Idzie od ${comingFrom}` : "Komórka"} (${dist}) i odchodzi na ${toward ?? "bok"}. Szansa ~${chance}%. ${formNote}`;
   } else if (willHit && comingFrom) {
     const etaBit = etaMin && etaMin > 0 ? ` Dojście ${nadWho}: ok. ${etaMin} min.` : "";
-    detail = `Idzie od ${comingFrom}${speedKmh ? ` (~${Math.round(speedKmh)} km/h)` : ""}, echo ${dist}.${etaBit}${expect ? ` Spodziewaj się: ${expect}.` : ""} Szansa ~${chance}%. To ruch echa, nie pewność.${trendNote} ${formNote}`;
+    detail = `Idzie od ${comingFrom}${speedKmh ? ` (~${Math.round(speedKmh)} km/h)` : ""}, echo ${dist}.${etaBit} Szansa ~${chance}%. To ruch echa, nie pewność. ${formNote}`;
   } else if (
     comingFrom &&
     missKm !== null &&
     missKm > PIN_KM &&
     (nearestKm === null || nearestKm > OVER_KM)
   ) {
-    detail = `Idzie od ${comingFrom}, echo ${dist}. Tor minie ${who} ok. ${missKm.toFixed(0)} km obok${etaMin ? ` za ~${etaMin} min` : ""}.${expect ? ` Spodziewaj się w okolicy: ${expect}.` : ""} Nad samym punktem szansa ~${chance}%.${trendNote} ${formNote}`;
+    detail = `Idzie od ${comingFrom}, echo ${dist}. Tor minie ${who} ok. ${missKm.toFixed(0)} km obok${etaMin ? ` za ~${etaMin} min` : ""}. Nad samym punktem szansa ~${chance}%. ${formNote}`;
   } else if (nearestKm !== null) {
-    detail = `Echo ${dist}${comingFrom ? `, od ${comingFrom}` : ""}.${expect ? ` Spodziewaj się: ${expect}.` : ""} Szansa ~${chance}%.${trendNote} ${formNote}`;
+    detail = `Echo ${dist}${comingFrom ? `, od ${comingFrom}` : ""}. Szansa ~${chance}%. ${formNote}`;
   } else if (level === "watch") {
     const body =
       activeMatch[0]?.body ?? upcoming[0]?.body ?? "Instytut wydał ostrzeżenie dla powiatu.";
