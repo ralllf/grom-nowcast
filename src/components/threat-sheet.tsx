@@ -5,6 +5,7 @@ import {
   cellTrendLine,
   echoLabel,
   etaLabel,
+  idzieOdTowardSuffix,
   nextSheetDetent,
   nowcastHeadline,
   SHEET_DETENT_CLASS,
@@ -253,7 +254,9 @@ export function ThreatSheet({
               <p>
                 <span className="text-faint">Idzie od </span>
                 <span className="font-medium">{threat.comingFrom}</span>
-                {threat.toward ? <span className="text-muted"> → na {threat.toward}</span> : null}
+                {threat.toward ? (
+                  <span className="text-muted">{idzieOdTowardSuffix(threat.toward)}</span>
+                ) : null}
                 {threat.speedKmh ? (
                   <span className="font-mono text-xs text-muted">
                     {" "}

@@ -102,6 +102,20 @@ export function cellTrendLine(trend: CellTrend | undefined): string | null {
   return cellTrendCopy(trend ?? null);
 }
 
+/** " na wschód" — spoken words, never an arrow glyph (screen readers say "strzałka"). */
+export function idzieOdTowardSuffix(toward: string | null | undefined): string {
+  return toward ? ` na ${toward}` : "";
+}
+
+/** Full Idzie od line for a west→east cell: "Idzie od zachodu na wschód". */
+export function idzieOdLine(
+  comingFrom: string | null | undefined,
+  toward: string | null | undefined,
+): string | null {
+  if (!comingFrom) return null;
+  return `Idzie od ${comingFrom}${idzieOdTowardSuffix(toward)}`;
+}
+
 export function etaLabel(threat: Threat | null, ageMin = 0): string {
   if (threat?.etaMin === 0) return "teraz";
   if (threat?.etaMin != null) {

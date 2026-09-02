@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import {
   echoLabel,
   etaLabel,
+  idzieOdLine,
   imgwAsideCountLine,
   lightningCaption,
   isOfflineFailure,
@@ -260,6 +261,14 @@ describe("threatLevelChip", () => {
 });
 
 describe("threat-sheet user copy", () => {
+  it("west→east Idzie od line is Polish words, not an arrow glyph", () => {
+    const line = idzieOdLine("zachodu", "wschód");
+    assert.equal(line, "Idzie od zachodu na wschód");
+    assert.doesNotMatch(line, /→/);
+    assert.match(SHEET_SRC, /idzieOdTowardSuffix\(threat\.toward\)/);
+    assert.doesNotMatch(SHEET_SRC, /→ na/);
+  });
+
   it("box owns Spodziewaj się / Komórka; grey paragraph is threat.detail only", () => {
     assert.match(SHEET_SRC, /Spodziewaj się:[\s\S]{0,80}\{threat\.expect\}/);
     assert.match(SHEET_SRC, /\{trendLine \? \(/);
