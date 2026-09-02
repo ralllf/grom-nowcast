@@ -112,10 +112,9 @@ export function stopTitleFlash() {
 /** Alternate the tab title with the alert for up to 5 minutes or until the tab is focused. */
 export function startTitleFlash(event: AlertEvent) {
   if (typeof document === "undefined") return;
-  if (prefersReducedMotion()) return;
-  const interval = titleFlashIntervalMs();
-  if (interval == null) return;
   stopTitleFlash();
+  if (prefersReducedMotion()) return;
+  const interval = titleFlashIntervalMs(false);
   baseTitle = document.title;
   stopFlashAt = Date.now() + 5 * 60_000;
   const alt = `⚡ ${event.title}`;

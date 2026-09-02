@@ -66,8 +66,8 @@ describe("prefers-reduced-motion (§7 Motion / 10b#12)", () => {
   });
 
   it("easeTo and fitBounds take a reduced-motion duration", () => {
-    assert.match(MAP, /cameraDuration\(/);
-    assert.match(MAP, /duration:\s*cameraDuration\(/);
+    assert.match(MAP, /duration:\s*cameraDuration\(700\)/);
+    assert.match(MAP, /duration:\s*cameraDuration\(1000\)/);
   });
 
   it("tab-title flash is skipped when reduced motion is on", () => {
