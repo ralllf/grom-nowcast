@@ -167,6 +167,6 @@ if (report.snapshot.warningsUnavailable) {
   report.reason += " (IMGW warnings unavailable — skip imgw-warnings assertions)";
 }
 if (report.snapshot.lightningUnavailable) {
-  report.reason += " (PERUN unavailable — expect Wyładowania chwilowo niedostępne)";
+  report.reason += " (PERUN unavailable — expect wyładowania ✕ on the status row)";
 }
 emit(report);

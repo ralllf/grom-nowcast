@@ -7,7 +7,7 @@ Official powiat storm warnings from `https://danepubliczne.imgw.pl/api/data/warn
 - Desktop `aside` heading `Ostrzeżenia IMGW` with `N burzowych w kraju`
 - Cards: `event`, `Badge` `stopień N`, time range via `formatImgwRange`, body; `Inny powiat — podgląd krajowy.` when TERYT misses
 - Empty: `Brak aktywnych ostrzeżeń burzowych.`
-- Failure: `Ostrzeżenia IMGW chwilowo niedostępne` (aside + optional sheet)
+- Failure: `Ostrzeżenia IMGW chwilowo niedostępne` on the desktop aside; the sheet folds this into the grey status row (`IMGW ✕`)
 - Local lane on the sheet: `Ostrzeżenie IMGW: burze · … · powiat …` (`localImgwLane`)
 - Map choropleth toggle `IMGW` (`aria-pressed`, default on) — only if `stormWarningDegrees` is non-empty
 - Settings checkbox `Ostrzeżenia IMGW na mapie (powiat, stopień)`

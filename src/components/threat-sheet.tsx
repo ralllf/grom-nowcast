@@ -6,6 +6,7 @@ import {
   etaLabel,
   nowcastHeadline,
   sheetSourceHonesty,
+  sheetStatusRow,
   shouldAutoExpandSheet,
   threatLevelChip,
 } from "@/components/threat-sheet-logic";
@@ -13,12 +14,10 @@ import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { LEVEL_SWATCH, levelLabelPl } from "@/lib/weather/palette";
 import {
-  radarAgeCaption,
   radarAgeMin,
   rewriteArrivalMinutes,
   wallClockAxisLabel,
   wallClockMin,
-  type RadarPaintSource,
 } from "@/lib/weather/wall-clock";
 import type {
   CellTrack,
@@ -62,11 +61,7 @@ type Props = {
   onShowRainMotion: () => void;
   /** Latest radar scan, unix seconds. `null` = no radar. */
   radarTime: number | null;
-  /** What the map is painting — not snapshot analysisSource. */
-  radarPaint?: RadarPaintSource;
-  /** PERUN line — empty-state copy when this session has no strikes. */
-  lightningNote?: string;
-  /** True when the PERUN download bounced — warn, do not look like a quiet sky. */
+  /** True when the PERUN download bounced — folded into the status row. */
   lightningUnavailable?: boolean;
 };
 
@@ -83,8 +78,6 @@ export function ThreatSheet({
   onClearGeoError,
   onShowRainMotion,
   radarTime,
-  radarPaint = "rainviewer",
-  lightningNote,
   lightningUnavailable = false,
 }: Props) {
   const [open, setOpen] = useState(false);
@@ -95,7 +88,6 @@ export function ThreatSheet({
   const nowMs = Date.now();
   const ageMin = radarAgeMin(radarTime, nowMs);
   const eta = etaLabel(threat, ageMin);
-  const radarCaption = radarAgeCaption(radarTime, nowMs, radarPaint);
   const detail = threat ? rewriteArrivalMinutes(threat.detail, threat.etaMin, ageMin) : null;
   const echo = echoLabel(threat);
   const echoFull =
@@ -109,6 +101,14 @@ export function ThreatSheet({
     queryError: error,
     radarUnavailable,
     warningsUnavailable,
+  });
+  const statusRow = sheetStatusRow({
+    radarTime,
+    nowMs,
+    radarUnavailable,
+    queryError: error,
+    warningsUnavailable,
+    lightningUnavailable,
   });
 
   useEffect(() => {
@@ -246,22 +246,6 @@ export function ThreatSheet({
           <Stat label="Echo" value={echoFull} />
         </dl>
 
-        {radarCaption ? (
-          <p className="mt-2 text-center font-mono text-[11px] text-faint">{radarCaption}</p>
-        ) : null}
-
-        {lightningNote ? (
-          <p
-            className={
-              lightningUnavailable
-                ? "mt-2 text-center text-[11px] text-warn"
-                : "mt-2 text-center text-[11px] text-faint"
-            }
-          >
-            {lightningNote}
-          </p>
-        ) : null}
-
         {threat && threat.timeline.length > 0 ? (
           <Timeline points={threat.timeline} advected={threat.timelineAdvected} ageMin={ageMin} />
         ) : null}
@@ -283,10 +267,14 @@ export function ThreatSheet({
           te, które dotyczą pinezki, mówią czy opad dojdzie.
         </p>
 
-        {honesty.imgw ? (
-          <p className="mt-3 text-xs text-warn">{honesty.imgw}</p>
-        ) : imgwLine ? (
+        {imgwLine ? (
           <p className="mt-3 text-xs leading-relaxed text-warn">{imgwLine}</p>
+        ) : null}
+
+        {statusRow ? (
+          <p className={statusRow.tone === "warn" ? "mt-3 text-xs text-warn" : "mt-3 text-xs text-faint"}>
+            {statusRow.text}
+          </p>
         ) : null}
 
         {geoError ? (

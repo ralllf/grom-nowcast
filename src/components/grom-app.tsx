@@ -26,7 +26,6 @@ import { formatImgwRange } from "@/lib/weather/imgw-time";
 import { localImgwLane, stormWarningDegrees } from "@/lib/weather/imgw-lane";
 import { framesFromScan } from "@/lib/weather/pack";
 import { historyIsDegraded } from "@/lib/weather/radar-history";
-import { lightningCaption } from "@/lib/weather/perun";
 import { PL_RADAR_ORIGIN } from "@/lib/weather/radar-grid";
 import { overlayFallback } from "@/lib/weather/sri-overlay";
 import { formatRadarClock, radarPaintSource, radarPaintWho } from "@/lib/weather/wall-clock";
@@ -567,14 +566,6 @@ export function GromApp() {
             onClearGeoError={() => setGeoError(null)}
             onShowRainMotion={showRainMotion}
             radarTime={radarTime}
-            radarPaint={radarPaint}
-            lightningNote={
-              snapshot
-                ? lightningCaption(snapshot.lightning.length, snapshot.lightningUnavailable)
-                : snapshotQuery.isPending
-                  ? undefined
-                  : lightningCaption(0, true)
-            }
             lightningUnavailable={snapshot?.lightningUnavailable ?? !snapshot}
           />
 

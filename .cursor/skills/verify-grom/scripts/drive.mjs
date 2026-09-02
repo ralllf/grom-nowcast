@@ -275,7 +275,21 @@ try {
     await screenshot(cdp, join(OUT, "00-failed-za-ile.png"));
     throw new Error(`sheet missing Za ile / Szansa: ${JSON.stringify(trio.labels)}`);
   }
+  const statusRow = quoteStatusRow(sheet);
+  writeFileSync(
+    join(OUT, "status-row.json"),
+    JSON.stringify({ when: new Date().toISOString(), pin: "Warszawa", statusRow, sheetHasAmberSentences: hasAmberOutageSentences(sheet) }, null, 2),
+  );
+  if (hasAmberOutageSentences(sheet)) {
+    await screenshot(cdp, join(OUT, "00-failed-amber-sentences.png"));
+    throw new Error(`sheet still has amber outage sentences: ${JSON.stringify(sheet.slice(0, 400))}`);
+  }
+  if (!statusRow) {
+    await screenshot(cdp, join(OUT, "00-failed-status-row.png"));
+    throw new Error(`sheet missing status row: ${JSON.stringify(sheet.slice(0, 400))}`);
+  }
   step(`trio labels: ${trio.labels.join(" · ")}`);
+  step(`status row: ${statusRow}`);
   step(`sheet ready, starts with pin copy: ${sheet.split("\n").slice(0, 4).join(" | ")}`);
 
   if (FEATURE === "radar-map") {
@@ -611,6 +625,25 @@ try {
     await screenshot(cdp, join(OUT, "00-failed-eta-label.png"));
     throw new Error(`Kraków sheet still shows ETA: ${JSON.stringify(trioKrakow)}`);
   }
+  const statusKrakow = quoteStatusRow(after);
+  writeFileSync(
+    join(OUT, "status-row.json"),
+    JSON.stringify(
+      {
+        when: new Date().toISOString(),
+        warszawa: statusRow,
+        krakow: statusKrakow,
+        sheetHasAmberSentences: hasAmberOutageSentences(after),
+      },
+      null,
+      2,
+    ),
+  );
+  if (hasAmberOutageSentences(after) || !statusKrakow) {
+    await screenshot(cdp, join(OUT, "00-failed-status-row.png"));
+    throw new Error(`Kraków sheet status row missing or amber sentences present: ${JSON.stringify(after.slice(0, 400))}`);
+  }
+  step(`Kraków status row: ${statusKrakow}`);
   notes.sideEffects.push({
     storage: "grom-settings-v1",
     place: stored,
@@ -675,4 +708,20 @@ ${
 
 Mocks: none. Radar snapshot is the live IMGW/RainViewer boundary already checked by doctor.
 `;
+}
+
+const STATUS_ROW_RE =
+  /Radar (?:\d{1,2}:\d{2} · \d+ min|✕) · IMGW [✓✕] · wyładowania [✓✕]/;
+const AMBER_OUTAGE_SENTENCES = [
+  "Wyładowania chwilowo niedostępne",
+  "Ostrzeżenia IMGW chwilowo niedostępne",
+];
+
+function hasAmberOutageSentences(text) {
+  return AMBER_OUTAGE_SENTENCES.some((s) => text.includes(s));
+}
+
+function quoteStatusRow(text) {
+  const m = text.match(STATUS_ROW_RE);
+  return m ? m[0] : null;
 }

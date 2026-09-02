@@ -8,8 +8,8 @@ The bottom card (`#grom-threat-sheet`) is the product: chance, ETA, and echo for
 - Stats `Szansa`, `Za ile` (`teraz` / `N min` / `minie` / `—`), `Echo` (`N km` + intensity)
 - Copy block: `Idzie od … → na …`, `Spodziewaj się:`, `Komórka rośnie` / `Komórka słabnie`
 - Timeline `role="img"` `aria-label="Oś czasu opadu"` (19 bars / 5 min) and caption `z ruchu echa` vs `bez ruchu — jak teraz`
-- Radar age `Radar IMGW HH:MM · sprzed N min` (SRI) or `Radar HH:MM · …` (RainViewer)
-- PERUN line: `Brak wyładowań w tej sesji` or `Wyładowania chwilowo niedostępne` (warn color when unavailable)
+- One grey status row: `Radar HH:MM · N min · IMGW ✓/✕ · wyładowania ✓/✕` (amber only when radar is stale or down)
+- Map chip (not the sheet) names the painted source (`Radar IMGW` / `Radar`)
 - `Pokaż ruch opadu na mapie` when tracks exist and nearest echo is > 25 km
 - Mobile peek (collapsed): same three stats; drag/tap handle (`aria-expanded`)
 
