@@ -103,8 +103,9 @@ function meanPoint(cells: TrailCell[]): { lat: number; lon: number } | null {
 }
 
 /**
- * Pair cells between two trail snaps. Gate is residual GROWTH_MATCH_KM plus
- * the bulk centroid hop so a translating mass still matches the same parcels.
+ * Pair cells between two trail snaps. Advect `prev` by the centroid hop, then
+ * match residuals inside matchKm — geographic nearest-neighbour without the
+ * shift pairs a translating core's leading edge to the old trailing edge.
  */
 function matchTrailCells(
   prev: TrailCell[],
@@ -114,16 +115,16 @@ function matchTrailCells(
   if (prev.length === 0 || next.length === 0) return [];
   const c0 = meanPoint(prev);
   const c1 = meanPoint(next);
-  const bulk =
-    c0 && c1 ? haversineKm(c0.lat, c0.lon, c1.lat, c1.lon) : 0;
-  const gate = matchKm + bulk;
+  const dLat = c0 && c1 ? c1.lat - c0.lat : 0;
+  const dLon = c0 && c1 ? c1.lon - c0.lon : 0;
+  const shifted = prev.map((c) => ({ lat: c.lat + dLat, lon: c.lon + dLon }));
   const candidates: { i: number; j: number; d: number }[] = [];
   for (let i = 0; i < next.length; i++) {
     const a = next[i]!;
-    for (let j = 0; j < prev.length; j++) {
-      const b = prev[j]!;
+    for (let j = 0; j < shifted.length; j++) {
+      const b = shifted[j]!;
       const d = haversineKm(a.lat, a.lon, b.lat, b.lon);
-      if (d <= gate) candidates.push({ i, j, d });
+      if (d <= matchKm) candidates.push({ i, j, d });
     }
   }
   candidates.sort((a, b) => a.d - b.d);

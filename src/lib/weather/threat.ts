@@ -1288,7 +1288,7 @@ export function computeThreat(
       const pinTrail = buildMassTrail(pinMass, layers);
       cellTrend = cellTrendFromSnaps(trailSnaps(pinTrail));
       if (growthMath) {
-        growthSlope = lagrangianMeanRateSlope(rateTrailSnaps(pinTrail), LINK_KM);
+        growthSlope = lagrangianMeanRateSlope(rateTrailSnaps(pinTrail));
       }
     }
 

@@ -1333,6 +1333,24 @@ test("flag on: deepening trail grows 15–20 min rain; extra is damped after ~30
   assert.ok(extra50 < extra20, `extra at 50 (${extra50}) must be damped vs 20 (${extra20})`);
 });
 
+test("flag on: translating deepening cell raises 15–20 min rates vs the gated path", () => {
+  const growing = [
+    frame(0, blobAtRate(50.0, 20.4, 2), 43),
+    frame(600, blobAtRate(50.0, 20.55, 4), 32),
+    frame(1_200, blobAtRate(50.0, 20.7, 6), 21),
+    frame(1_800, blobAtRate(50.0, 20.85, 8), 11),
+  ];
+  const off = computeThreat(city, growing, [], city, [], false);
+  const on = computeThreat(city, growing, [], city, [], true);
+  assert.equal(on.cellTrend, "growing");
+  const wet = on.timeline.filter((p) => p.t > 0 && p.t <= 20 && p.rate > 0 && !p.unknown);
+  assert.ok(wet.length > 0, "translating cell must still arrive in the apply window");
+  for (const p of wet) {
+    const base = off.timeline.find((q) => q.t === p.t);
+    assert.ok(base && p.rate > base.rate, `t=${p.t}: grown ${p.rate} vs gated ${base?.rate}`);
+  }
+});
+
 /** Tight 5×5 so the nearest edge stays where we put the centre (±~2.7 km). */
 function compactBlob(lat: number, lon: number, level: RadarLevel): RadarSample[] {
   const samples: RadarSample[] = [];

@@ -115,11 +115,11 @@ function cell(lat: number, lon: number, rate: number) {
   return { lat, lon, rate };
 }
 
-/** Four 10-min hops; two matched parcels deepen 2 → 8 mm/h. Extra unmatched rain is ignored. */
+/** Four 10-min hops; two matched parcels translate and deepen 2 → 8 mm/h. */
 function deepeningTrail(): RateTrailSnap[] {
   return [
-    rateSnap(0, [cell(50, 20, 2), cell(50.04, 20, 2), cell(50.2, 20.4, 1)]),
-    rateSnap(600, [cell(50, 20.08, 4), cell(50.04, 20.08, 4), cell(49.5, 19.5, 12)]),
+    rateSnap(0, [cell(50, 20, 2), cell(50.04, 20, 2)]),
+    rateSnap(600, [cell(50, 20.08, 4), cell(50.04, 20.08, 4)]),
     rateSnap(1200, [cell(50, 20.16, 6), cell(50.04, 20.16, 6)]),
     rateSnap(1800, [cell(50, 20.24, 8), cell(50.04, 20.24, 8)]),
   ];
@@ -128,7 +128,7 @@ function deepeningTrail(): RateTrailSnap[] {
 test("Lagrangian ΔR is the sum of rate over matched cells, not first-vs-last mass count", () => {
   const trail = deepeningTrail();
   const deltaR = lagrangianDeltaR(trail);
-  // Two parcels × (+2 +2 +2) = +12. The unmatched 12 mm/h blob never enters.
+  // Two parcels × (+2 +2 +2) = +12. New unmatched cells do not add their rate.
   assert.equal(deltaR, 12);
   const areaOnly: RateTrailSnap[] = [
     rateSnap(0, [cell(50, 20, 3), cell(50.04, 20, 3)]),
@@ -147,6 +147,23 @@ test("deepening matched trail has a positive mean-rate slope", () => {
   const slope = lagrangianMeanRateSlope(deepeningTrail());
   // Mean parcel 2 → 8 mm/h over 30 min → 0.2 mm/h per min.
   assert.ok(Math.abs(slope - 0.2) < 1e-9, `slope ${slope}`);
+});
+
+test("translating 5-cell core: Lagrangian ΔR follows parcels, not leading-vs-trailing edge", () => {
+  const lons = [20.0, 20.03, 20.06, 20.09, 20.12];
+  const hop = 0.08;
+  const trail: RateTrailSnap[] = [
+    rateSnap(
+      0,
+      lons.map((lon) => cell(50, lon, 2)),
+    ),
+    rateSnap(
+      600,
+      lons.map((lon) => cell(50, lon + hop, 4)),
+    ),
+  ];
+  assert.equal(lagrangianDeltaR(trail), 10);
+  assert.ok(Math.abs(lagrangianMeanRateSlope(trail) - 0.2) < 1e-9);
 });
 
 test("damped increment is full for 15–20 min then e-folds toward zero (~30 min)", () => {
