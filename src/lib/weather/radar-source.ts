@@ -46,13 +46,14 @@ function framesToScan(
     samples: [],
     prevSamples: [],
     prevTime: before?.time ?? null,
-    history: frames.map(({ time, samples, maxLevel, nearestKm, complete }) => ({
+    history: frames.map(({ time, samples, maxLevel, nearestKm, complete, cellKm }) => ({
       time,
       samples: [],
       packed: packSamples(samples),
       maxLevel,
       nearestKm,
       degraded: !complete,
+      cellKm,
     })),
     maxLevel: latest?.maxLevel ?? 0,
     nearestKm: latest?.nearestKm ?? null,

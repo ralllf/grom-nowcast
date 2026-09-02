@@ -7,7 +7,7 @@ import {
 } from "./alerts.ts";
 import { bearingDeg, destPoint, haversineKm } from "./geo.ts";
 import { levelFromRate } from "./palette.ts";
-import { aggregate } from "./radar-grid.ts";
+import { aggregate, BASE_CELL_LAT, BASE_CELL_LON, PL_RADAR_BBOX } from "./radar-grid.ts";
 import {
   computeThreat,
   GATE_DT_SEC,
@@ -16,6 +16,8 @@ import {
   TRAIL_SOLO_KM_30,
   TRAIL_TRUST_KM_30,
   gateKm,
+  nccCellKm,
+  nccSampleCell,
   pinTimeline,
 } from "./threat.ts";
 import type { OfficialWarning, Place, RadarLevel, RadarMemoryFrame, RadarSample } from "./types.ts";
@@ -57,6 +59,50 @@ const zgorzelec: Place = {
   label: "Zgorzelec",
   terc: "0225",
 };
+
+test("NCC bins at aggregate cellKm: 6 km samples are adjacent at 6, every-other at 3", () => {
+  const lat0 = 52.1;
+  const lon0 = 19.35;
+  const north = lat0 + 6 / 111;
+  const at3s = nccSampleCell(lat0, lon0, lat0, lon0, 3);
+  const at3n = nccSampleCell(north, lon0, lat0, lon0, 3);
+  const at6s = nccSampleCell(lat0, lon0, lat0, lon0, 6);
+  const at6n = nccSampleCell(north, lon0, lat0, lon0, 6);
+  assert.ok(at3s && at3n && at6s && at6n);
+  assert.equal(Math.abs(at3n.iy - at3s.iy), 2, "6 km on a 3 km NCC grid is a checkerboard step");
+  assert.equal(Math.abs(at6n.iy - at6s.iy), 1, "6 km on a 6 km NCC grid is one cell");
+
+  const hits3 = latticeHitsForNcc(9_000);
+  const hits6 = latticeHitsForNcc(9_001);
+  const a3 = aggregate(hits3);
+  const a6 = aggregate(hits6);
+  assert.equal(a3.cellKm, 3);
+  assert.equal(a6.cellKm, 6);
+  const f3 = [frame(1_000, a3.samples, 0), frame(1_600, a3.samples, 0)].map((f) => ({
+    ...f,
+    cellKm: a3.cellKm,
+  }));
+  const f6 = [frame(1_000, a6.samples, 0), frame(1_600, a6.samples, 0)].map((f) => ({
+    ...f,
+    cellKm: a6.cellKm,
+  }));
+  assert.equal(nccCellKm(f3), 3);
+  assert.equal(nccCellKm(f6), 6);
+  assert.equal(nccCellKm([frame(1_000, blob(50, 21, 2), 0)]), 3);
+});
+
+function latticeHitsForNcc(count: number) {
+  const hits: { lat: number; lon: number; rate: number }[] = [];
+  const nLon = Math.floor((PL_RADAR_BBOX.maxLon - PL_RADAR_BBOX.minLon) / BASE_CELL_LON);
+  for (let n = 0; n < count; n++) {
+    hits.push({
+      lat: PL_RADAR_BBOX.minLat + (Math.floor(n / nLon) + 0.5) * BASE_CELL_LAT,
+      lon: PL_RADAR_BBOX.minLon + ((n % nLon) + 0.5) * BASE_CELL_LON,
+      rate: 1.5,
+    });
+  }
+  return hits;
+}
 
 test("motion gates are speed·Δt of the old 30-min 10 / 14 / 45 km constants", () => {
   assert.equal(GATE_DT_SEC, 30 * 60);
