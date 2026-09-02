@@ -134,11 +134,11 @@ export function levelLabelPl(level: RadarLevel): string {
   }
 }
 
-/** Representative swatch per class for legends (taken from the palette). */
+/** Representative swatch per class for legends and the map overlay (L3 darkened vs RainViewer yellow). */
 export const LEVEL_SWATCH: Record<RadarLevel, string> = {
   0: "transparent",
   1: "#36bae5",
   2: "#005b8e",
-  3: "#ffc500",
+  3: "#e8b400",
   4: "#e62800",
 };

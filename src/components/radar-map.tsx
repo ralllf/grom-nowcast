@@ -67,7 +67,7 @@ const ESRI_FALLBACK: StyleSpecification = {
 };
 
 const INK = "#12171f";
-const AMBER = "#e4572e";
+const AMBER = "#f0a202";
 const AMBER_SOFT = "#f0a202";
 const CREAM = "#f8f4ee";
 const STRIKE = "#f5c518";
@@ -531,7 +531,7 @@ function syncRadar(map: import("maplibre-gl").Map, live: Live) {
       id,
       type: "raster",
       source: id,
-      paint: { "raster-opacity": 0.78, "raster-fade-duration": 0, "raster-resampling": "nearest" },
+      paint: { "raster-opacity": 0.85, "raster-fade-duration": 0, "raster-resampling": "nearest" },
     },
     labelLayerId(map),
   );
