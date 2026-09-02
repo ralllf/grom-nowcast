@@ -2,10 +2,11 @@
 
 Full-project analysis done on 1 September 2026 against `main` @ `ec7d59a`, with the live site checked at 20:04–20:07 CEST during a storm over Warsaw. English; product words stay Polish.
 
-Two summary pages (private artifacts, share from the page menu):
+Summary pages (private artifacts, share from the page menu):
 
 - **Go-Live Plan** — state of the app, MeteoSwiss benchmark, go-live blockers, roadmap, Android/iOS strategy, push architecture, costs, first two weeks: https://claude.ai/code/artifact/50284580-2e2c-41b5-a779-2763db1bdc95
 - **Engineering Review** — code quality, calculation design, interface design, one ranked worklist: https://claude.ai/code/artifact/c1a55def-293c-48a4-a013-41ac31cd421e
+- **Business Plan** — side-project plan with three 2027 scenarios, pricing, go-to-market and decision point: https://claude.ai/code/artifact/e6dba849-71ed-46bc-b6c8-354f7e197020
 
 The detailed reports behind those pages:
 
@@ -18,6 +19,10 @@ The detailed reports behind those pages:
 | 05 | [05-code-quality-review.md](05-code-quality-review.md) | Metrics table, architecture, component/effect hygiene, types and validation, error handling, tests, duplication, tooling, top-10 refactors, scores |
 | 06 | [06-calculation-design-review.md](06-calculation-design-review.md) | aeqd/georeferencing check (verified scale error), aggregation, mass identification, NCC, advection, ETA edge cases, chance calibration, trend, alert engine holes, hindcast methodology, stage table, top-8 |
 | 07 | [07-ui-design-review.md](07-ui-design-review.md) | Identity, hierarchy, sheet content, map layer, settings, states, accessibility measurements, copy, mobile-native readiness, 12 prioritised changes, wireframes, design tokens |
+| 08 | [08-monetisation-legal-and-data.md](08-monetisation-legal-and-data.md) | Polish business/VAT/consumer/store/GDPR rules for subscriptions and ads; commercial terms and prices for every radar, lightning, warnings, basemap and geocoding source; cheapest legal stack and the "if IMGW says no" stack |
+| 09 | [09-business-plan.md](09-business-plan.md) | Side-project business plan: positioning, market numbers, free vs GROM Plus vs B2B licence, unit economics, three 2027 scenarios, zero-budget go-to-market, timeline, KPIs, September 2027 decision point, risks |
+| 10 | [10-liability-protection.md](10-liability-protection.md) | EU Product Liability Directive 2024/2853 and apps, Polish obligation-of-means analysis, regulamin structure that survives UOKiK, IT liability insurance, JDG vs sp. z o.o. vs PSA, product design measures, draft Polish clauses |
+| 11 | [11-model-quality-and-europe.md](11-model-quality-and-europe.md) | GROM skill vs published nowcast benchmarks, pysteps / ML / NWP-blending upgrade paths, convective flag without lightning, what users pay for, Europe open-radar table, competition, second-market ranking |
 
 Screenshots used as evidence are in [screenshots/](screenshots/).
 
