@@ -11,6 +11,7 @@ import {
   radarPaintSource,
   radarPaintWho,
   rewriteArrivalMinutes,
+  nowCursorFrac,
   wallClockAxisLabel,
   wallClockMin,
 } from "./wall-clock.ts";
@@ -130,10 +131,24 @@ test("Dojście / za ~N min copy subtracts age; 0 becomes teraz", () => {
   );
 });
 
-test("timeline axis labels subtract age and print teraz at 0", () => {
-  assert.equal(wallClockAxisLabel(0, 11), "teraz");
-  assert.equal(wallClockAxisLabel(30, 11), "19");
-  assert.equal(wallClockAxisLabel(90, 11, true), "79 min");
-  assert.equal(wallClockAxisLabel(0, 0), "teraz");
-  assert.equal(wallClockAxisLabel(90, 0, true), "90 min");
+test("timeline axis labels are HH:MM Warsaw clocks, not age-shifted minutes", () => {
+  // 20:30 CEST on the review evening — age 6 min used to print "teraz 24 54 84 min".
+  const radar = Date.UTC(2026, 8, 1, 18, 30, 0) / 1000;
+  assert.equal(formatRadarClock(radar), "20:30");
+  assert.equal(wallClockAxisLabel(0, radar), "20:30");
+  assert.equal(wallClockAxisLabel(30, radar), "21:00");
+  assert.equal(wallClockAxisLabel(60, radar), "21:30");
+  assert.equal(wallClockAxisLabel(90, radar), "22:00");
+  for (const t of [0, 30, 60, 90]) {
+    assert.match(wallClockAxisLabel(t, radar), /^\d{2}:\d{2}$/);
+    assert.doesNotMatch(wallClockAxisLabel(t, radar), /min|teraz/i);
+  }
+});
+
+test("now-cursor sits at radar age along the 90-min strip", () => {
+  assert.equal(nowCursorFrac(0), 0);
+  assert.equal(nowCursorFrac(6, 90), 6 / 90);
+  assert.equal(nowCursorFrac(90), 1);
+  assert.equal(nowCursorFrac(120), 1);
+  assert.equal(nowCursorFrac(-3), 0);
 });

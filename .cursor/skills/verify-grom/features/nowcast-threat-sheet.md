@@ -7,7 +7,7 @@ The bottom card (`#grom-threat-sheet`) is the product: chance, ETA, and echo for
 - Headline + place label (city / pinezka only — no TERYT)
 - Stats `Szansa`, `Za ile` (`teraz` / `N min` / `minie` / `—`), `Echo` (`N km` + intensity)
 - Copy block: `Idzie od … → na …`, `Spodziewaj się:`, `Komórka rośnie` / `Komórka słabnie`
-- Timeline `role="img"` `aria-label="Oś czasu opadu"` (19 bars / 5 min) and caption `z ruchu echa` vs `bez ruchu — jak teraz`
+- Timeline `role="img"` with a clock sentence (`Opad od HH:MM do HH:MM, najsilniej ok. HH:MM` or `Brak opadu od HH:MM do HH:MM`), Warsaw axis ticks, a now-cursor, and tap-to-read bars. Caption `z ruchu echa` vs `bez ruchu — jak teraz`
 - One grey status row: `Radar HH:MM · N min · IMGW ✓/✕ · wyładowania ✓/✕` (amber only when radar is stale or down)
 - Map chip (not the sheet) names the painted source (`Radar IMGW` / `Radar`)
 - `Pokaż ruch opadu na mapie` when tracks exist and nearest echo is > 25 km
@@ -23,7 +23,7 @@ Open `/`. On a viewport ≥ 640 px the full sheet is already open (`sm:block`). 
 1. `Page.navigate` `BASE/` at 1280×800. Poll `#grom-threat-sheet` `innerText` until it does **not** include `Skanuję radar…` (cap ~45 s; first SRI decode is slow).
 2. Assert the sheet contains the current pin label (`Warszawa` unless you changed it), the words `Szansa`, `Za ile`, `Echo`, and a `%` chance. No `ETA`.
 3. Acceptable headlines after a good snapshot: `Czysto`, `Opad w okolicy`, `Opad nadciąga`, `Opad oddala się`, `… nadciąga`, `… nad Tobą`. `Brak danych` + `Nie udało się pobrać radaru` is a failed snapshot — stop.
-4. If `Opad nad pinezką · 90 min` is present, assert `[role="img"][aria-label="Oś czasu opadu"]` exists.
+4. If `Opad nad pinezką · 90 min` is present, assert `[role="img"]` has a clock sentence (`Opad od …` / `Brak opadu od …`), `[data-timeline-axis]` ticks are `HH:MM` (not `24 min`), and `[data-now-cursor]` exists.
 5. Screenshot the sheet, not just the map.
 
 ## Gotchas
