@@ -10,7 +10,8 @@ import type { RadarLevel, RadarMemoryFrame, RadarSample, RadarScan } from "./typ
  * u16 level, u16 rate×10. ~4 000 samples ≈ 43 kB before gzip.
  */
 const LAT0 = 48.0;
-const LON0 = 13.0;
+/** West of the old 13°E origin so COMPO_SRI (~11.6°E) survives the wire. */
+const LON0 = 11.0;
 const BYTES = 8;
 
 function bytesToBase64(bytes: Uint8Array): string {

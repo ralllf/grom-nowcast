@@ -1,9 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { aeqdForward } from "./aeqd.ts";
-import { aggregate, PL_RADAR_BBOX } from "./radar-grid.ts";
+import { aeqdForward, aeqdInverse } from "./aeqd.ts";
+import { aggregate } from "./radar-grid.ts";
 import {
   hitsFromSriGrid,
+  inSriComposite,
   parseSriListing,
   POLCOMP_SRI_GRID,
   SRI_CADENCE_SEC,
@@ -131,7 +132,7 @@ test("Kraków and Warszawa land inside the 800×800 aeqd grid", () => {
   assert.ok(Math.abs(back.lon - 19.9366) < 0.01);
 });
 
-test("hitsFromSriGrid uses IMGW RATE mm/h, skips nodata/undetect, stays in the PL bbox", () => {
+test("hitsFromSriGrid uses IMGW RATE mm/h and skips nodata/undetect", () => {
   const nx = 4;
   const ny = 4;
   const grid = {
@@ -154,12 +155,58 @@ test("hitsFromSriGrid uses IMGW RATE mm/h, skips nodata/undetect, stays in the P
   const hits = hitsFromSriGrid(data, grid);
   assert.equal(hits.length, 1);
   assert.equal(hits[0]!.rate, 12.5);
-  assert.ok(hits[0]!.lat >= PL_RADAR_BBOX.minLat && hits[0]!.lat <= PL_RADAR_BBOX.maxLat);
-  assert.ok(hits[0]!.lon >= PL_RADAR_BBOX.minLon && hits[0]!.lon <= PL_RADAR_BBOX.maxLon);
 
   const { samples, cellKm } = aggregate(hits);
   assert.equal(samples.length, 1);
   assert.equal(samples[0]!.level, levelFromRate(12.5));
   assert.equal(samples[0]!.rate, 12.5);
   assert.equal(cellKm, 3);
+});
+
+test("hitsFromSriGrid keeps rain west of 13.8°E when the pixel sits in the UL/LR composite", () => {
+  const geo = sriGeorefFromCorners(
+    LIVE_WHERE.ulLon,
+    LIVE_WHERE.ulLat,
+    LIVE_WHERE.lrLon,
+    LIVE_WHERE.lrLat,
+    LIVE_WHERE.nx,
+    LIVE_WHERE.ny,
+  );
+  const grid = { ...POLCOMP_SRI_GRID, ...geo };
+  const west = { lat: 53.4285, lon: 13.2 };
+  assert.ok(west.lon < 13.8);
+  assert.ok(inSriComposite(west.lat, west.lon, grid), "13.2°E must be inside the composite");
+
+  const xy = aeqdForward(west.lat, west.lon);
+  const col = Math.round((xy.x - geo.x0) / geo.xscale - 0.5);
+  const row = Math.round((geo.y0 - xy.y) / geo.yscale - 0.5);
+  assert.ok(col >= 0 && col < grid.nx && row >= 0 && row < grid.ny, `pixel ${col},${row}`);
+
+  const data = new Float32Array(grid.nx * grid.ny).fill(-2);
+  data[row * grid.nx + col] = 8;
+  const hits = hitsFromSriGrid(data, grid);
+  assert.equal(hits.length, 1);
+  assert.ok(hits[0]!.lon < 13.8, `hit lon ${hits[0]!.lon} was clipped to the old PL bbox`);
+  assert.ok(hits[0]!.lon > 11.6);
+  assert.equal(hits[0]!.rate, 8);
+
+  const { samples } = aggregate(hits);
+  assert.equal(samples.length, 1);
+  assert.ok(samples[0]!.lon < 13.8, `aggregated lon ${samples[0]!.lon}`);
+});
+
+test("a back-step west of the UL/LR composite is out of coverage", () => {
+  const geo = sriGeorefFromCorners(
+    LIVE_WHERE.ulLon,
+    LIVE_WHERE.ulLat,
+    LIVE_WHERE.lrLon,
+    LIVE_WHERE.lrLat,
+    LIVE_WHERE.nx,
+    LIVE_WHERE.ny,
+  );
+  const grid = { ...POLCOMP_SRI_GRID, ...geo };
+  assert.equal(inSriComposite(53.4285, 13.2, grid), true);
+  assert.equal(inSriComposite(52.2297, 21.0122, grid), true);
+  const off = aeqdInverse(geo.x0 - 25_000, 0);
+  assert.equal(inSriComposite(off.lat, off.lon, grid), false);
 });

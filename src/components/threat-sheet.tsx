@@ -348,7 +348,7 @@ function Timeline({
           return (
             <div
               key={p.t}
-              title={`${when}: ${p.level > 0 ? `${levelLabelPl(p.level)}, ~${p.rate} mm/h` : "sucho"}`}
+              title={`${when}: ${p.unknown ? "poza radarem" : p.level > 0 ? `${levelLabelPl(p.level)}, ~${p.rate} mm/h` : "sucho"}`}
               className="flex-1 rounded-sm"
               style={{
                 height: p.level > 0 ? `${25 + p.level * 18}%` : "4px",

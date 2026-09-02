@@ -1,5 +1,5 @@
 import { aeqdForward, aeqdInverse, SRI_LAT0, SRI_LON0, SRI_R } from "./aeqd.ts";
-import { inPolandRadar, type RawHit } from "./radar-grid.ts";
+import type { RawHit } from "./radar-grid.ts";
 
 /** Datastore directory — do not use the lagging `/api/data/product` mirror. */
 export const SRI_DATASTORE_PATH = "Oper/Polrad/Produkty/POLCOMP/COMPO_SRI.comp.sri";
@@ -124,6 +124,30 @@ export function sriPixelToLonLat(
   return aeqdInverse(x, y, grid.lat0, grid.lon0, grid.radiusM);
 }
 
+/** Live COMPO_SRI `/where` UL/LR (calc review 06). Wider than `PL_RADAR_BBOX`. */
+export const COMPO_SRI_WHERE = { ulLon: 11.6, ulLat: 56.3, lrLon: 25.3, lrLat: 48.0 } as const;
+
+export const COMPO_SRI_GRID: SriGrid = {
+  ...POLCOMP_SRI_GRID,
+  ...sriGeorefFromCorners(
+    COMPO_SRI_WHERE.ulLon,
+    COMPO_SRI_WHERE.ulLat,
+    COMPO_SRI_WHERE.lrLon,
+    COMPO_SRI_WHERE.lrLat,
+    POLCOMP_SRI_GRID.nx,
+    POLCOMP_SRI_GRID.ny,
+  ),
+};
+
+/** True when the point sits inside the aeqd raster (decoded grid / ODIM corners). */
+export function inSriComposite(lat: number, lon: number, grid: SriGrid = COMPO_SRI_GRID): boolean {
+  const { x, y } = aeqdForward(lat, lon, grid.lat0, grid.lon0, grid.radiusM);
+  if (grid.xscale === 0 || grid.yscale === 0) return false;
+  const col = (x - grid.x0) / grid.xscale;
+  const row = (grid.y0 - y) / grid.yscale;
+  return col >= 0 && col < grid.nx && row >= 0 && row < grid.ny;
+}
+
 const RATE_MIN = 0.1;
 
 export function hitsFromSriGrid(data: ArrayLike<number>, grid: SriGrid): RawHit[] {
@@ -137,7 +161,6 @@ export function hitsFromSriGrid(data: ArrayLike<number>, grid: SriGrid): RawHit[
     const col = i % grid.nx;
     const row = (i - col) / grid.nx;
     const ll = sriPixelToLonLat(col, row, grid);
-    if (!inPolandRadar(ll.lat, ll.lon)) continue;
     hits.push({ lat: ll.lat, lon: ll.lon, rate });
   }
   return hits;

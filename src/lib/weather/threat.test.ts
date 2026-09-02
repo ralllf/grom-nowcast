@@ -14,6 +14,7 @@ import {
   TRAIL_SOLO_KM_30,
   TRAIL_TRUST_KM_30,
   gateKm,
+  pinTimeline,
 } from "./threat.ts";
 import type { OfficialWarning, Place, RadarLevel, RadarMemoryFrame, RadarSample } from "./types.ts";
 
@@ -761,6 +762,61 @@ test("weak pin echo + approaching klasa-4 cell: no hail, one story, not Szansa 9
     `headline+detail must be one story: title=${threat.title} detail=${threat.detail}`,
   );
   assert.notEqual(threat.chancePct, 90, `Szansa ${threat.chancePct} is the 90 rung for a weak pin`);
+});
+
+test("Szczecin-like pin sees echo west of 13.8°E and gets an ETA", () => {
+  const szczecin: Place = { lat: 53.4285, lon: 14.5528, label: "Szczecin", terc: "3262" };
+  const start = destPoint(szczecin.lat, szczecin.lon, 270, 80);
+  assert.ok(start.lon < 13.8, `upstream start ${start.lon}°E should be west of the old bbox`);
+  const frames = [0, 1, 2, 3].map((t) => {
+    const p = destPoint(start.lat, start.lon, 90, t * 8);
+    return frame(t * 300, blob(p.lat, p.lon, 3), 80 - t * 8);
+  });
+  const threat = computeThreat(szczecin, frames, []);
+  assert.ok(
+    threat.nearestKm !== null && threat.nearestKm < 100,
+    `Szczecin should see the 13.2°E-class echo, nearest=${threat.nearestKm}`,
+  );
+  assert.equal(threat.willHit, true);
+  assert.ok(threat.etaMin !== null && threat.etaMin > 0, `expected future ETA, got ${threat.etaMin}`);
+});
+
+test("back-trajectory west of the SRI composite is unknown, not a dry miss", () => {
+  const off = pinTimeline([], 53.4, 12.4, { bearing: 90, speedKmh: 80 });
+  assert.equal(off[0]!.unknown, undefined, "pin starts inside the composite");
+  const later = off.filter((p) => p.t > 0);
+  assert.ok(later.some((p) => p.unknown), "a step west of the composite must be unknown");
+  assert.ok(
+    later.filter((p) => p.unknown).every((p) => p.level === 0),
+    "unknown is not a rain hit",
+  );
+  const interiorDry = pinTimeline([], 52.23, 21.01, { bearing: 90, speedKmh: 40 });
+  assert.ok(interiorDry.some((p) => p.t > 0 && !p.unknown && p.level === 0));
+  assert.ok(
+    interiorDry.filter((p) => p.t > 0).every((p) => !p.unknown),
+    "Warszawa back-steps stay in coverage",
+  );
+});
+
+test("in-coverage dry miss still clears willHit; unknown later bars do not", () => {
+  const dry = computeThreat(city, [], []);
+  assert.equal(dry.willHit, false);
+  assert.equal(dry.etaMin, null);
+
+  const edge: Place = { lat: 53.4, lon: 12.25, label: "Krawędź", terc: "3201" };
+  const start = destPoint(edge.lat, edge.lon, 270, 18);
+  const frames = [0, 1, 2, 3].map((t) => {
+    const p = destPoint(start.lat, start.lon, 90, t * 6);
+    return frame(t * 300, blob(p.lat, p.lon, 3), 18 - t * 6);
+  });
+  const threat = computeThreat(edge, frames, [], edge);
+  assert.ok(
+    threat.timeline.some((p) => p.unknown),
+    `expected an off-composite step, got ${threat.timeline.map((p) => `${p.t}:${p.unknown ? "u" : p.level}`).join(",")}`,
+  );
+  if (threat.willHit) {
+    assert.ok(threat.etaMin !== null, "unknown coverage must not strip a mass ETA");
+  }
 });
 
 test("pin timeline: dry now, rain arrives when the advected cell reaches the pin", () => {

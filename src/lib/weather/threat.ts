@@ -17,6 +17,7 @@ import { strikeNearCell } from "./perun.ts";
 import { isActiveWarning } from "./imgw-time.ts";
 import { HAIL_RATE, LEVEL_MIN_RATE, levelFromRate } from "./palette.ts";
 import { calibrateChancePct } from "./chance.ts";
+import { COMPO_SRI_GRID, inSriComposite, type SriGrid } from "./sri.ts";
 
 /** Distance at which the cell is treated as covering the city / GPS pin. */
 const PIN_KM = 5;
@@ -391,12 +392,14 @@ function maxRateWithin(samples: RadarSample[], lat: number, lon: number, maxKm: 
 /**
  * Rain at the pin for the next 90 minutes by backward advection: the air that will be
  * over the pin at time t is now at pin − v·t. With no usable motion, persistence.
+ * A step off the SRI composite is `unknown`, not a dry (rate 0) miss.
  */
-function pinTimeline(
+export function pinTimeline(
   samples: RadarSample[],
   pinLat: number,
   pinLon: number,
   motion: { bearing: number; speedKmh: number } | null,
+  coverage: SriGrid = COMPO_SRI_GRID,
 ): TimelinePoint[] {
   const out: TimelinePoint[] = [];
   const near = nearPin(samples, pinLat, pinLon, TRACK_MAX_KM + OVER_KM);
@@ -406,6 +409,10 @@ function pinTimeline(
     if (motion && t > 0) {
       const back = (motion.bearing + 180) % 360;
       at = destPoint(pinLat, pinLon, back, motion.speedKmh * (t / 60));
+    }
+    if (!inSriComposite(at.lat, at.lon, coverage)) {
+      out.push({ t, level: 0, rate: 0, unknown: true });
+      continue;
     }
     const grow = motion ? 0.15 * motion.speedKmh * (t / 60) : 0;
     const rate = maxRateWithin(near, at.lat, at.lon, radius + Math.min(grow, 6));
@@ -830,6 +837,7 @@ export function computeThreat(
   let receding = false;
   let speedKmh: number | null = null;
   let etaMin: number | null = null;
+  let massEtaMin: number | null = null;
   let comingFrom: string | null = null;
   let toward: string | null = null;
   let willHit = false;
@@ -953,6 +961,7 @@ export function computeThreat(
       }
       threatCellLevel = primary.level;
       willHit = primary.miss <= PIN_KM;
+      massEtaMin = primary.eta;
       threatTrack = primary.track;
     }
   }
@@ -995,8 +1004,11 @@ export function computeThreat(
     }
   }
   const timeline = last ? pinTimeline(lastSamples, place.lat, place.lon, pinMotion) : [];
-  const tlFirst = pinMotion ? (timeline.find((p) => p.t > 0 && p.level >= 1) ?? null) : null;
+  const tlFirst = pinMotion
+    ? (timeline.find((p) => p.t > 0 && !p.unknown && p.level >= 1) ?? null)
+    : null;
   const tlMaxLevel = timeline.reduce<RadarLevel>((m, p) => (p.level > m ? p.level : m), 0);
+  const leftCoverage = timeline.some((p) => p.unknown);
 
   if (nearestKm !== null && nearestKm <= OVER_KM && pinLevel >= 1) {
     etaMin = 0;
@@ -1012,6 +1024,9 @@ export function computeThreat(
       approaching = true;
       etaMin = tlFirst.t;
       if (threatCellLevel < tlMaxLevel) threatCellLevel = tlMaxLevel;
+    } else if (leftCoverage) {
+      // Off-composite is unknown — keep the mass hit/ETA instead of a dry miss.
+      if (willHit && etaMin === null && massEtaMin != null) etaMin = massEtaMin;
     } else {
       willHit = false;
       etaMin = null;

@@ -8,6 +8,7 @@ import {
   EMPTY_ALERT_MEMORY,
   EPISODE_TTL_MIN,
   alertPresetPatch,
+  etaToLevel,
   evaluateAlert,
   isQuietHour,
   matchAlertPreset,
@@ -105,6 +106,28 @@ function run(
   }
   return { fired, events, mem };
 }
+
+test("etaToLevel skips unknown bars and keeps mass ETA when coverage ends", () => {
+  const t = incoming(25, 3, {
+    timelineAdvected: true,
+    timeline: [
+      { t: 0, level: 0, rate: 0 },
+      { t: 5, level: 0, rate: 0 },
+      { t: 10, level: 0, rate: 0, unknown: true },
+      { t: 15, level: 0, rate: 0, unknown: true },
+    ],
+  });
+  assert.equal(etaToLevel(t, 2), 25);
+  const dry = incoming(25, 3, {
+    timelineAdvected: true,
+    timeline: [
+      { t: 0, level: 0, rate: 0 },
+      { t: 5, level: 0, rate: 0 },
+      { t: 10, level: 0, rate: 0 },
+    ],
+  });
+  assert.equal(etaToLevel(dry, 2), null);
+});
 
 test("disabled settings never fire", () => {
   const { fired } = run([[incoming(15), 0]], { ...on, enabled: false });
