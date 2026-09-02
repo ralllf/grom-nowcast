@@ -13,7 +13,9 @@ import {
 import { IMGW_WARNINGS_UNAVAILABLE, RADAR_UNAVAILABLE } from "../lib/weather/snapshot.ts";
 import type { Threat } from "@/lib/weather/types";
 
-const SHEET_SRC = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "threat-sheet.tsx"), "utf8");
+const HERE = dirname(fileURLToPath(import.meta.url));
+const SHEET_SRC = readFileSync(join(HERE, "threat-sheet.tsx"), "utf8");
+const APP_SRC = readFileSync(join(HERE, "grom-app.tsx"), "utf8");
 
 function threat(partial: Partial<Threat>): Threat {
   return {
@@ -152,6 +154,15 @@ describe("threat-sheet user copy", () => {
     );
     assert.ok(honesty, "expected the pin-honesty paragraph in threat-sheet.tsx");
     assert.doesNotMatch(honesty[0], /leadMin/);
+  });
+
+  it("names the painted map source, not analysisSource", () => {
+    assert.match(SHEET_SRC, /radarPaint/);
+    assert.match(SHEET_SRC, /radarAgeCaption\(radarTime, nowMs, radarPaint\)/);
+    assert.doesNotMatch(SHEET_SRC, /radarAgeCaption\(radarTime, nowMs, analysisSource\)/);
+    assert.match(APP_SRC, /radarPaint=\{radarPaint\}/);
+    assert.match(APP_SRC, /aria-label="Źródło radaru na mapie"/);
+    assert.doesNotMatch(APP_SRC, /analysisSource=\{snapshot\?\.radar\.analysisSource\}/);
   });
 });
 

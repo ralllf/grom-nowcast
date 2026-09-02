@@ -21,16 +21,33 @@ export function formatRadarClock(unixSec: number): string {
   });
 }
 
-/** "Radar IMGW 11:15 · sprzed 6 min" on SRI; "Radar 11:15 · …" on RainViewer fallback. */
+/** What RadarMap is painting right now — not analysisSource. */
+export type RadarPaintSource = "sri" | "rainviewer" | "placeholder";
+
+export function radarPaintSource(layer: { useSri: boolean; useRainviewer: boolean }): RadarPaintSource {
+  if (layer.useSri) return "sri";
+  if (layer.useRainviewer) return "rainviewer";
+  return "placeholder";
+}
+
+/** Short map-chip label. "Radar IMGW" only for a current IMGW SRI overlay. */
+export function radarPaintWho(source: RadarPaintSource): string {
+  if (source === "sri") return "Radar IMGW";
+  if (source === "placeholder") return "poprzednia klatka";
+  return "Radar";
+}
+
+/** "Radar IMGW 11:15 · sprzed 6 min" on current SRI; "Radar 11:15 · …" on RainViewer; stale PNG named as previous. */
 export function radarAgeCaption(
   radarTimeSec: number | null,
   nowMs: number,
-  source: "sri" | "rainviewer" = "rainviewer",
+  source: RadarPaintSource = "rainviewer",
 ): string | null {
   if (radarTimeSec == null) return null;
   const age = Math.round(radarAgeMin(radarTimeSec, nowMs));
-  const who = source === "sri" ? "Radar IMGW" : "Radar";
-  return `${who} ${formatRadarClock(radarTimeSec)} · sprzed ${age} min`;
+  const clock = formatRadarClock(radarTimeSec);
+  if (source === "placeholder") return `Radar ${clock} · poprzednia klatka`;
+  return `${radarPaintWho(source)} ${clock} · sprzed ${age} min`;
 }
 
 /**
