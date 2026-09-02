@@ -149,15 +149,12 @@ describe("imgwAsideCountLine", () => {
 });
 
 describe("threatLevelChip", () => {
-  it("prints teraz for now, not English now", () => {
+  it("prints Polish for every threat.level, not the English enum key", () => {
     assert.equal(threatLevelChip("now"), "teraz");
-  });
-
-  it("leaves other threat levels as the enum key", () => {
-    assert.equal(threatLevelChip("imminent"), "imminent");
-    assert.equal(threatLevelChip("nearby"), "nearby");
-    assert.equal(threatLevelChip("watch"), "watch");
-    assert.equal(threatLevelChip("clear"), "clear");
+    assert.equal(threatLevelChip("imminent"), "zaraz");
+    assert.equal(threatLevelChip("nearby"), "blisko");
+    assert.equal(threatLevelChip("watch"), "uwaga");
+    assert.equal(threatLevelChip("clear"), "czysto");
   });
 
   it("wires the sheet Badge through threatLevelChip", () => {
