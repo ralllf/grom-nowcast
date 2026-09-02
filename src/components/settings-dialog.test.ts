@@ -79,3 +79,61 @@ describe("settings dialog a11y wiring (§7 Dialog / 10b#9)", () => {
     assert.equal(tabWrapTarget(false, [first, last], first), null);
   });
 });
+
+/** Markup from the dialog title through HourSelect (the panel, not map chrome). */
+function settingsPanel(src: string): string {
+  const start = src.indexOf('id="settings-title"');
+  assert.ok(start >= 0, "settings-title missing");
+  const end = src.indexOf("function HourSelect");
+  assert.ok(end > start, "HourSelect sentinel missing");
+  return src.slice(start, end);
+}
+
+/** Slice from a heading/tab label to the next, or to the end of the panel. */
+function sectionAfter(panel: string, startLabel: string, endLabel: string | null): string {
+  const start = panel.search(new RegExp(`>${startLabel}<`));
+  assert.ok(start >= 0, `missing ${startLabel} heading/tab`);
+  if (!endLabel) return panel.slice(start);
+  const rest = panel.slice(start + startLabel.length + 2);
+  const rel = rest.search(new RegExp(`>${endLabel}<`));
+  assert.ok(rel >= 0, `missing ${endLabel} heading/tab after ${startLabel}`);
+  return panel.slice(start, start + startLabel.length + 2 + rel);
+}
+
+describe("settings dialog split Miejsce / Alerty (§5 / 10b#9)", () => {
+  it("exposes Miejsce and Alerty as headings or tabs", () => {
+    const panel = settingsPanel(APP);
+    assert.match(panel, />Miejsce</);
+    assert.match(panel, />Alerty</);
+  });
+
+  it("keeps city chips under Miejsce, not Alerty", () => {
+    const panel = settingsPanel(APP);
+    const miejsce = sectionAfter(panel, "Miejsce", "Alerty");
+    const alerty = sectionAfter(panel, "Alerty", null);
+    assert.match(miejsce, /CITIES\.slice\(0, 12\)/);
+    assert.doesNotMatch(alerty, /CITIES\.slice\(0, 12\)/);
+  });
+
+  it("keeps Testuj alert under Alerty, not Miejsce", () => {
+    const panel = settingsPanel(APP);
+    const miejsce = sectionAfter(panel, "Miejsce", "Alerty");
+    const alerty = sectionAfter(panel, "Alerty", null);
+    assert.match(alerty, /Testuj alert/);
+    assert.doesNotMatch(miejsce, /Testuj alert/);
+  });
+
+  it("puts GPS locate under Miejsce (existing locate(), no new API)", () => {
+    const miejsce = sectionAfter(settingsPanel(APP), "Miejsce", "Alerty");
+    assert.match(miejsce, /onClick=\{locate\}/);
+    assert.match(miejsce, /Użyj GPS/);
+  });
+
+  it("drops layer checkboxes from the dialog (map chips stay)", () => {
+    const panel = settingsPanel(APP);
+    assert.doesNotMatch(panel, /Ostrzeżenia IMGW na mapie/);
+    assert.doesNotMatch(panel, /Pokaż mżawkę na mapie/);
+    assert.match(APP, /Pokaż mżawkę/);
+    assert.match(APP, />IMGW</);
+  });
+});
