@@ -12,6 +12,7 @@ import {
   BACK_TRAJ_ITERS,
   computeThreat,
   GATE_DT_SEC,
+  LINK_KM,
   MATCH_KM_30,
   TRACK_MAX_KM,
   TRAIL_SOLO_KM_30,
@@ -107,6 +108,10 @@ function latticeHitsForNcc(count: number) {
   }
   return hits;
 }
+
+test("identity links at 2 cells (~6–7 km), not the old 16 km glue", () => {
+  assert.ok(LINK_KM >= 6 && LINK_KM <= 7, `LINK_KM should be 2 × 3 km cells, got ${LINK_KM}`);
+});
 
 test("motion gates are speed·Δt of the old 30-min 10 / 14 / 45 km constants", () => {
   assert.equal(GATE_DT_SEC, 30 * 60);
@@ -348,13 +353,19 @@ function warsawBarbell(dEastKm: number): { samples: RadarSample[]; cell: { lat: 
   const cell0 = destPoint(warsaw.lat, warsaw.lon, 180, 23);
   const cell = destPoint(cell0.lat, cell0.lon, 90, dEastKm);
   const weak = destPoint(cell.lat, cell.lon, 270, 22);
-  const mid = destPoint(cell.lat, cell.lon, 270, 11);
+  const spine: RadarSample[] = [];
+  for (let d = 3; d <= 19; d += 3) {
+    const mid = destPoint(cell.lat, cell.lon, 270, d);
+    spine.push(
+      { lat: mid.lat, lon: mid.lon, level: 1 },
+      { lat: mid.lat + 0.012, lon: mid.lon, level: 1 },
+      { lat: mid.lat - 0.012, lon: mid.lon, level: 1 },
+    );
+  }
   const samples = [
     ...tightBlob(cell.lat, cell.lon, 3),
     ...tightBlob(weak.lat, weak.lon, 1, 3),
-    { lat: mid.lat, lon: mid.lon, level: 1 as RadarLevel },
-    { lat: mid.lat + 0.012, lon: mid.lon, level: 1 as RadarLevel },
-    { lat: mid.lat - 0.012, lon: mid.lon, level: 1 as RadarLevel },
+    ...spine,
   ].filter((s) => haversineKm(warsaw.lat, warsaw.lon, s.lat, s.lon) > 8);
   return { samples, cell };
 }
@@ -473,7 +484,7 @@ test("a wide stratiform blob is one mass → one arrow", () => {
   const rain: RadarSample[] = [];
   for (let i = -6; i <= 6; i++) {
     for (let j = -4; j <= 4; j++) {
-      rain.push({ lat: 50.0 + i * 0.08, lon: 20.7 + j * 0.08, level: 2 });
+      rain.push({ lat: 50.0 + i * 0.045, lon: 20.7 + j * 0.045, level: 2 });
     }
   }
   const frames = [
@@ -519,8 +530,8 @@ test("east-edge pin on a west-heavy NE-moving front still reads southwest origin
     for (let i = -5; i <= 2; i++) {
       for (let j = -7; j <= 1; j++) {
         s.push({
-          lat: 50.0 + dLat + i * 0.08,
-          lon: 21.0 + dLon + j * 0.08,
+          lat: 50.0 + dLat + i * 0.045,
+          lon: 21.0 + dLon + j * 0.045,
           level: 2,
         });
       }
@@ -1278,4 +1289,92 @@ test("two masses, different vectors: pin timeline / ETA / miss follow the local 
     !primaryOnly.some((p) => p.t > 0 && p.level >= 1),
     "control: A's north vector alone must stay dry over the pin",
   );
+});
+
+test("two cores ~10+ km apart stay two objects, not one 55 km tile", () => {
+  // 14 km N–S, both klasa 3, translating east. LINK_KM = 16 glues them; a 55 km
+  // tile would too. 2-cell link (~6–7 km) must keep two objects.
+  const origin = { lat: 52.0, lon: 19.0 };
+  const a0 = destPoint(origin.lat, origin.lon, 270, 40);
+  const b0 = destPoint(a0.lat, a0.lon, 0, 14);
+  const gap = haversineKm(a0.lat, a0.lon, b0.lat, b0.lon);
+  assert.ok(gap >= 10 && gap < 20, `cores should be ~14 km apart, got ${gap.toFixed(1)}`);
+
+  const frames = [0, 1, 2, 3].map((t) => {
+    const a = destPoint(a0.lat, a0.lon, 90, t * 8);
+    const b = destPoint(b0.lat, b0.lon, 90, t * 8);
+    return frame(
+      t * 600,
+      [...compactBlob(a.lat, a.lon, 3), ...compactBlob(b.lat, b.lon, 3)],
+      40,
+    );
+  });
+  const threat = computeThreat(city, frames, [], origin);
+  assert.ok(
+    threat.tracks.length >= 2,
+    `two cores must stay two objects, got ${threat.tracks.length} (16 km link / 55 km tile glued them)`,
+  );
+  const sep = haversineKm(
+    threat.tracks[0]!.now.lat,
+    threat.tracks[0]!.now.lon,
+    threat.tracks[1]!.now.lat,
+    threat.tracks[1]!.now.lon,
+  );
+  assert.ok(sep >= 10, `arrows ${sep.toFixed(1)} km apart — not one shared tile`);
+});
+
+test("uniform translating front has honest trail speed, not a lattice-pinned ~0", () => {
+  // ~180 km slab, all klasa 3, east at ~50 km/h. splitOversizedMass cuts 55 km
+  // lon/lat tiles; membership churn pins centroids so trail speed ≈ 0 / tiles
+  // invent a west arrow.
+  function slab(lon0: number): RadarSample[] {
+    const out: RadarSample[] = [];
+    for (let i = -3; i <= 3; i++) {
+      for (let j = -25; j <= 25; j++) {
+        out.push({ lat: 52.0 + i * 0.05, lon: lon0 + j * 0.05, level: 3 });
+      }
+    }
+    return out;
+  }
+  const dLon = 0.12;
+  const frames = [0, 1, 2, 3].map((t) => frame(t * 600, slab(17.0 + t * dLon), 40));
+  const threat = computeThreat(city, frames, [], { lat: 52.0, lon: 19.0 });
+  assert.ok(threat.tracks.length >= 1, "front must still yield a track");
+  for (const tr of threat.tracks) {
+    assert.ok(
+      tr.speedKmh >= 35 && tr.speedKmh <= 75,
+      `expected ~50 km/h, got ${tr.speedKmh.toFixed(1)} (lattice-pinned tile trail is ~0–25)`,
+    );
+    assert.ok(
+      tr.bearing > 50 && tr.bearing < 130,
+      `uniform east front must not invent a west tile, got ${tr.bearing.toFixed(0)}°`,
+    );
+  }
+});
+
+test("cellLevel is the inbound core, not the whole cluster max", () => {
+  // Klasa 3 heads for the pin; klasa 4 sits ~14 km north of it (same 16 km
+  // cluster / 55 km tile). Spodziewaj się must name the core, not the cluster max.
+  const inbound0 = destPoint(city.lat, city.lon, 270, 35);
+  const hot0 = destPoint(inbound0.lat, inbound0.lon, 0, 14);
+  assert.ok(haversineKm(inbound0.lat, inbound0.lon, hot0.lat, hot0.lon) >= 10);
+  const frames = [0, 1, 2, 3].map((t) => {
+    const inbound = destPoint(inbound0.lat, inbound0.lon, 90, t * 8);
+    const hot = destPoint(hot0.lat, hot0.lon, 90, t * 8);
+    const dIn = haversineKm(city.lat, city.lon, inbound.lat, inbound.lon);
+    return frame(
+      t * 600,
+      [...compactBlob(inbound.lat, inbound.lon, 3), ...compactBlob(hot.lat, hot.lon, 4)],
+      dIn,
+    );
+  });
+  const threat = computeThreat(city, frames, []);
+  assert.equal(threat.willHit, true, "klasa-3 core is on the pin");
+  assert.equal(
+    threat.cellLevel,
+    3,
+    `cellLevel must be the inbound core, not cluster max 4 (got ${threat.cellLevel})`,
+  );
+  assert.equal(threat.expect, "ulewę i porywisty wiatr");
+  assert.doesNotMatch(threat.detail, /silną ulewę/);
 });
