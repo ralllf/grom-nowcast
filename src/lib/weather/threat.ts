@@ -378,15 +378,31 @@ function maxLevelWithin(
   return max;
 }
 
+function sampleRate(s: RadarSample): number {
+  // Synthetic samples carry only a level → use the class floor.
+  return s.rate ?? (s.level > 0 ? LEVEL_MIN_RATE[s.level as 1 | 2 | 3 | 4] : 0);
+}
+
 function maxRateWithin(samples: RadarSample[], lat: number, lon: number, maxKm: number): number {
   let max = 0;
   for (const s of samples) {
     if (haversineKm(lat, lon, s.lat, s.lon) > maxKm) continue;
-    // Synthetic samples carry only a level → use the class floor.
-    const r = s.rate ?? (s.level > 0 ? LEVEL_MIN_RATE[s.level as 1 | 2 | 3 | 4] : 0);
+    const r = sampleRate(s);
     if (r > max) max = r;
   }
   return max;
+}
+
+/** Mean RATE of samples in the disc — pin class, not detection. Zeros are absent (level 0 dropped). */
+function meanRateWithin(samples: RadarSample[], lat: number, lon: number, maxKm: number): number {
+  let sum = 0;
+  let n = 0;
+  for (const s of samples) {
+    if (haversineKm(lat, lon, s.lat, s.lon) > maxKm) continue;
+    sum += sampleRate(s);
+    n++;
+  }
+  return n === 0 ? 0 : sum / n;
 }
 
 /**
@@ -415,7 +431,10 @@ export function pinTimeline(
       continue;
     }
     const grow = motion ? 0.15 * motion.speedKmh * (t / 60) : 0;
-    const rate = maxRateWithin(near, at.lat, at.lon, radius + Math.min(grow, 6));
+    const reach = radius + Math.min(grow, 6);
+    // Detection/ETA: any rain in the disc (max). Class on the strip: neighbourhood mean.
+    const present = maxRateWithin(near, at.lat, at.lon, reach);
+    const rate = present > 0 ? meanRateWithin(near, at.lat, at.lon, reach) : 0;
     out.push({ t, level: levelFromRate(rate), rate: Math.round(rate * 10) / 10 });
   }
   return out;
@@ -829,7 +848,8 @@ export function computeThreat(
 
   const lastSamples = last?.samples ?? [];
   const maxLevel = maxLevelWithin(lastSamples, place.lat, place.lon, LOCAL_MAX_KM);
-  const pinLevel = maxLevelWithin(lastSamples, place.lat, place.lon, OVER_KM);
+  const pinMaxLevel = maxLevelWithin(lastSamples, place.lat, place.lon, OVER_KM);
+  const pinLevel = levelFromRate(meanRateWithin(lastSamples, place.lat, place.lon, OVER_KM));
   const nearestKm = nearestWithin(lastSamples, place.lat, place.lon, TRACK_MAX_KM);
   const who = place.label;
 
@@ -1010,7 +1030,7 @@ export function computeThreat(
   const tlMaxLevel = timeline.reduce<RadarLevel>((m, p) => (p.level > m ? p.level : m), 0);
   const leftCoverage = timeline.some((p) => p.unknown);
 
-  if (nearestKm !== null && nearestKm <= OVER_KM && pinLevel >= 1) {
+  if (nearestKm !== null && nearestKm <= OVER_KM && pinMaxLevel >= 1) {
     etaMin = 0;
     willHit = true;
     receding = false;
@@ -1037,10 +1057,13 @@ export function computeThreat(
   const upcoming = matched.filter((w) => !isActive(w));
   // Brace for: what is over the pin or about to arrive on the pin.
   // Not the strongest echo 25 km away — that is context for the map, not for the copy.
+  // Class at the pin is the neighbourhood mean (`pinLevel`). Do not let a single
+  // max-core pixel (mass / timeline max) upgrade "nad Tobą" copy to Ulewa.
+  const overPinNow = nearestKm !== null && nearestKm <= OVER_KM;
   const expectLevel = Math.max(
     pinLevel,
-    willHit || approaching ? threatCellLevel : 0,
-    willHit ? tlMaxLevel : 0,
+    overPinNow ? 0 : willHit || approaching ? threatCellLevel : 0,
+    overPinNow ? 0 : willHit ? tlMaxLevel : 0,
   );
   const hailAtPin = maxRateWithin(lastSamples, place.lat, place.lon, OVER_KM) >= HAIL_RATE;
   let expect = expectPl(expectLevel, hailAtPin);
@@ -1062,11 +1085,12 @@ export function computeThreat(
   }
   if (willHit && approaching && expectLevel >= 2) chance = Math.max(chance, 60);
   // Raw 70/80 remap to shipped 90. That rung is "under this cell", not any pin echo.
-  if (nearestKm !== null && nearestKm <= OVER_KM && pinLevel >= 2) chance = Math.max(chance, 70);
-  if (etaMin !== null && etaMin === 0 && pinLevel >= 2) chance = Math.max(chance, 80);
+  // Detection intensity stays the neighbourhood max so Szansa rungs are not retuned.
+  if (nearestKm !== null && nearestKm <= OVER_KM && pinMaxLevel >= 2) chance = Math.max(chance, 70);
+  if (etaMin !== null && etaMin === 0 && pinMaxLevel >= 2) chance = Math.max(chance, 80);
   if (etaMin !== null && etaMin > 0 && etaMin <= 20 && willHit) chance = Math.max(chance, 70);
   if (etaMin !== null && etaMin > 20 && etaMin <= 45 && willHit) chance = Math.max(chance, 50);
-  if (nearestKm !== null && nearestKm <= PIN_KM && pinLevel >= 3) chance = Math.max(chance, 90);
+  if (nearestKm !== null && nearestKm <= PIN_KM && pinMaxLevel >= 3) chance = Math.max(chance, 90);
   if (receding && (nearestKm === null || nearestKm > OVER_KM)) chance = Math.min(chance, 20);
   if (missKm !== null && missKm > PIN_KM + 8 && !willHit) {
     chance = Math.min(chance, Math.max(15, chance - 20));
@@ -1085,7 +1109,7 @@ export function computeThreat(
     level = "imminent";
   }
   // "Nad Tobą" means over the pin — never a strong cell 20 km away plus drizzle here.
-  if (nearestKm !== null && nearestKm <= OVER_KM && pinLevel >= 2) level = "now";
+  if (nearestKm !== null && nearestKm <= OVER_KM && pinMaxLevel >= 2) level = "now";
   if (upcoming.length > 0 && level === "clear") level = "watch";
 
   const formNote = "Komórka może też urosnąć na miejscu — tego radar nie zapowie.";
@@ -1096,7 +1120,7 @@ export function computeThreat(
   const dist = nearestKm !== null ? `ok. ${nearestKm.toFixed(0)} km od ${who}` : `w okolicy ${who}`;
 
   let detail: string;
-  if (etaMin === 0 && (pinLevel >= 1 || (nearestKm !== null && nearestKm <= PIN_KM))) {
+  if (etaMin === 0 && (pinMaxLevel >= 1 || (nearestKm !== null && nearestKm <= PIN_KM))) {
     detail = `Opad jest nad ${who} teraz.${expect ? ` Spodziewaj się: ${expect}.` : ""}${trendNote} ${formNote}`;
   } else if (receding && aboutPin) {
     detail = `${comingFrom ? `Idzie od ${comingFrom}` : "Komórka"} (${dist}) i odchodzi na ${toward ?? "bok"}.${expect ? ` Spodziewaj się: ${expect}.` : ""} Szansa ~${chance}%.${trendNote} ${formNote}`;
