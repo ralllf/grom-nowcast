@@ -1,0 +1,10 @@
+{
+  "source": "GET / SSR HTML before/without waiting for client snapshot",
+  "hasSkanuje": true,
+  "echoDdValues": [
+    "—",
+    "—"
+  ],
+  "echoBrakInHtml": false,
+  "sheetSnippet": "Skanuję radar… Warszawa Szansa — ETA — Echo — Warszawa TERYT 1465 Skanuję radar… Szansa — ETA — Echo — Szansa, ETA i alert są dla pinezki ( Warszawa ) — miasta albo punktu na mapie — nie dla koła w okolicy. Próg a"
+}
