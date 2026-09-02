@@ -12,7 +12,15 @@ import type {
   ThreatLevel,
   TimelinePoint,
 } from "./types.ts";
-import { cellTrendCopy, cellTrendFromSnaps, type TrailSnap } from "./trend.ts";
+import {
+  GROWTH_MATH_ENABLED,
+  applyGrowthToTimeline,
+  cellTrendCopy,
+  cellTrendFromSnaps,
+  lagrangianMeanRateSlope,
+  type RateTrailSnap,
+  type TrailSnap,
+} from "./trend.ts";
 import { strikeNearCell } from "./perun.ts";
 import { isActiveWarning } from "./imgw-time.ts";
 import { HAIL_RATE, LEVEL_MIN_RATE, levelFromRate } from "./palette.ts";
@@ -916,6 +924,17 @@ function trailSnaps(trail: { time: number; mass: Mass }[]): TrailSnap[] {
   });
 }
 
+function rateTrailSnaps(trail: { time: number; mass: Mass }[]): RateTrailSnap[] {
+  return trail.map((t) => ({
+    time: t.time,
+    cells: t.mass.samples.map((s) => ({
+      lat: s.lat,
+      lon: s.lon,
+      rate: sampleRate(s),
+    })),
+  }));
+}
+
 function buildMassTrail(mass: Mass, layers: MassLayer[]): { time: number; mass: Mass }[] {
   const newest = layers.at(-1);
   if (!newest) return [];
@@ -1201,6 +1220,7 @@ export function computeThreat(
   warnings: OfficialWarning[],
   sampleOrigin: { lat: number; lon: number } = place,
   strikes: LightningStrike[] = [],
+  growthMath = GROWTH_MATH_ENABLED,
 ): Threat {
   const matched = warnings.filter((w) => w.matchesPlace && w.stormRelated);
   // Frames are already cropped to the radar domain (Poland). Do not re-crop around the pin.
@@ -1229,6 +1249,7 @@ export function computeThreat(
   let threatTrack: CellTrack | null = null;
   let threatCellLevel = 0;
   let cellTrend: CellTrend = null;
+  let growthSlope = 0;
   const motionAnchors: MotionAnchor[] = [];
 
   const motionKm = motionNccCellKm(usable);
@@ -1264,7 +1285,11 @@ export function computeThreat(
       }
     }
     if (pinMass) {
-      cellTrend = cellTrendFromSnaps(trailSnaps(buildMassTrail(pinMass, layers)));
+      const pinTrail = buildMassTrail(pinMass, layers);
+      cellTrend = cellTrendFromSnaps(trailSnaps(pinTrail));
+      if (growthMath) {
+        growthSlope = lagrangianMeanRateSlope(rateTrailSnaps(pinTrail), LINK_KM);
+      }
     }
 
     type Hit = {
@@ -1414,7 +1439,8 @@ export function computeThreat(
         )
       : null;
   const timelineMotion = motionField ?? pinMotion;
-  const timeline = last ? pinTimeline(lastSamples, place.lat, place.lon, timelineMotion) : [];
+  const advected = last ? pinTimeline(lastSamples, place.lat, place.lon, timelineMotion) : [];
+  const timeline = applyGrowthToTimeline(advected, growthSlope, growthMath);
   const tlFirst = timelineMotion
     ? (timeline.find((p) => p.t > 0 && !p.unknown && p.level >= 1) ?? null)
     : null;

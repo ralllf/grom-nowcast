@@ -91,7 +91,7 @@ Dry / IMGW-only pins are **not** in this table and keep their raw rungs.
 Re-run `npm run --silent hindcast -- --sri --json` on a stormy day and add a
 row here before inventing new frequencies.
 
-## Slice 9 gate (2026-08-31) — copy only, math off
+## Slice 9 gate (2026-08-31) — copy live, math implemented and off
 
 The plan lets timeline / ETA move for growing cells only on **≥ 3 convective
 log days**, with POD at +20…+40 min up, FAR up by < 3 pts, and ETA median bias
@@ -100,10 +100,13 @@ toward 0.
 Published rows today: **2**, both `front`. Convective days: **0**. Slice 0's
 own success check (≥ 5 days including ≥ 2 convective) is also unmet.
 
-`GROWTH_MATH_ENABLED` in [`src/lib/weather/trend.ts`](../src/lib/weather/trend.ts)
-stays **false**. The sheet ships **Komórka rośnie / słabnie** from the 4-frame
-trail; nowcast numbers do not change. Re-open the math only after three
-`konwekcja` rows exist and the numbers above hold.
+Math is Lagrangian ΔR (sum of `rate` over matched cells along the trail),
+applied 15–20 min then damped toward zero with ~30 min e-folding — not
+first-vs-last max/mean/count on the whole mass. `GROWTH_MATH_ENABLED` in
+[`src/lib/weather/trend.ts`](../src/lib/weather/trend.ts) stays **false**
+(0 `konwekcja` days). The sheet ships **Komórka rośnie / słabnie** from the
+4-frame trail; live nowcast numbers do not change. Re-open the flag only after
+three `konwekcja` rows exist and the numbers above hold.
 
 ## Log
 

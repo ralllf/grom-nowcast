@@ -1273,6 +1273,66 @@ test("copy-only: growing cell does not change ETA or timeline vs same latest geo
   );
 });
 
+function blobAtRate(lat: number, lon: number, rate: number): RadarSample[] {
+  const level = levelFromRate(rate);
+  const samples: RadarSample[] = [];
+  for (let i = -2; i <= 2; i++) {
+    for (let j = -2; j <= 2; j++) {
+      samples.push({
+        lat: lat + i * 0.012,
+        lon: lon + j * 0.012,
+        level,
+        rate,
+      });
+    }
+  }
+  return samples;
+}
+
+test("flag off: live computeThreat matches today's gated path (no Lagrangian extra)", () => {
+  const deepening = [
+    frame(0, blobAtRate(50.0, 21.0, 2), 0),
+    frame(600, blobAtRate(50.0, 21.0, 4), 0),
+    frame(1_200, blobAtRate(50.0, 21.0, 6), 0),
+    frame(1_800, blobAtRate(50.0, 21.0, 8), 0),
+  ];
+  const live = computeThreat(city, deepening, []);
+  const forcedOff = computeThreat(city, deepening, [], city, [], false);
+  assert.equal(live.cellTrend, "growing");
+  assert.deepEqual(live.timeline, forcedOff.timeline);
+  assert.equal(live.etaMin, forcedOff.etaMin);
+  const rainy = live.timeline.filter((p) => p.rate > 0 && !p.unknown);
+  assert.ok(rainy.length >= 3);
+  const rates = new Set(rainy.map((p) => p.rate));
+  assert.equal(rates.size, 1, "gated path is persistence — no lead-dependent extra");
+});
+
+test("flag on: deepening trail grows 15–20 min rain; extra is damped after ~30 min", () => {
+  const deepening = [
+    frame(0, blobAtRate(50.0, 21.0, 2), 0),
+    frame(600, blobAtRate(50.0, 21.0, 4), 0),
+    frame(1_200, blobAtRate(50.0, 21.0, 6), 0),
+    frame(1_800, blobAtRate(50.0, 21.0, 8), 0),
+  ];
+  const off = computeThreat(city, deepening, [], city, [], false);
+  const on = computeThreat(city, deepening, [], city, [], true);
+  assert.equal(off.cellTrend, "growing");
+  assert.equal(on.cellTrend, "growing");
+  const at = (threat: ReturnType<typeof computeThreat>, t: number) =>
+    threat.timeline.find((p) => p.t === t);
+  const off0 = at(off, 0)!.rate;
+  const on15 = at(on, 15)!.rate;
+  const on20 = at(on, 20)!.rate;
+  const on50 = at(on, 50)!.rate;
+  assert.equal(at(on, 0)!.rate, off0);
+  assert.ok(on15 > off0, `15 min must take Lagrangian ΔR, got ${on15} vs ${off0}`);
+  assert.ok(on20 > on15, `apply window still accumulating at 20, got ${on20} vs ${on15}`);
+  const extra20 = on20 - at(off, 20)!.rate;
+  const extra50 = on50 - at(off, 50)!.rate;
+  assert.ok(extra50 > 0, "rain still over the pin at 50 is still adjusted");
+  assert.ok(extra50 < extra20, `extra at 50 (${extra50}) must be damped vs 20 (${extra20})`);
+});
+
 /** Tight 5×5 so the nearest edge stays where we put the centre (±~2.7 km). */
 function compactBlob(lat: number, lon: number, level: RadarLevel): RadarSample[] {
   const samples: RadarSample[] = [];
