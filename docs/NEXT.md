@@ -9,6 +9,7 @@ Already on `main` (code, not a guess):
 - PERUN point CSVs still **307**. Not a code slice. LTS2005 GIFs are maps, not lat/lon.
 - `DEFAULT_ALERT_SETTINGS.enabled` is **false**. Hindcast force-enables. Live users toggle. Not a slice unless Rafał wants alerts on by default.
 - Live SRI today was **fresh** (~3 min). `resolveAnalysis` still keeps any non-empty SRI even if the newest H5 is hours old; `canTrustRadar` still ignores age; alerts already no-op at `STALE_RADAR_MIN` 30. Real hole — **not this week’s #1**, because today’s feed was not stale. [DATA.md](DATA.md) already warns the product-API mirror lags hours.
+- SRI listing is shared 90 s (Runtime Cache + single-flight), not a 7.7 s POST per cold isolate.
 
 Parked: GPS-as-platform, Web Push, ML, second backend, Blitzortung, growth math, inventing strikes from GIFs.
 

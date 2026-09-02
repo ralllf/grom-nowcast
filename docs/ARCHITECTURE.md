@@ -44,7 +44,7 @@ Szansa, ETA i alert (nadciąga / nad Tobą / przeszło) są **tylko dla pinezki*
   Beżowe, półprzezroczyste < 15 dBZ (mżawka / szum) = brak echa. Dawna heurystyka po odcieniu liczyła ten szum jako „deszcz”, a pomarańcz (40–44 dBZ) klasyfikowała *niżej* niż żółty — stąd fałszywe „opad w okolicy” i przegapione ulewy.
 - **Zoom 6** (RainViewer dopuszcza ≤ 7): ~1.5 km/px na szerokości Polski, stride 2 → próbka co ~3 km. Polska = 9 kafelków na klatkę.
 - **Siatka zamiast obcinania.** Piksele agregujemy do siatki ~3 km (max mm/h w komórce). Gdy próbek > 9000, siatka rośnie ×2 — pokrycie zostaje równomierne. Wcześniej próbki sortowano po poziomie i szerokości i ucinano do 5000, co przy rozległym opadzie **wyrzucało południe kraju**.
-- **Cache per klatka.** Klatka SRI / RainViewera jest niezmienna → dekodujemy ją raz (cache 12 klatek). Snapshot ma dodatkowo cache 90 s. Listing SRI cache 45 s.
+- **Cache per klatka.** Klatka SRI / RainViewera jest niezmienna → dekodujemy ją raz (cache 12 klatek). Snapshot ma dodatkowo cache 90 s. Listing SRI: 90 s (kadencja IMGW 5 min), single-flight + Vercel Runtime Cache między instancjami — nie RAM per isolate.
 - **Format przesyłu.** TanStack Start opakowuje każdą liczbę w JSON (`{"t":0,"s":51.149}`), więc klatka jedzie jako **jeden string base64, 8 bajtów/próbka** ([`pack.ts`](../src/lib/weather/pack.ts)): u16 lat, u16 lon (tysięczne stopnia od rogu bboxu), u16 klasa, u16 mm/h×10. Deszczowy dzień: ~180 kB za 4 klatki zamiast ~2 MB.
 - Overlay na mapie: jedno PNG 800×800 z tego samego pola SRI, pokolorowane 4 klasami legendy, źródło `image` MapLibre z narożnikami aeqd. Domyślnie klasa ≥ 1 (jak liczby); „Pokaż mżawkę” jest wyłączona. RainViewer `…/2/1_0.png` zostaje fallbackiem.
 
