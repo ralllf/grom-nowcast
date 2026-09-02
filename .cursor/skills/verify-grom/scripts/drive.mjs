@@ -251,6 +251,31 @@ try {
     await screenshot(cdp, join(OUT, "00-failed-teryt-leak.png"));
     throw new Error(`sheet leaked TERYT: ${JSON.stringify(sheet.slice(0, 240))}`);
   }
+  const TRIO_JS = `(() => {
+    const el = document.querySelector("#grom-threat-sheet");
+    if (!el) return { labels: [], stats: [], sheetHasETA: false };
+    const stats = [...el.querySelectorAll("dl div")].map((row) => ({
+      label: row.querySelector("dt")?.textContent?.trim() ?? "",
+      shown: row.querySelector("dt")?.innerText?.trim() ?? "",
+      value: row.querySelector("dd")?.textContent?.trim() ?? "",
+    }));
+    return {
+      labels: [...new Set(stats.map((s) => s.label))],
+      stats,
+      sheetHasETA: /\\bETA\\b/.test(el.innerText),
+    };
+  })()`;
+  const trio = await evalExpr(cdp, TRIO_JS);
+  writeFileSync(join(OUT, "trio.json"), JSON.stringify({ when: new Date().toISOString(), pin: "Warszawa", ...trio }, null, 2));
+  if (trio.labels.includes("ETA") || trio.sheetHasETA) {
+    await screenshot(cdp, join(OUT, "00-failed-eta-label.png"));
+    throw new Error(`sheet still shows ETA: ${JSON.stringify(trio)}`);
+  }
+  if (!trio.labels.includes("Za ile") || !trio.labels.includes("Szansa")) {
+    await screenshot(cdp, join(OUT, "00-failed-za-ile.png"));
+    throw new Error(`sheet missing Za ile / Szansa: ${JSON.stringify(trio.labels)}`);
+  }
+  step(`trio labels: ${trio.labels.join(" · ")}`);
   step(`sheet ready, starts with pin copy: ${sheet.split("\n").slice(0, 4).join(" | ")}`);
 
   if (FEATURE === "radar-map") {
@@ -357,9 +382,9 @@ try {
   } else if (FEATURE === "pin-alerts") {
     await screenshot(cdp, join(OUT, "01-sheet-before.png"));
     const sheetBefore = await evalExpr(cdp, `document.querySelector('#grom-threat-sheet')?.innerText || ''`);
-    const sheetHasStats = /szansa/i.test(sheetBefore) && /eta/i.test(sheetBefore) && /echo/i.test(sheetBefore);
+    const sheetHasStats = /szansa/i.test(sheetBefore) && /za ile/i.test(sheetBefore) && /echo/i.test(sheetBefore);
     if (!sheetBefore.includes("Warszawa") || !sheetHasStats) {
-      throw new Error(`sheet missing Warszawa / Szansa/ETA/Echo before alerts: ${JSON.stringify(sheetBefore.slice(0, 400))}`);
+      throw new Error(`sheet missing Warszawa / Szansa/Za ile/Echo before alerts: ${JSON.stringify(sheetBefore.slice(0, 400))}`);
     }
 
     step('click button[aria-label="Ustawienia"]');
@@ -494,20 +519,20 @@ try {
     const sheetAfterOk =
       sheetAfter.includes("Warszawa") &&
       /szansa/i.test(sheetAfter) &&
-      /eta/i.test(sheetAfter) &&
+      /za ile/i.test(sheetAfter) &&
       /echo/i.test(sheetAfter);
     if (!sheetAfterOk) {
       await screenshot(cdp, join(OUT, "00-failed-sheet.png"));
       throw new Error(`sheet broken after pin-alerts: ${JSON.stringify(sheetAfter.slice(0, 400))}`);
     }
-    step("sheet still Warszawa + Szansa/ETA/Echo after test alert");
+    step("sheet still Warszawa + Szansa/Za ile/Echo after test alert");
     await screenshot(cdp, join(OUT, "04-sheet-after.png"));
 
     notes.ok = true;
     notes.finishedAt = new Date().toISOString();
     notes.result =
       "Enabled pin alerts, Testuj alert showed Deszcz za ok. 18 min for Warszawa, " +
-      "dismissed banner, log + grom-alerts-v1 kept the title. Sheet still Warszawa / Szansa / ETA / Echo.";
+      "dismissed banner, log + grom-alerts-v1 kept the title. Sheet still Warszawa / Szansa / Za ile / Echo.";
     await cdp.send("Browser.close").catch(() => {});
     ws.close();
   } else {
@@ -573,6 +598,19 @@ try {
     throw new Error(`localStorage place mismatch: ${JSON.stringify(stored)}`);
   }
   step("sheet shows Kraków (no TERYT); dialog closed");
+  const trioKrakow = await evalExpr(cdp, TRIO_JS);
+  writeFileSync(
+    join(OUT, "trio.json"),
+    JSON.stringify(
+      { when: new Date().toISOString(), warszawa: trio, krakow: { pin: "Kraków", ...trioKrakow } },
+      null,
+      2,
+    ),
+  );
+  if (trioKrakow.labels.includes("ETA") || trioKrakow.sheetHasETA) {
+    await screenshot(cdp, join(OUT, "00-failed-eta-label.png"));
+    throw new Error(`Kraków sheet still shows ETA: ${JSON.stringify(trioKrakow)}`);
+  }
   notes.sideEffects.push({
     storage: "grom-settings-v1",
     place: stored,

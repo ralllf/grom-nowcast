@@ -211,10 +211,21 @@ describe("threat-sheet user copy", () => {
 
   it("does not leak leadMin into the honesty paragraph", () => {
     const honesty = SHEET_SRC.match(
-      /Szansa, ETA i alert są dla pinezki[\s\S]*?opad dojdzie\./,
+      /Szansa, Za ile i alert są dla pinezki[\s\S]*?opad dojdzie\./,
     );
     assert.ok(honesty, "expected the pin-honesty paragraph in threat-sheet.tsx");
     assert.doesNotMatch(honesty[0], /leadMin/);
+  });
+
+  it("prints Za ile on the trio, not the English ETA acronym", () => {
+    assert.match(SHEET_SRC, /PeekStat label="Za ile" value=\{eta\}/);
+    assert.match(SHEET_SRC, /Stat label="Za ile" value=\{eta\}/);
+    assert.match(SHEET_SRC, /PeekStat label="Szansa"/);
+    assert.match(SHEET_SRC, /Stat label="Szansa"/);
+    assert.match(SHEET_SRC, /PeekStat label="Echo"/);
+    assert.match(SHEET_SRC, /Stat label="Echo"/);
+    assert.doesNotMatch(SHEET_SRC, /label="ETA"/);
+    assert.doesNotMatch(SHEET_SRC, /\bETA\b/);
   });
 
   it("names the painted map source, not analysisSource", () => {
