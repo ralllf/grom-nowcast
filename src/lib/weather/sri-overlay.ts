@@ -75,10 +75,10 @@ export function classFromOverlayRgba(r: number, g: number, b: number, a: number)
 
 /** Outer corners of the aeqd raster, in MapLibre image-source order. */
 export function overlayCorners(grid: SriGrid): OverlayCorners {
-  const xW = (0 - grid.nx / 2) * grid.xscale;
-  const xE = (grid.nx - grid.nx / 2) * grid.xscale;
-  const yN = (grid.ny / 2 - 0) * grid.yscale;
-  const yS = (grid.ny / 2 - grid.ny) * grid.yscale;
+  const xW = grid.x0;
+  const xE = grid.x0 + grid.nx * grid.xscale;
+  const yN = grid.y0;
+  const yS = grid.y0 - grid.ny * grid.yscale;
   const tl = aeqdInverse(xW, yN, grid.lat0, grid.lon0, grid.radiusM);
   const tr = aeqdInverse(xE, yN, grid.lat0, grid.lon0, grid.radiusM);
   const br = aeqdInverse(xE, yS, grid.lat0, grid.lon0, grid.radiusM);

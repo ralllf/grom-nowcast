@@ -1,4 +1,4 @@
-import { aeqdInverse, SRI_LAT0, SRI_LON0, SRI_R } from "./aeqd.ts";
+import { aeqdForward, aeqdInverse, SRI_LAT0, SRI_LON0, SRI_R } from "./aeqd.ts";
 import { inPolandRadar, type RawHit } from "./radar-grid.ts";
 
 /** Datastore directory — do not use the lagging `/api/data/product` mirror. */
@@ -11,13 +11,17 @@ export const SRI_HISTORY_FRAMES = 4;
 
 /**
  * Live COMPO_SRI `where` attrs (probed 2026-08-31). 800×800, not the 900×900
- * that older notes assumed; pixel ~1.16 km (xscale/yscale in metres).
+ * that older notes assumed. File `xscale`/`yscale` are nominal arc lengths;
+ * plane pixel size comes from ODIM UL/LR corners at decode.
  */
 export type SriGrid = {
   nx: number;
   ny: number;
   xscale: number;
   yscale: number;
+  /** Outer UL corner in aeqd metres (ODIM convention). */
+  x0: number;
+  y0: number;
   lat0: number;
   lon0: number;
   radiusM: number;
@@ -27,11 +31,16 @@ export type SriGrid = {
   offset: number;
 };
 
+const ATTR_XSCALE = 1163.641987013176;
+const ATTR_YSCALE = 1153.6468207035664;
+
 export const POLCOMP_SRI_GRID: SriGrid = {
   nx: 800,
   ny: 800,
-  xscale: 1163.641987013176,
-  yscale: 1153.6468207035664,
+  xscale: ATTR_XSCALE,
+  yscale: ATTR_YSCALE,
+  x0: -(800 / 2) * ATTR_XSCALE,
+  y0: (800 / 2) * ATTR_YSCALE,
   lat0: SRI_LAT0,
   lon0: SRI_LON0,
   radiusM: SRI_R,
@@ -40,6 +49,28 @@ export const POLCOMP_SRI_GRID: SriGrid = {
   gain: 1,
   offset: 0,
 };
+
+/** Plane pixel size and UL origin from ODIM outer-corner lon/lat. */
+export function sriGeorefFromCorners(
+  ulLon: number,
+  ulLat: number,
+  lrLon: number,
+  lrLat: number,
+  nx: number,
+  ny: number,
+  lat0 = SRI_LAT0,
+  lon0 = SRI_LON0,
+  radiusM = SRI_R,
+): { xscale: number; yscale: number; x0: number; y0: number } {
+  const ul = aeqdForward(ulLat, ulLon, lat0, lon0, radiusM);
+  const lr = aeqdForward(lrLat, lrLon, lat0, lon0, radiusM);
+  return {
+    xscale: (lr.x - ul.x) / nx,
+    yscale: (ul.y - lr.y) / ny,
+    x0: ul.x,
+    y0: ul.y,
+  };
+}
 
 const H5_NAME = /^(\d{8})(\d{6})00dBR\.sri\.h5$/;
 const H5_IN_HTML = /(\d{16}dBR\.sri\.h5)/g;
@@ -88,8 +119,8 @@ export function sriPixelToLonLat(
   row: number,
   grid: SriGrid = POLCOMP_SRI_GRID,
 ): { lat: number; lon: number } {
-  const x = (col + 0.5 - grid.nx / 2) * grid.xscale;
-  const y = (grid.ny / 2 - row - 0.5) * grid.yscale;
+  const x = grid.x0 + (col + 0.5) * grid.xscale;
+  const y = grid.y0 - (row + 0.5) * grid.yscale;
   return aeqdInverse(x, y, grid.lat0, grid.lon0, grid.radiusM);
 }
 

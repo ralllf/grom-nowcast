@@ -7,6 +7,7 @@ import {
   parseSriListing,
   POLCOMP_SRI_GRID,
   sriFilenameTime,
+  sriGeorefFromCorners,
   sriPixelToLonLat,
 } from "./sri.ts";
 import { levelFromRate } from "./palette.ts";
@@ -46,6 +47,46 @@ test("DATA.md 900×900 is wrong: live POLCOMP SRI is 800×800 at ~1.16 km", () =
   assert.ok(Math.abs(POLCOMP_SRI_GRID.yscale - 1153.65) < 0.1);
 });
 
+/** Live COMPO_SRI `/where` from calc review 06 §1 (`2026090118350000dBR.sri.h5`). */
+const LIVE_WHERE = {
+  ulLon: 11.6,
+  ulLat: 56.3,
+  lrLon: 25.3,
+  lrLat: 48.0,
+  nx: 800,
+  ny: 800,
+};
+
+test("ODIM UL/LR corners imply 1154.40 × 1159.81 m pixels, not attr xscale/yscale", () => {
+  const geo = sriGeorefFromCorners(
+    LIVE_WHERE.ulLon,
+    LIVE_WHERE.ulLat,
+    LIVE_WHERE.lrLon,
+    LIVE_WHERE.lrLat,
+    LIVE_WHERE.nx,
+    LIVE_WHERE.ny,
+  );
+  assert.ok(Math.abs(geo.xscale - 1154.4) < 0.05, `xscale ${geo.xscale}`);
+  assert.ok(Math.abs(geo.yscale - 1159.81) < 0.05, `yscale ${geo.yscale}`);
+
+  const warsaw = { lat: 52.2297, lon: 21.0122 };
+  const xy = aeqdForward(warsaw.lat, warsaw.lon);
+  const col = (xy.x - geo.x0) / geo.xscale - 0.5;
+  const row = (geo.y0 - xy.y) / geo.yscale - 0.5;
+
+  const cornerGrid = { ...POLCOMP_SRI_GRID, ...geo };
+  const llNew = sriPixelToLonLat(col, row, cornerGrid);
+  const xyNew = aeqdForward(llNew.lat, llNew.lon);
+  const newErr = Math.hypot(xyNew.x - xy.x, xyNew.y - xy.y);
+  assert.ok(newErr < 2, `corner georef ${newErr} m from projected Warszawa`);
+
+  const llOld = sriPixelToLonLat(col, row, POLCOMP_SRI_GRID);
+  const xyOld = aeqdForward(llOld.lat, llOld.lon);
+  const oldErr = Math.hypot(xyOld.x - xy.x, xyOld.y - xy.y);
+  assert.ok(oldErr > 800 && oldErr < 1300, `attr-scale Warszawa shift ${oldErr} m`);
+  assert.ok(newErr < oldErr / 10, `new ${newErr} m should crush old ${oldErr} m`);
+});
+
 test("Kraków and Warszawa land inside the 800×800 aeqd grid", () => {
   const krakow = aeqdForward(50.0614, 19.9366);
   const col = krakow.x / POLCOMP_SRI_GRID.xscale + POLCOMP_SRI_GRID.nx / 2;
@@ -65,6 +106,8 @@ test("hitsFromSriGrid uses IMGW RATE mm/h, skips nodata/undetect, stays in the P
     ...POLCOMP_SRI_GRID,
     nx,
     ny,
+    x0: -(nx / 2) * POLCOMP_SRI_GRID.xscale,
+    y0: (ny / 2) * POLCOMP_SRI_GRID.yscale,
     nodata: -2,
     undetect: -1,
     gain: 1,
