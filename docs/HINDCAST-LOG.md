@@ -64,32 +64,32 @@ POD/FAR/CSI cells are written `P/F/C` in percent, e.g. `64/32/49`.
 
 ## Slice 8 remap (2026-08-31)
 
-No SRI-era row and no held-out day exist yet. Slice 8 remaps echo-driven Szansa
-from the **one published midday row** above (`2026-08-31`, window 09:40–11:40,
-RainViewer). Observed = rain ≥ klasa 1 over the pin within 60 min, echo ≤ 100 km.
+No SRI-era row and no held-out day exist yet. Live remap keys on **rung
+identity**, not the raw integer ([`chance.ts`](../src/lib/weather/chance.ts)).
+The n / observed numbers below are the **one published midday row**
+(`2026-08-31`, window 09:40–11:40, RainViewer; rain ≥ klasa 1 over the pin
+within 60 min, echo ≤ 100 km). They are historical frequencies for the
+population that filled that bin that morning — not a ±10 pt reliability gate
+and not a lookup by today's raw %.
 
 Dry / IMGW-only pins are **not** in this table and keep their raw rungs.
 
-| raw rung | n | mean raw | observed | shipped | ±10 pt gate |
+| live id | historical raw | n | observed | shipped | note |
 |---|---|---|---|---|---|
-| 0–19 | 219 | 10.3 | 10% | **10** | yes |
-| 20–29 | 2 | 22.5 | 0% | **10** | n<20, conservative |
-| 30–39 | 0 | — | — | **15** | empty |
-| 40–49 | 1 | 40 | 0% | **15** | n<20 |
-| 50–59 | 28 | 55 | 18% | **20** | yes |
-| 60–69 | 75 | 60 | 56% | **55** | yes |
-| 70–79 | 27 | 70 | 89% | **90** | yes |
-| 80–89 | 109 | 80 | 90% | **90** | yes |
-| 90–100 | 33 | 90 | 100% | **95** | yes |
+| `echoFar` | 0–19 | 219 | 10% | **10** | measured leftover / far echo |
+| `legacyArea20` | 20–29 | 2 | 0% | **10** | tiny n, conservative |
+| `legacyArea30` | 30–39 | 0 | — | **15** | empty leftover |
+| `legacyArea40` | 40–49 | 1 | 0% | **15** | tiny n |
+| `willHitEta20to45` | 50 (today) | 0 | — | **50** | no matching identity in the row; do not wear the 18% |
+| `legacyCloseEcho` | 50–59 | 28 | 18% | **20** | old close-echo population; leftover id |
+| `willHitApproachingKlasa2` | 60–69 | 75 | 56% | **55** | still clears `minChancePct` 50 |
+| `overPinKlasa2` / `willHitEtaLe20` | 70–79 | 27 | 89% | **90** | |
+| `overPinNowKlasa2` | 80–89 | 109 | 90% | **90** | |
+| `overPinKlasa3` | 90–100 | 33 | 100% | **95** | |
 
-Live remap keys on **rung identity**, not the raw integer
-([`chance.ts`](../src/lib/weather/chance.ts)). The 50–59 row above is the old
-close-echo population (`legacyCloseEcho`, shipped 20). Today's willHit / ETA
-20–45 / klasa 1 also writes raw 50 (`willHitEta20to45`) and ships **50** — no
-matching identity in this row, so we do not wear the 18%. WillHit approaching
-rungs (60 → 55, 70/80 → 90) still clear `minChancePct` 50. This is not a ±10 pt
-gate. Re-run `npm run --silent hindcast -- --sri --json` on a stormy day and add
-a row here before inventing new frequencies.
+`willHitEta20to45` and `legacyCloseEcho` share raw 50 and ship **50 vs 20**.
+Re-run `npm run --silent hindcast -- --sri --json` on a stormy day and add a
+row here before inventing new frequencies.
 
 ## Slice 9 gate (2026-08-31) — copy only, math off
 
