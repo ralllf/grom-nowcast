@@ -32,6 +32,7 @@ import { overlayFallback } from "@/lib/weather/sri-overlay";
 import { getSnapshot, getSriOverlay, searchPlaces } from "@/lib/weather/server";
 import { canTrustRadar, IMGW_WARNINGS_UNAVAILABLE } from "@/lib/weather/snapshot";
 import { computeThreat } from "@/lib/weather/threat";
+import { tracksForMap } from "@/lib/weather/tracks-map";
 import {
   ALERT_PRESET_ORDER,
   ALERT_PRESETS,
@@ -103,6 +104,8 @@ export function GromApp() {
   const setImgwMap = useGrom((s) => s.setImgwMap);
   const drizzleMap = useGrom((s) => s.drizzleMap);
   const setDrizzleMap = useGrom((s) => s.setDrizzleMap);
+  const tracksMap = useGrom((s) => s.tracksMap);
+  const setTracksMap = useGrom((s) => s.setTracksMap);
   const setAlerts = useGrom((s) => s.setAlerts);
   const setAlertMemory = useGrom((s) => s.setAlertMemory);
   const recordAlert = useGrom((s) => s.recordAlert);
@@ -368,6 +371,7 @@ export function GromApp() {
     if (already) return fieldTracks;
     return [...fieldTracks, { ...pinTrack, threatening: true }];
   })();
+  const mapTracks = tracksForMap(tracks, tracksMap);
   const hasImgwTint = Object.keys(imgwDegrees).length > 0;
 
   return (
@@ -380,7 +384,7 @@ export function GromApp() {
         radarPath={radarPath}
         overlayUrl={sriOverlayUrl}
         overlayCorners={sriOverlayCorners}
-        tracks={tracks}
+        tracks={mapTracks}
         imgwOn={imgwMap}
         imgwDegrees={imgwDegrees}
         strikes={snapshot?.lightning ?? []}
@@ -496,8 +500,18 @@ export function GromApp() {
         >
           {tracks.length > 0 ? (
             <div className="pointer-events-auto flex items-center gap-2 rounded-full bg-surface/90 px-3 py-1.5 text-xs shadow-[0_0_0_1px_rgba(255,255,255,0.08)] backdrop-blur-md">
-              <span className="inline-block size-2.5 rounded-full bg-vector ring-2 ring-fg" />
-              <span className="text-muted">tor komórki</span>
+              <button
+                type="button"
+                aria-pressed={tracksMap}
+                onClick={() => setTracksMap(!tracksMap)}
+                className="flex items-center gap-2"
+              >
+                <span
+                  className="inline-block size-2.5 rounded-full ring-2 ring-fg"
+                  style={{ backgroundColor: tracksMap ? "#e4572e" : "#5c6570" }}
+                />
+                <span className={tracksMap ? "text-fg" : "text-muted"}>tor komórki</span>
+              </button>
               <button
                 type="button"
                 className="font-medium text-accent hover:text-fg"
