@@ -1,68 +1,84 @@
 /**
- * Slice 8 — Szansa remapped to the Slice-0 calibration table.
+ * Szansa remapped by ladder *rung identity*, not the raw integer.
  *
- * The raw ladder in `threat.ts` produces pin rungs (10 / 50 / 60 / 70 / 80 / 90).
- * Older area rungs (25 / 40 / 55) stay in the table for leftover values. This
- * module maps those rungs to the observed rain frequency from
- * `docs/HINDCAST-LOG.md` (2026-08-31 midday, RainViewer, echo ≤ 100 km, rain ≥
- * klasa 1 over the pin within 60 min).
+ * The Slice-0 table (`docs/HINDCAST-LOG.md`, 2026-08-31 midday, RainViewer,
+ * echo ≤ 100 km, rain ≥ klasa 1 over the pin within 60 min) measured
+ * populations that no longer match today's raw numbers. The 50–59 bin
+ * (n = 28, 18 % observed) was the removed close-echo rung; today's raw 50
+ * is `willHitEta20to45` (willHit, ETA 20–45, klasa 1) — a different
+ * identity. Leftover ids stay in the table for leftover values.
  *
- * There is no SRI-era log row and no held-out day yet — the table is the one
- * published row. Bins with n < 20 are mapped conservatively and are not held
- * to the ±10 pt reliability gate.
+ * There is no SRI-era row for the new mid-lead willHit rung and no held-out
+ * day. Tiny-n / unmatched identities keep conservative shipped numbers.
+ * This is not a ±10 pt reliability claim — `claimsReliabilityGate` is false.
  *
- * Apply only when echo is within TRACK_MAX_KM. Dry / IMGW-only pins are not in
- * the table; their raw rungs stay as written.
+ * Apply only when echo is within TRACK_MAX_KM. Dry / IMGW-only pins are not
+ * in the table; their raw rungs stay as written.
  */
 
-export type SzansaCalibBin = {
-  /** Inclusive raw-rung range (after `roundPct`). */
-  rawLo: number;
-  rawHi: number;
+export type ChanceRung =
+  | "echoFar"
+  | "legacyArea20"
+  | "legacyArea30"
+  | "legacyArea40"
+  | "willHitEta20to45"
+  | "legacyCloseEcho"
+  | "willHitApproachingKlasa2"
+  | "overPinKlasa2"
+  | "willHitEtaLe20"
+  | "overPinNowKlasa2"
+  | "overPinKlasa3"
+  | "receding"
+  | "missBeside"
+  | "imgwWatch";
+
+export type SzansaCalibRung = {
+  id: ChanceRung;
+  /** Ladder integer this identity last used. Not a lookup key. */
+  rawPct: number;
   n: number;
-  meanRawPct: number;
-  observedPct: number;
-  /** What GROM ships after Slice 8. */
+  observedPct: number | null;
   shippedPct: number;
 };
 
-/**
- * Published Slice-0 table, compacted to the bins the remapper uses.
- * `observedPct` is rounded to the nearest percent from the JSON archive.
- */
 export const SZANSA_CALIBRATION: {
   source: "hindcast-log-2026-08-31-midday";
   radar: "rainviewer";
   heldOut: false;
-  minNForGate: 20;
-  bins: readonly SzansaCalibBin[];
+  /** One RainViewer morning; do not advertise a ±10 pt gate. */
+  claimsReliabilityGate: false;
+  rungs: readonly SzansaCalibRung[];
 } = {
   source: "hindcast-log-2026-08-31-midday",
   radar: "rainviewer",
   heldOut: false,
-  minNForGate: 20,
-  bins: [
-    { rawLo: 0, rawHi: 19, n: 219, meanRawPct: 10.3, observedPct: 10, shippedPct: 10 },
+  claimsReliabilityGate: false,
+  rungs: [
+    { id: "echoFar", rawPct: 10, n: 219, observedPct: 10, shippedPct: 10 },
     // n=2 observed 0% — too few; don't print "0%" as if we know it never rains.
-    { rawLo: 20, rawHi: 29, n: 2, meanRawPct: 22.5, observedPct: 0, shippedPct: 10 },
-    { rawLo: 30, rawHi: 39, n: 0, meanRawPct: 0, observedPct: 0, shippedPct: 15 },
-    { rawLo: 40, rawHi: 49, n: 1, meanRawPct: 40, observedPct: 0, shippedPct: 15 },
-    { rawLo: 50, rawHi: 59, n: 28, meanRawPct: 55, observedPct: 18, shippedPct: 20 },
-    { rawLo: 60, rawHi: 69, n: 75, meanRawPct: 60, observedPct: 56, shippedPct: 55 },
-    { rawLo: 70, rawHi: 79, n: 27, meanRawPct: 70, observedPct: 89, shippedPct: 90 },
-    { rawLo: 80, rawHi: 89, n: 109, meanRawPct: 80, observedPct: 90, shippedPct: 90 },
-    { rawLo: 90, rawHi: 100, n: 33, meanRawPct: 90, observedPct: 100, shippedPct: 95 },
+    { id: "legacyArea20", rawPct: 25, n: 2, observedPct: 0, shippedPct: 10 },
+    { id: "legacyArea30", rawPct: 35, n: 0, observedPct: null, shippedPct: 15 },
+    { id: "legacyArea40", rawPct: 40, n: 1, observedPct: 0, shippedPct: 15 },
+    // Today's willHit / ETA 20–45 / klasa 1. No matching identity in the
+    // published row — keep the raw 50, do not wear the close-echo 18%.
+    { id: "willHitEta20to45", rawPct: 50, n: 0, observedPct: null, shippedPct: 50 },
+    // Same raw integer as willHitEta20to45. Old 50–59 close-echo population.
+    { id: "legacyCloseEcho", rawPct: 50, n: 28, observedPct: 18, shippedPct: 20 },
+    { id: "willHitApproachingKlasa2", rawPct: 60, n: 75, observedPct: 56, shippedPct: 55 },
+    { id: "overPinKlasa2", rawPct: 70, n: 27, observedPct: 89, shippedPct: 90 },
+    { id: "willHitEtaLe20", rawPct: 70, n: 27, observedPct: 89, shippedPct: 90 },
+    { id: "overPinNowKlasa2", rawPct: 80, n: 109, observedPct: 90, shippedPct: 90 },
+    { id: "overPinKlasa3", rawPct: 90, n: 33, observedPct: 100, shippedPct: 95 },
+    { id: "receding", rawPct: 20, n: 2, observedPct: 0, shippedPct: 10 },
+    { id: "missBeside", rawPct: 15, n: 219, observedPct: 10, shippedPct: 10 },
+    { id: "imgwWatch", rawPct: 35, n: 0, observedPct: null, shippedPct: 15 },
   ],
 };
 
-export function calibrateChancePct(rawPct: number): number {
-  const raw = Math.max(0, Math.min(100, rawPct));
-  const bin = SZANSA_CALIBRATION.bins.find((b) => raw >= b.rawLo && raw <= b.rawHi);
-  return bin?.shippedPct ?? 10;
-}
+const SHIPPED = new Map<ChanceRung, number>(
+  SZANSA_CALIBRATION.rungs.map((r) => [r.id, r.shippedPct]),
+);
 
-/** Reliability gate from the plan: |shipped − observed| ≤ 10 pts when n is large enough. */
-export function calibBinWithinGate(bin: SzansaCalibBin, slackPts = 10): boolean {
-  if (bin.n < SZANSA_CALIBRATION.minNForGate) return true;
-  return Math.abs(bin.shippedPct - bin.observedPct) <= slackPts;
+export function calibrateChancePct(rung: ChanceRung): number {
+  return SHIPPED.get(rung) ?? 10;
 }

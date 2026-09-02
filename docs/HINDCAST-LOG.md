@@ -82,14 +82,14 @@ Dry / IMGW-only pins are **not** in this table and keep their raw rungs.
 | 80–89 | 109 | 80 | 90% | **90** | yes |
 | 90–100 | 33 | 90 | 100% | **95** | yes |
 
-The table lives in [`src/lib/weather/chance.ts`](../src/lib/weather/chance.ts) and
-is asserted by `chance.test.ts`. Re-run `npm run --silent hindcast -- --sri --json`
-on a stormy day and add a row here before tightening the bins.
-
-Alert implication at shipped defaults (`leadMin` 30, `minLevel` 2, `minChancePct` 50):
-the well-calibrated willHit+approaching rung (60 → 55) still clears the gate; the
-overconfident close-echo rung (55 → 20, obs 18%) no longer fires. That should
-not worsen POD and should cut FAR. Confirm on the next logged day.
+Live remap keys on **rung identity**, not the raw integer
+([`chance.ts`](../src/lib/weather/chance.ts)). The 50–59 row above is the old
+close-echo population (`legacyCloseEcho`, shipped 20). Today's willHit / ETA
+20–45 / klasa 1 also writes raw 50 (`willHitEta20to45`) and ships **50** — no
+matching identity in this row, so we do not wear the 18%. WillHit approaching
+rungs (60 → 55, 70/80 → 90) still clear `minChancePct` 50. This is not a ±10 pt
+gate. Re-run `npm run --silent hindcast -- --sri --json` on a stormy day and add
+a row here before inventing new frequencies.
 
 ## Slice 9 gate (2026-08-31) — copy only, math off
 

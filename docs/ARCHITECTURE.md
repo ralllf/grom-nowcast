@@ -74,12 +74,14 @@ W oknie 0–90 min, krok 2 min, rzutujemy komórkę po azymucie i prędkości.
 - Zbliża się i minie ≤ 12 km → ETA z adnotacją, to jeszcze o nas.
 - Minie daleko albo stoi bez kierunku → ETA `—` albo `minie`, bez udawania pewności.
 
-Szansa % jest grubą siatką (5–95), potem **przemapowana** na częstość z dziennika
-hindcastu ([`chance.ts`](../src/lib/weather/chance.ts), Slice 8): surowy szczebel
-60 (tor trafia) → 55, 70/80 (nad pinezką / ETA ≤ 20) → 90. Echo w okolicy, które
-minie pinezkę, zostaje na surowym 10 → 10 — bez starych szczebli 25/40/55 z koła.
-Tylko gdy echo jest ≤ 100 km — suche pinezki i samo IMGW zostają na surowym
-szczeblu. To nie model MESO-NH. UI mówi „szansa”, nie „pewność”.
+Szansa % jest grubą siatką (5–95), potem **przemapowana po tożsamości szczebla**
+([`chance.ts`](../src/lib/weather/chance.ts)), nie po surowej liczbie.
+`willHitApproachingKlasa2` (surowy 60) → 55; nad pinezką / ETA ≤ 20 → 90.
+Dzisiejszy `willHitEta20to45` (surowy 50, klasa 1) zostaje na 50 — to nie jest
+stary close-echo 50–59 (n=28, 18% → 20). Echo, które minie pinezkę, zostaje na
+`echoFar` 10. Tylko gdy echo jest ≤ 100 km — suche pinezki i samo IMGW zostają
+na surowym szczeblu. Jedno rano RainViewera; nie ma bramki ±10 pt. To nie model
+MESO-NH. UI mówi „szansa”, nie „pewność”.
 
 ## Trafi czy minie — z próbek, nie z centroidu
 

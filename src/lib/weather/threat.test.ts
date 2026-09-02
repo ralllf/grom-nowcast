@@ -8,8 +8,10 @@ import {
 import { bearingDeg, destPoint, haversineKm } from "./geo.ts";
 import { levelFromRate } from "./palette.ts";
 import { aggregate, BASE_CELL_LAT, BASE_CELL_LON, PL_RADAR_BBOX } from "./radar-grid.ts";
+import { calibrateChancePct } from "./chance.ts";
 import {
   BACK_TRAJ_ITERS,
+  chanceLadder,
   computeThreat,
   GATE_DT_SEC,
   LINK_KM,
@@ -1128,12 +1130,40 @@ test("incoming willHit Szansa uses the calibrated 55 or 90 rung", () => {
   const frames = [frame(1_000, blob(50.0, 20.4), 43), frame(1_600, blob(50.0, 20.55), 32)];
   const threat = computeThreat(city, frames, []);
   assert.equal(threat.willHit, true);
-  // Raw 60 (willHit+approaching) → 55; raw 70 (ETA ≤ 20) → 90.
+  // willHitApproachingKlasa2 → 55; willHitEtaLe20 / over-pin → 90.
   if (threat.etaMin !== null && threat.etaMin > 20 && threat.etaMin <= 45) {
     assert.equal(threat.chancePct, 55);
   } else {
     assert.equal(threat.chancePct, 90);
   }
+});
+
+test("chanceLadder names willHit ETA 20–45 klasa 1, not leftover close-echo", () => {
+  const { rung, rawPct } = chanceLadder({
+    willHit: true,
+    approaching: true,
+    receding: false,
+    expectLevel: 1,
+    pinMaxLevel: 1,
+    nearestKm: 25,
+    etaMin: 30,
+    missKm: 2,
+    imgwDegree: null,
+  });
+  assert.equal(rung, "willHitEta20to45");
+  assert.equal(rawPct, 50);
+  assert.equal(calibrateChancePct(rung), 50);
+  assert.equal(calibrateChancePct("legacyCloseEcho"), 20);
+});
+
+test("klasa-1 willHit ETA 20–45 ships 50, not the old close-echo 20", () => {
+  // Weaker / farther than the klasa-3 incoming fixture so ETA stays in 20–45.
+  const frames = [frame(1_000, blob(50.0, 20.25, 1), 54), frame(1_600, blob(50.0, 20.4, 1), 43)];
+  const threat = computeThreat(city, frames, []);
+  assert.equal(threat.willHit, true);
+  assert.ok(threat.etaMin !== null && threat.etaMin > 20 && threat.etaMin <= 45, `eta ${threat.etaMin}`);
+  assert.ok(threat.cellLevel < 2, `klasa ${threat.cellLevel}`);
+  assert.equal(threat.chancePct, 50);
 });
 
 test("Szansa with no echo stays the dry 10 (calibration does not apply)", () => {
