@@ -8,6 +8,14 @@ import { formatRadarClock, radarAgeMin, wallClockMin } from "../lib/weather/wall
 
 export { lightningCaption };
 
+/** One always-visible credit. Jargon lives in `SHEET_DATA_DETAILS` behind O danych. */
+export const SHEET_CREDIT_LINE = "Dane: IMGW-PIB · mapa OpenFreeMap/OSM";
+
+/** Legal / method copy — POLRAD, dBZ, Marshall–Palmer, COMPO_SRI. Not body copy. */
+export const SHEET_DATA_DETAILS =
+  "Źródłem danych ostrzeżeń i sieci POLRAD jest Instytut Meteorologii i Gospodarki Wodnej – Państwowy Instytut Badawczy. Dane radarowe zostały przetworzone (SRI mm/h IMGW, siatka ~3 km; RainViewer dBZ → Marshall–Palmer gdy SRI niedostępne). Analiza: IMGW COMPO_SRI. Mapa: IMGW SRI (4 klasy) / RainViewer fallback / OpenFreeMap / OSM. To nie jest oficjalny alert RCB. Komórka burzowa może powstać lokalnie nawet przy czystym radarze.";
+
+
 /** Count line for the IMGW aside — never a fake zero while fetching or when IMGW is down. */
 export function imgwAsideCountLine(
   snapshot: { stormWarningCount: number; warningsUnavailable: boolean } | null | undefined,

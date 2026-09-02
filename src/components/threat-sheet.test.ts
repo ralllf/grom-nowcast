@@ -339,6 +339,52 @@ describe("threat-sheet user copy", () => {
   });
 });
 
+describe("sheet attribution (§3 / 10b#6)", () => {
+  const JARGON = /POLRAD|dBZ|Marshall–Palmer|COMPO_SRI/;
+
+  function alwaysVisibleSheetCopy(src: string): string {
+    return src.replace(/<details[\s\S]*?<\/details>/g, "");
+  }
+
+  it("keeps one visible Dane: IMGW-PIB · mapa OpenFreeMap/OSM line", async () => {
+    const logic = await import("./threat-sheet-logic.ts");
+    assert.equal(logic.SHEET_CREDIT_LINE, "Dane: IMGW-PIB · mapa OpenFreeMap/OSM");
+    assert.doesNotMatch(logic.SHEET_CREDIT_LINE, JARGON);
+    assert.match(SHEET_SRC, /SHEET_CREDIT_LINE/);
+    assert.match(SHEET_SRC, /O danych/);
+  });
+
+  it("does not dump COMPO_SRI/dBZ as always-visible body copy", () => {
+    const visible = alwaysVisibleSheetCopy(SHEET_SRC);
+    assert.doesNotMatch(visible, /COMPO_SRI/);
+    assert.doesNotMatch(visible, /\bdBZ\b/);
+    assert.doesNotMatch(visible, /Marshall–Palmer/);
+    assert.doesNotMatch(visible, /POLRAD/);
+  });
+
+  it("puts POLRAD / dBZ / Marshall–Palmer / COMPO_SRI behind O danych ›", async () => {
+    const logic = await import("./threat-sheet-logic.ts");
+    assert.match(logic.SHEET_DATA_DETAILS, /POLRAD/);
+    assert.match(logic.SHEET_DATA_DETAILS, /dBZ/);
+    assert.match(logic.SHEET_DATA_DETAILS, /Marshall–Palmer/);
+    assert.match(logic.SHEET_DATA_DETAILS, /COMPO_SRI/);
+    assert.match(SHEET_SRC, /<details/);
+    assert.match(SHEET_SRC, /<summary[\s\S]*O danych ›/);
+    assert.match(SHEET_SRC, /SHEET_DATA_DETAILS/);
+    const details = SHEET_SRC.match(/<details[\s\S]*?<\/details>/);
+    assert.ok(details, "expected <details> O danych on the expanded sheet");
+    assert.match(details[0], /O danych/);
+    assert.match(details[0], /SHEET_DATA_DETAILS/);
+  });
+
+  it("does not replace the map chrome OpenFreeMap/OSM credit", async () => {
+    const { MAP_CREDIT } = await import("./map-chrome-logic.ts");
+    const logic = await import("./threat-sheet-logic.ts");
+    assert.equal(MAP_CREDIT, "OpenFreeMap / OSM");
+    assert.notEqual(logic.SHEET_CREDIT_LINE, MAP_CREDIT);
+  });
+});
+
 describe("isOfflineFailure", () => {
   it("is true when the browser is offline", () => {
     assert.equal(isOfflineFailure({ browserOnline: false }), true);

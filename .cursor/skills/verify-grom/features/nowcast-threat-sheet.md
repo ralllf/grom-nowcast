@@ -33,4 +33,4 @@ Open `/`. On a viewport ≥ 640 px the full sheet is already open (`sm:block`). 
 - `watch` (IMGW-only, no echo) still headlines `Czysto`. Look for the yellow IMGW lane under the title, not a storm headline.
 - ETA is wall-clock (`radarAgeMin` subtracted). Do not compare it to raw `etaMin` from a stale mental model.
 - Sheet auto-expand is mobile-only. Desktop tests must not tap the handle (it is `sm:hidden`).
-- Attribution paragraph always mentions IMGW-PIB / not-RCB / local cell growth — that is static, not proof the radar loaded.
+- Visible credit is `Dane: IMGW-PIB · mapa OpenFreeMap/OSM`. POLRAD / dBZ / Marshall–Palmer / COMPO_SRI live behind `O danych ›` (`<details>`). That copy is static, not proof the radar loaded.
