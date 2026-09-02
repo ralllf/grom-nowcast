@@ -250,6 +250,20 @@ test("overlayFallback keeps SRI when a PNG exists, RainViewer on miss/error, bla
   );
 });
 
+test("overlayFallback does not treat a placeholder PNG as current SRI", () => {
+  assert.deepEqual(
+    overlayFallback({
+      overlaysAvailable: true,
+      png: "data:image/png;base64,xx",
+      queryError: false,
+      queryFetched: false,
+      isPlaceholder: true,
+    }),
+    { useSri: false, useRainviewer: false },
+    "keepPreviousData PNG is stale, not the current frame",
+  );
+});
+
 test("pickRadarLayer prefers SRI image source and falls back to RainViewer tiles", () => {
   const corners = overlayCorners(tinyGrid());
   assert.deepEqual(

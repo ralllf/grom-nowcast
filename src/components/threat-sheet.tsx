@@ -16,6 +16,7 @@ import {
   rewriteArrivalMinutes,
   wallClockAxisLabel,
   wallClockMin,
+  type RadarPaintSource,
 } from "@/lib/weather/wall-clock";
 import type {
   CellTrack,
@@ -59,7 +60,8 @@ type Props = {
   onShowRainMotion: () => void;
   /** Latest radar scan, unix seconds. `null` = no radar. */
   radarTime: number | null;
-  analysisSource?: "sri" | "rainviewer";
+  /** What the map is painting — not snapshot analysisSource. */
+  radarPaint?: RadarPaintSource;
   /** PERUN line — empty-state copy when this session has no strikes. */
   lightningNote?: string;
   /** True when the PERUN download bounced — warn, do not look like a quiet sky. */
@@ -79,7 +81,7 @@ export function ThreatSheet({
   onClearGeoError,
   onShowRainMotion,
   radarTime,
-  analysisSource = "rainviewer",
+  radarPaint = "rainviewer",
   lightningNote,
   lightningUnavailable = false,
 }: Props) {
@@ -91,7 +93,7 @@ export function ThreatSheet({
   const nowMs = Date.now();
   const ageMin = radarAgeMin(radarTime, nowMs);
   const eta = etaLabel(threat, ageMin);
-  const radarCaption = radarAgeCaption(radarTime, nowMs, analysisSource);
+  const radarCaption = radarAgeCaption(radarTime, nowMs, radarPaint);
   const detail = threat ? rewriteArrivalMinutes(threat.detail, threat.etaMin, ageMin) : null;
   const echo = threat?.nearestKm != null ? `${threat.nearestKm.toFixed(0)} km` : "brak";
   const echoFull =

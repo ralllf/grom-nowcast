@@ -117,7 +117,7 @@ export function overlayFallback(opts: {
   queryFetched: boolean;
   isPlaceholder: boolean;
 }): { useSri: boolean; useRainviewer: boolean } {
-  if (opts.png) return { useSri: true, useRainviewer: false };
+  if (opts.png && !opts.isPlaceholder) return { useSri: true, useRainviewer: false };
   if (!opts.overlaysAvailable) return { useSri: false, useRainviewer: true };
   if (opts.queryError) return { useSri: false, useRainviewer: true };
   if (opts.queryFetched && !opts.isPlaceholder && !opts.png) {

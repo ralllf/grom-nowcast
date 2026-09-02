@@ -29,6 +29,7 @@ import { historyIsDegraded } from "@/lib/weather/radar-history";
 import { lightningCaption } from "@/lib/weather/perun";
 import { PL_RADAR_ORIGIN } from "@/lib/weather/radar-grid";
 import { overlayFallback } from "@/lib/weather/sri-overlay";
+import { radarPaintSource, radarPaintWho } from "@/lib/weather/wall-clock";
 import { getSnapshot, getSriOverlay, searchPlaces } from "@/lib/weather/server";
 import { canTrustRadar, IMGW_WARNINGS_UNAVAILABLE } from "@/lib/weather/snapshot";
 import { computeThreat } from "@/lib/weather/threat";
@@ -260,10 +261,13 @@ export function GromApp() {
     queryFetched: overlayQuery.isFetched,
     isPlaceholder: overlayQuery.isPlaceholderData,
   });
+  const radarPaint = radarPaintSource(layerPick);
   const radarHost = layerPick.useRainviewer ? (snapshot?.radar.host ?? null) : null;
   const radarPath = layerPick.useRainviewer ? fallbackPath : null;
-  const sriOverlayUrl = layerPick.useSri ? overlayUrl : null;
-  const sriOverlayCorners = layerPick.useSri
+  // Current SRI, or the keepPreviousData PNG labeled as poprzednia klatka — never as current IMGW.
+  const showSriOverlay = layerPick.useSri || (radarPaint === "placeholder" && overlayUrl != null);
+  const sriOverlayUrl = showSriOverlay ? overlayUrl : null;
+  const sriOverlayCorners = showSriOverlay
     ? (overlayQuery.data?.corners ?? sliderCorners)
     : null;
 
@@ -447,6 +451,9 @@ export function GromApp() {
             <span className="w-12 text-right font-mono text-xs tabular-nums text-muted">
               {formatClock(slider[activeIdx]?.time ?? null)}
             </span>
+            <span className="max-w-[9rem] truncate text-[10px] text-faint" aria-label="Źródło radaru na mapie">
+              {radarPaintWho(radarPaint)}
+            </span>
             {radarDegraded ? (
               <span className="text-[10px] text-faint" title="Brakowało kafelka radaru">
                 niepełne
@@ -567,7 +574,7 @@ export function GromApp() {
             onClearGeoError={() => setGeoError(null)}
             onShowRainMotion={showRainMotion}
             radarTime={radarTime}
-            analysisSource={snapshot?.radar.analysisSource}
+            radarPaint={radarPaint}
             lightningNote={
               snapshot
                 ? lightningCaption(snapshot.lightning.length, snapshot.lightningUnavailable)
