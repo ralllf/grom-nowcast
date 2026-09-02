@@ -1,0 +1,25 @@
+{
+  "when": "2026-09-02T22:14:42.999Z",
+  "warszawa": {
+    "present": true,
+    "aria": "Brak opadu od 00:10 do 01:40",
+    "ticks": [
+      "00:10",
+      "00:40",
+      "01:10",
+      "01:40"
+    ],
+    "hasNowCursor": true
+  },
+  "krakow": {
+    "present": true,
+    "aria": "Brak opadu od 00:10 do 01:40",
+    "ticks": [
+      "00:10",
+      "00:40",
+      "01:10",
+      "01:40"
+    ],
+    "hasNowCursor": true
+  }
+}
