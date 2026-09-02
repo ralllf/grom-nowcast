@@ -1,5 +1,7 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { StyleSpecification } from "maplibre-gl";
+import { MapChrome } from "@/components/map-chrome";
+import { scaleBar } from "@/components/map-chrome-logic";
 import { shouldFallbackBasemap } from "@/components/map-boot";
 import {
   IMGW_DEGREE_PAINT,
@@ -51,6 +53,7 @@ type Props = {
   sheetDetent?: SheetDetent;
   focus: Focus | null;
   onPick: (lat: number, lon: number) => void;
+  onLocate: () => void;
   className?: string;
 };
 
@@ -116,6 +119,7 @@ export function RadarMap({
   sheetDetent = "peek",
   focus,
   onPick,
+  onLocate,
   className,
 }: Props) {
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -125,6 +129,7 @@ export function RadarMap({
   const readyRef = useRef(false);
   const onPickRef = useRef(onPick);
   onPickRef.current = onPick;
+  const [scale, setScale] = useState(() => scaleBar(8.2, lat));
 
   const liveRef = useRef<Live>({
     lat,
@@ -162,6 +167,7 @@ export function RadarMap({
     let cancelled = false;
     let map: import("maplibre-gl").Map | undefined;
     let onClick: ((e: import("maplibre-gl").MapMouseEvent) => void) | undefined;
+    let onScale: (() => void) | undefined;
     let usedFallback = false;
     let styleTimer = 0;
 
@@ -216,6 +222,12 @@ export function RadarMap({
         onPickRef.current(e.lngLat.lat, e.lngLat.lng);
       };
       instance.on("click", onClick);
+      onScale = () => {
+        if (cancelled) return;
+        setScale(scaleBar(instance.getZoom(), instance.getCenter().lat));
+      };
+      instance.on("moveend", onScale);
+      instance.on("zoomend", onScale);
       fitMap(instance);
       requestAnimationFrame(() => fitMap(instance));
 
@@ -265,6 +277,10 @@ export function RadarMap({
       ro.disconnect();
       window.visualViewport?.removeEventListener("resize", onViewport);
       if (map && onClick) map.off("click", onClick);
+      if (map && onScale) {
+        map.off("moveend", onScale);
+        map.off("zoomend", onScale);
+      }
       map?.remove();
       mapRef.current = null;
     };
@@ -327,6 +343,12 @@ export function RadarMap({
         ref={canvasRef}
         className="pointer-events-none absolute inset-0 z-[1] h-full w-full"
         aria-hidden
+      />
+      <MapChrome
+        onZoomIn={() => mapRef.current?.zoomIn()}
+        onZoomOut={() => mapRef.current?.zoomOut()}
+        onLocate={onLocate}
+        scale={scale}
       />
     </div>
   );
