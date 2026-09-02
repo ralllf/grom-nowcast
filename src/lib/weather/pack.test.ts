@@ -17,6 +17,22 @@ test("pack/unpack keeps a composite sample west of 13°E", () => {
   assert.ok(back[0]!.lon < 13);
 });
 
+test("old 8-byte pack blobs still unpack level + max rate", () => {
+  // Frozen wire from the 8-byte era (u16le lat, lon, level, rate×10). Not re-packed.
+  const old = "TQyoDwIAIgA="; // 51.149, 15.008, level 2, 3.4 mm/h
+  const also = "0AcQJwQA+wA="; // 50.000, 21.000, level 4, 25.1 mm/h
+  const a = unpackSamples(old);
+  const b = unpackSamples(also);
+  assert.equal(a.length, 1);
+  assert.ok(Math.abs(a[0]!.lat - 51.149) < 0.0006);
+  assert.ok(Math.abs(a[0]!.lon - 15.008) < 0.0006);
+  assert.equal(a[0]!.level, 2);
+  assert.ok(Math.abs((a[0]!.rate ?? 0) - 3.4) < 0.06);
+  assert.equal(b.length, 1);
+  assert.equal(b[0]!.level, 4);
+  assert.ok(Math.abs((b[0]!.rate ?? 0) - 25.1) < 0.06);
+});
+
 test("pack/unpack round-trips samples to 0.001° and 0.1 mm/h", () => {
   const back = unpackSamples(packSamples(samples));
   assert.equal(back.length, 2);

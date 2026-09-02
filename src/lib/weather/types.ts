@@ -146,7 +146,7 @@ export type Threat = {
   nearestKm: number | null;
   /** Strongest echo within 25 km — context, not "over you". */
   maxLevel: RadarLevel;
-  /** Strongest echo over the pin itself (within OVER_KM). */
+  /** Class over the pin (mean RATE within OVER_KM), not the neighbourhood max. */
   pinLevel: RadarLevel;
   /** Intensity the pin should brace for: over-pin level, or the incoming cell's core level. */
   cellLevel: RadarLevel;

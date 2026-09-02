@@ -6,6 +6,8 @@ import {
   evaluateAlert,
 } from "./alerts.ts";
 import { bearingDeg, destPoint, haversineKm } from "./geo.ts";
+import { levelFromRate } from "./palette.ts";
+import { aggregate } from "./radar-grid.ts";
 import {
   computeThreat,
   GATE_DT_SEC,
@@ -721,6 +723,57 @@ test("bright core jumping SE must not beat bulk echo moving west", () => {
       `expected ~west bulk motion, got ${tr.bearing.toFixed(0)}° at ${tr.now.lat.toFixed(2)},${tr.now.lon.toFixed(2)}`,
     );
   }
+});
+
+/** ~1.16 km native hits in an 8 km disc around the pin. */
+function nativeDiscHits(
+  lat: number,
+  lon: number,
+  rateAt: (i: number, j: number) => number,
+): { lat: number; lon: number; rate: number }[] {
+  const hits: { lat: number; lon: number; rate: number }[] = [];
+  for (let i = -7; i <= 7; i++) {
+    for (let j = -7; j <= 7; j++) {
+      const hLat = lat + i * 0.0105;
+      const hLon = lon + j * 0.0165;
+      if (haversineKm(lat, lon, hLat, hLon) > 8) continue;
+      hits.push({ lat: hLat, lon: hLon, rate: rateAt(i, j) });
+    }
+  }
+  return hits;
+}
+
+test("8 km neighbourhood: one 12 mm/h pixel among 1 mm/h drizzle is not Ulewa/klasa 4", () => {
+  const hits = nativeDiscHits(city.lat, city.lon, (i, j) => (i === 0 && j === 0 ? 12 : 1));
+  assert.ok(hits.length > 20, `expected a filled 8 km disc, got ${hits.length} hits`);
+  const { samples } = aggregate(hits);
+  assert.ok(
+    samples.some((s) => (s.rate ?? 0) >= 12),
+    "aggregate must keep the 12 mm/h max for detection",
+  );
+  const frames = [frame(1_000, samples, 0), frame(1_600, samples, 0)];
+  const threat = computeThreat(city, frames, []);
+  assert.ok(threat.nearestKm !== null, "detection still sees rain");
+  assert.equal(threat.willHit, true);
+  assert.equal(threat.etaMin, 0);
+  assert.ok(threat.pinLevel < 4, `pin class should not be 4, got ${threat.pinLevel}`);
+  assert.notEqual(threat.title, "Ulewa nad Tobą");
+  assert.doesNotMatch(threat.expect ?? "", /silną ulewę/);
+  assert.ok(
+    threat.timeline[0] && threat.timeline[0].level < 4 && threat.timeline[0].rate < 10,
+    `strip at the pin must not be klasa 4, got ${threat.timeline[0]?.level} / ${threat.timeline[0]?.rate}`,
+  );
+});
+
+test("uniform 12 mm/h over the pin is still klasa 4 / Ulewa", () => {
+  const hits = nativeDiscHits(city.lat, city.lon, () => 12);
+  const { samples } = aggregate(hits);
+  assert.ok(samples.every((s) => s.level === 4 && (s.rate ?? 0) >= 12));
+  const frames = [frame(1_000, samples, 0), frame(1_600, samples, 0)];
+  const threat = computeThreat(city, frames, []);
+  assert.equal(threat.pinLevel, 4);
+  assert.equal(threat.title, "Ulewa nad Tobą");
+  assert.equal(levelFromRate(12), 4);
 });
 
 test("a strong cell 20 km away plus drizzle over the pin is not 'nad Tobą'", () => {
