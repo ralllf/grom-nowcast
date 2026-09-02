@@ -58,15 +58,17 @@ test("L3 swatch is gold so it reads on Positron; L4 stays rain red", () => {
 test("tracks are amber, not vermilion or rain-L4 red", async () => {
   const css = await readFile(new URL("../../styles.css", import.meta.url), "utf8");
   const map = await readFile(new URL("../../components/radar-map.tsx", import.meta.url), "utf8");
+  const overlay = await readFile(new URL("./map-overlay.ts", import.meta.url), "utf8");
   const app = await readFile(new URL("../../components/grom-app.tsx", import.meta.url), "utf8");
 
   assert.match(css, /--color-vector:\s*#f0a202\b/);
   assert.doesNotMatch(css, /--color-vector:\s*#e4572e\b/);
 
-  assert.match(map, /const AMBER = "#f0a202"/);
-  assert.match(map, /const AMBER_SOFT = "#f0a202"/);
+  assert.match(overlay, /export const AMBER = "#f0a202"/);
+  assert.doesNotMatch(overlay, /#e4572e/);
   assert.doesNotMatch(map, /#e4572e/);
   assert.equal(map.includes(RAIN_L4), false);
+  assert.equal(overlay.includes(RAIN_L4), false);
   assert.match(map, /"raster-opacity": 0\.85/);
   assert.doesNotMatch(map, /"raster-opacity": 0\.78/);
 

@@ -1,0 +1,72 @@
+{
+  "ok": true,
+  "w": 1280,
+  "h": 800,
+  "accent": 212,
+  "amber": 479,
+  "white": 239,
+  "ink": 1071,
+  "other": 1703,
+  "pin": {
+    "cx": 895,
+    "cy": 89,
+    "n": 212
+  },
+  "coreAccent": 113,
+  "coreAmber": 0,
+  "coreN": 113,
+  "ringAmberNear": 0,
+  "core": [
+    {
+      "x": 895,
+      "y": 89,
+      "r": 110,
+      "g": 200,
+      "b": 212,
+      "a": 255
+    },
+    {
+      "x": 897,
+      "y": 89,
+      "r": 110,
+      "g": 200,
+      "b": 212,
+      "a": 255
+    },
+    {
+      "x": 893,
+      "y": 89,
+      "r": 110,
+      "g": 200,
+      "b": 212,
+      "a": 255
+    },
+    {
+      "x": 895,
+      "y": 91,
+      "r": 110,
+      "g": 200,
+      "b": 212,
+      "a": 255
+    },
+    {
+      "x": 895,
+      "y": 87,
+      "r": 110,
+      "g": 200,
+      "b": 212,
+      "a": 255
+    }
+  ],
+  "pinAboveTrack": true,
+  "quote": "The pin is visible above the track: overlay canvas pin core at (895,89) is accent (coreAccent=113, coreAmber=0) while amber track pixels=479 (0 in the annulus around the pin).",
+  "steps": [
+    "navigate http://127.0.0.1:8080/",
+    "sheet ready: Warszawa\n\nCzysto\nCZYSTO\n\nEcho ok. 23 km od Warszawa. Szansa ~10%. Komórka może też urosnąć na miejscu — tego radar nie zapowie.\n\nSZANSA\n10%\nZA ILE\n—\nECHO\n23 km\nOpad nad pinezką · 90 min · mm/h\nz ruchu echa\nteraz\n25\n55\n85 min\nsłaby <1\numiarkowany 1–4\nsilny 4–10\nulewny >10\nnic w oknie 90 min\n\nSzansa, Za ile i alert są dla pinezki (Warszawa) — miasta albo punktu na mapie — nie dla koła w okolicy. Próg alertu to czas, nie dystans. Na mapie strzałki to pole ruchu; te, które dotyczą pinezki, mówią czy opad dojdzie.\n\nRadar 23:25 · 5 min · IMGW ✕ · wyładowania ✕\n\nŹródłem danych ostrzeżeń i sieci POLRAD jest Instytut Meteorologii i Gospodarki Wodnej – Państwowy Instytut Badawczy. Dane radarowe zostały przetworzone (SRI mm/h IMGW, siatka ~3 km; RainViewer dBZ → Marshall–Palmer gdy SRI niedostępne). Analiza: IMGW COMPO_SRI. Mapa: IMGW SRI (4 klasy) / RainViewer fallback / OpenFreeMap / OSM. To nie jest oficjalny alert RCB. Komórka burzowa może powstać lokalnie nawet przy czystym radarze.",
+    "tor komórki present=true aria-pressed=false",
+    "before toggle: accent=212 amber=0 pin={\"cx\":640,\"cy\":399,\"n\":212} pressed=false",
+    "tor komórki aria-pressed=true",
+    "pokaż clicked",
+    "tracks on: accent=212 amber=479 coreAccent=113 coreAmber=0 pinAboveTrack=true"
+  ]
+}

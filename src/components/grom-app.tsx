@@ -393,6 +393,7 @@ export function GromApp() {
         imgwOn={imgwMap}
         imgwDegrees={imgwDegrees}
         strikes={snapshot?.lightning ?? []}
+        threatLevel={threat?.level ?? null}
         focus={focus}
         onPick={(lat, lon) => {
           if (Date.now() < ignoreMapClickUntil.current) return;

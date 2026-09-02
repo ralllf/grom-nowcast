@@ -7,7 +7,8 @@ import {
   type ImgwGeoJSON,
 } from "@/lib/weather/imgw-lane";
 import { loadPowiatBoundaries } from "@/lib/weather/teryt";
-import type { CellTrack, LightningStrike } from "@/lib/weather/types";
+import { drawMapOverlay } from "@/lib/weather/map-overlay";
+import type { CellTrack, LightningStrike, ThreatLevel } from "@/lib/weather/types";
 import { strikeOpacity } from "@/lib/weather/perun";
 import { pickRadarLayer, type OverlayCorners } from "@/lib/weather/sri-overlay";
 import { cn } from "@/lib/utils";
@@ -31,6 +32,8 @@ type Props = {
   imgwOn?: boolean;
   imgwDegrees?: Record<string, number>;
   strikes: LightningStrike[];
+  /** Sheet level — pin halo tints danger at `now`. */
+  threatLevel?: ThreatLevel | null;
   focus: Focus | null;
   onPick: (lat: number, lon: number) => void;
   className?: string;
@@ -67,9 +70,6 @@ const ESRI_FALLBACK: StyleSpecification = {
 };
 
 const INK = "#12171f";
-const AMBER = "#f0a202";
-const AMBER_SOFT = "#f0a202";
-const CREAM = "#f8f4ee";
 const STRIKE = "#f5c518";
 
 type Live = {
@@ -83,6 +83,7 @@ type Live = {
   imgwOn: boolean;
   imgwDegrees: Record<string, number>;
   strikes: LightningStrike[];
+  threatLevel: ThreatLevel | null;
 };
 
 export function RadarMap({
@@ -96,6 +97,7 @@ export function RadarMap({
   imgwOn = true,
   imgwDegrees = {},
   strikes,
+  threatLevel = null,
   focus,
   onPick,
   className,
@@ -119,6 +121,7 @@ export function RadarMap({
     imgwOn,
     imgwDegrees,
     strikes,
+    threatLevel,
   });
   liveRef.current = {
     lat,
@@ -131,6 +134,7 @@ export function RadarMap({
     imgwOn,
     imgwDegrees,
     strikes,
+    threatLevel,
   };
   const imgwGenRef = useRef(0);
 
@@ -144,10 +148,7 @@ export function RadarMap({
     let styleTimer = 0;
 
     const draw = () => {
-      const canvas = canvasRef.current;
-      const instance = mapRef.current;
-      if (!canvas || !instance || !readyRef.current) return;
-      drawTracks(canvas, instance, liveRef.current.tracks);
+      paintOverlay(canvasRef.current, mapRef.current, liveRef.current, readyRef.current);
     };
 
     const fitMap = (instance: import("maplibre-gl").Map | null | undefined) => {
@@ -203,45 +204,6 @@ export function RadarMap({
       const paintOverlays = () => {
         if (cancelled) return;
         const live = liveRef.current;
-        if (!instance.getSource("you")) {
-          instance.addSource("you", {
-            type: "geojson",
-            data: {
-              type: "Feature",
-              properties: {},
-              geometry: { type: "Point", coordinates: [live.lon, live.lat] },
-            },
-          });
-          instance.addLayer({
-            id: "you-halo",
-            type: "circle",
-            source: "you",
-            paint: {
-              "circle-radius": 14,
-              "circle-color": "#0e7490",
-              "circle-opacity": 0.18,
-            },
-          });
-          instance.addLayer({
-            id: "you-dot",
-            type: "circle",
-            source: "you",
-            paint: {
-              "circle-radius": 6,
-              "circle-color": "#12171f",
-              "circle-stroke-width": 2,
-              "circle-stroke-color": "#0e7490",
-            },
-          });
-        } else {
-          const youSrc = instance.getSource("you") as import("maplibre-gl").GeoJSONSource;
-          youSrc.setData({
-            type: "Feature",
-            properties: {},
-            geometry: { type: "Point", coordinates: [live.lon, live.lat] },
-          });
-        }
-
         syncRadar(instance, live);
         void syncImgw(instance, live, imgwGenRef);
         syncStrikes(instance, live.strikes);
@@ -293,14 +255,8 @@ export function RadarMap({
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !readyRef.current) return;
-    const live = liveRef.current;
-    const youSrc = map.getSource("you") as import("maplibre-gl").GeoJSONSource | undefined;
-    youSrc?.setData({
-      type: "Feature",
-      properties: {},
-      geometry: { type: "Point", coordinates: [live.lon, live.lat] },
-    });
-    map.easeTo({ center: [live.lon, live.lat], duration: 700 });
+    map.easeTo({ center: [liveRef.current.lon, liveRef.current.lat], duration: 700 });
+    paintOverlay(canvasRef.current, map, liveRef.current, true);
   }, [lat, lon]);
 
   useEffect(() => {
@@ -316,11 +272,8 @@ export function RadarMap({
   }, [imgwOn, imgwDegrees]);
 
   useEffect(() => {
-    const map = mapRef.current;
-    const canvas = canvasRef.current;
-    if (!map || !readyRef.current || !canvas) return;
-    drawTracks(canvas, map, tracks);
-  }, [tracks]);
+    paintOverlay(canvasRef.current, mapRef.current, liveRef.current, readyRef.current);
+  }, [tracks, threatLevel]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -537,69 +490,30 @@ function syncRadar(map: import("maplibre-gl").Map, live: Live) {
   );
 }
 
-function drawTracks(
+function paintOverlay(
   canvas: HTMLCanvasElement | null,
-  map: import("maplibre-gl").Map,
-  tracks: CellTrack[],
+  map: import("maplibre-gl").Map | null,
+  live: Live,
+  ready: boolean,
 ) {
-  if (!canvas) return;
+  if (!canvas || !map || !ready) return;
   const ctx = canvas.getContext("2d");
   if (!ctx) return;
-  const w = canvas.clientWidth;
-  const h = canvas.clientHeight;
-  ctx.clearRect(0, 0, w, h);
-  if (tracks.length === 0) return;
-
-  const ordered = [...tracks].sort((a, b) => Number(a.threatening) - Number(b.threatening));
-  for (const track of ordered) {
+  const projected = live.tracks.map((track) => {
     const nowP = map.project([track.now.lon, track.now.lat]);
     const fromP = map.project([track.from.lon, track.from.lat]);
     const soonP = map.project([track.soon.lon, track.soon.lat]);
-    const now = { x: nowP.x, y: nowP.y };
-    const from = { x: fromP.x, y: fromP.y };
-    // Length is geographic (speed × ~30 min) — do not inflate with a pixel floor.
-    const soon = { x: soonP.x, y: soonP.y };
-    const hot = track.threatening;
-    const core = hot ? AMBER : AMBER_SOFT;
-    const outline = hot ? 13 : 10;
-    const width = hot ? 6 : 4.5;
-
-    ctx.lineCap = "round";
-    ctx.lineJoin = "round";
-    ctx.beginPath();
-    ctx.moveTo(from.x, from.y);
-    ctx.lineTo(now.x, now.y);
-    ctx.lineTo(soon.x, soon.y);
-    ctx.strokeStyle = INK;
-    ctx.lineWidth = outline;
-    ctx.stroke();
-    ctx.strokeStyle = core;
-    ctx.lineWidth = width;
-    ctx.stroke();
-
-    const ang = Math.atan2(soon.y - now.y, soon.x - now.x);
-    const size = hot ? 18 : 14;
-    ctx.beginPath();
-    ctx.moveTo(soon.x, soon.y);
-    ctx.lineTo(soon.x - size * Math.cos(ang - 0.42), soon.y - size * Math.sin(ang - 0.42));
-    ctx.lineTo(soon.x - size * Math.cos(ang + 0.42), soon.y - size * Math.sin(ang + 0.42));
-    ctx.closePath();
-    ctx.fillStyle = core;
-    ctx.fill();
-    ctx.strokeStyle = INK;
-    ctx.lineWidth = 2.2;
-    ctx.stroke();
-
-    ctx.beginPath();
-    ctx.arc(now.x, now.y, hot ? 8 : 6.5, 0, Math.PI * 2);
-    ctx.fillStyle = CREAM;
-    ctx.fill();
-    ctx.strokeStyle = INK;
-    ctx.lineWidth = 3;
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.arc(now.x, now.y, 2.4, 0, Math.PI * 2);
-    ctx.fillStyle = core;
-    ctx.fill();
-  }
+    return {
+      from: { x: fromP.x, y: fromP.y },
+      now: { x: nowP.x, y: nowP.y },
+      soon: { x: soonP.x, y: soonP.y },
+      threatening: track.threatening,
+    };
+  });
+  const pinP = map.project([live.lon, live.lat]);
+  drawMapOverlay(ctx, canvas.clientWidth, canvas.clientHeight, projected, {
+    x: pinP.x,
+    y: pinP.y,
+    danger: live.threatLevel === "now",
+  });
 }
