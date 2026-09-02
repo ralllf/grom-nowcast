@@ -508,7 +508,7 @@ export function GromApp() {
               >
                 <span
                   className="inline-block size-2.5 rounded-full ring-2 ring-fg"
-                  style={{ backgroundColor: tracksMap ? "#e4572e" : "#5c6570" }}
+                  style={{ backgroundColor: tracksMap ? "#f0a202" : "#5c6570" }}
                 />
                 <span className={tracksMap ? "text-fg" : "text-muted"}>tor komórki</span>
               </button>
