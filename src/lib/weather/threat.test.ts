@@ -6,7 +6,7 @@ import {
   evaluateAlert,
 } from "./alerts.ts";
 import { bearingDeg, destPoint, haversineKm } from "./geo.ts";
-import { levelFromRate } from "./palette.ts";
+import { HAIL_RATE, levelFromRate } from "./palette.ts";
 import { aggregate, BASE_CELL_LAT, BASE_CELL_LON, PL_RADAR_BBOX } from "./radar-grid.ts";
 import { calibrateChancePct } from "./chance.ts";
 import {
@@ -969,29 +969,101 @@ test("a strong cell 20 km away plus drizzle over the pin is not 'nad Tobą'", ()
   assert.equal(threat.expect, "słabego deszczu");
 });
 
-test("weak pin echo + approaching klasa-4 cell: no hail, one story, not Szansa 90", () => {
-  // Live 2026-09-01 Gdańsk: Echo ~5 km · słaby, stronger klasa-4 cell inbound.
-  // Hail / 90% / "Opad nadciąga" + "nad … teraz" must not leak from the distant cell.
-  const drizzle: RadarSample[] = [
-    { lat: 50.045, lon: 21.0, level: 1 },
-    { lat: 50.048, lon: 21.01, level: 1 },
+/** Live 2026-09-01 17:18 CEST Gdańsk: Echo ~5 km · słaby, klasa-4 cell inbound. */
+const gdansk: Place = {
+  lat: 54.352,
+  lon: 18.6466,
+  label: "Gdańsk",
+  instrumental: "Gdańskiem",
+  city: "Gdańsk",
+  terc: "2261",
+};
+
+function weakPinSamples(place: Place): RadarSample[] {
+  const a = destPoint(place.lat, place.lon, 0, 5);
+  const b = destPoint(place.lat, place.lon, 10, 5.2);
+  return [
+    { lat: a.lat, lon: a.lon, level: 1 },
+    { lat: b.lat, lon: b.lon, level: 1 },
   ];
+}
+
+/** Inbound klasa-4 west of the pin + słaby echo ~5 km (OVER_KM), two frames. */
+function gdanskWeakPinInboundK4(place: Place = gdansk) {
+  const drizzle = weakPinSamples(place);
+  const west0 = destPoint(place.lat, place.lon, 270, 43);
+  const west1 = destPoint(place.lat, place.lon, 270, 32);
   const frames = [
-    frame(1_000, [...blob(50.0, 20.4, 4), ...drizzle], 5),
-    frame(1_600, [...blob(50.0, 20.55, 4), ...drizzle], 5),
+    frame(1_000, [...blob(west0.lat, west0.lon, 4), ...drizzle], 5),
+    frame(1_600, [...blob(west1.lat, west1.lon, 4), ...drizzle], 5),
   ];
-  const threat = computeThreat(city, frames, []);
+  return computeThreat(place, frames, []);
+}
+
+test("Gdańsk weak pin: hail is gated on HAIL_RATE at the pin, not a far klasa 4", () => {
+  const threat = gdanskWeakPinInboundK4();
   assert.equal(threat.pinLevel, 1);
   assert.ok(threat.nearestKm !== null && threat.nearestKm <= 8, `echo ${threat.nearestKm}`);
+  assert.ok(threat.nearestKm !== null && threat.nearestKm >= 4, `echo should be ~5 km, got ${threat.nearestKm}`);
   assert.doesNotMatch(threat.expect ?? "", /grad/);
   assert.doesNotMatch(threat.detail, /grad/);
+
+  const hailFrames = [
+    frame(1_000, blobAtRate(gdansk.lat, gdansk.lon, HAIL_RATE), 0),
+    frame(1_600, blobAtRate(gdansk.lat, gdansk.lon, HAIL_RATE), 0),
+  ];
+  const hail = computeThreat(gdansk, hailFrames, []);
+  assert.ok(hail.pinLevel >= 4, `hail-rate pin class ${hail.pinLevel}`);
+  assert.match(hail.expect ?? "", /grad/);
+});
+
+test("Gdańsk weak pin: headline and detail are nad Tobą or nadciąga, not both", () => {
+  const threat = gdanskWeakPinInboundK4();
   const nadciaga = /nadciąga/.test(threat.title);
-  const teraz = /teraz/.test(threat.detail) || /nad Tobą/.test(threat.title);
+  const nadToba = /nad Tobą/.test(threat.title);
+  const teraz = /teraz/.test(threat.detail);
   assert.ok(
-    nadciaga !== teraz,
-    `headline+detail must be one story: title=${threat.title} detail=${threat.detail}`,
+    !(nadciaga && (teraz || nadToba)),
+    `must not mix nadciąga with nad Tobą/teraz: title=${threat.title} detail=${threat.detail}`,
   );
-  assert.notEqual(threat.chancePct, 90, `Szansa ${threat.chancePct} is the 90 rung for a weak pin`);
+  if (teraz) {
+    assert.doesNotMatch(threat.title, /nadciąga/);
+    assert.match(threat.detail, /nad Gdańskiem teraz/);
+  }
+  if (nadciaga) {
+    assert.doesNotMatch(threat.detail, /teraz/);
+    assert.doesNotMatch(threat.title, /nad Tobą/);
+  }
+});
+
+test("Gdańsk weak pin: Szansa 90 only when the pin is under the cell", () => {
+  const weak = gdanskWeakPinInboundK4();
+  assert.equal(weak.pinLevel, 1);
+  assert.notEqual(weak.chancePct, 90, `Szansa ${weak.chancePct} is the 90 rung for Echo słaby`);
+
+  const over = computeThreat(
+    gdansk,
+    [frame(1_000, blob(gdansk.lat, gdansk.lon, 2), 1.2), frame(1_600, blob(gdansk.lat, gdansk.lon, 2), 2.1)],
+    [],
+  );
+  assert.ok(over.pinLevel >= 2, `under-cell pin class ${over.pinLevel}`);
+  assert.equal(over.etaMin, 0);
+  assert.equal(over.chancePct, 90);
+
+  const { rung: weakRung } = chanceLadder({
+    willHit: true,
+    approaching: true,
+    receding: false,
+    expectLevel: 1,
+    pinMaxLevel: 1,
+    nearestKm: 5,
+    etaMin: 0,
+    missKm: 0,
+    imgwDegree: null,
+  });
+  assert.notEqual(weakRung, "overPinKlasa2");
+  assert.notEqual(weakRung, "overPinNowKlasa2");
+  assert.notEqual(calibrateChancePct(weakRung), 90);
 });
 
 test("Szczecin-like pin sees echo west of 13.8°E and gets an ETA", () => {

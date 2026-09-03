@@ -39,11 +39,13 @@ Parked: GPS-as-platform, Web Push, ML, second backend, Blitzortung, growth math,
 
 ## 3. Hail and 90 % on a weak echo
 
-**Live Gdańsk 17:18 CEST:** Echo `5 km · słaby` still said **możliwy grad**; headline **Opad nadciąga** vs detail **nad Gdańsk teraz**; Szansa **90 %**, ETA **teraz**.
+**Landed** on `main` in [#23](https://github.com/ralllf/grom-nowcast/pull/23) (`35932b5`). Lock: `src/lib/weather/threat.test.ts` — three **Gdańsk weak pin** tests (hail on `HAIL_RATE` at the pin; headline vs detail; Szansa 90 only under the cell). The 2026-09-01 17:18 CEST sheet is the fixture, not a new Szansa day.
 
-Mechanism (code): [`expectPl`](../src/lib/weather/threat.ts) says hail at `expectLevel >= 4` — and `expectLevel` can be the approaching cell’s klasa, not the pin’s. Headline `nearby` + approaching → „Opad nadciąga”; `level === "now"` needs `pinLevel >= 2`, so słaby over the pin never gets „nad Tobą” while detail uses `etaMin === 0` → „nad … teraz”. Raw 70 (`OVER_KM` + any pin echo) remaps to **90** in [`chance.ts`](../src/lib/weather/chance.ts).
+**Live Gdańsk 17:18 CEST (the bug):** Echo `5 km · słaby` still said **możliwy grad**; headline **Opad nadciąga** vs detail **nad Gdańsk teraz**; Szansa **90 %**, ETA **teraz**.
 
-- **Who sees what:** a pin in weak rain next to a stronger cell — Gdańsk today.
+Mechanism that shipped: hail only when pin rate (≤ 8 km) ≥ `HAIL_RATE`; `expectLevel` does not take a far klasa 4 while the pin is already under echo; `nearby` headlines „Opad nadciąga” only when `approaching && etaMin !== 0`; raw 70/80 (`overPinKlasa2` / `overPinNowKlasa2`) need klasa ≥ 2 at the pin, not any echo.
+
+- **Who sees what:** a pin in weak rain next to a stronger cell — Gdańsk that afternoon.
 - **Success check:** Echo `5 km · słaby` no longer says możliwy grad (gate hail on `HAIL_RATE` at the pin, not a distant klasa 4). Headline and detail agree: **nad Tobą** or **nadciąga**, not both. 90 % stays only if the pin is actually under that cell.
 - **Out:** recalibrating Szansa from one new day; PERUN; growth math.
 
@@ -51,7 +53,11 @@ Mechanism (code): [`expectPl`](../src/lib/weather/threat.ts) says hail at `expec
 
 ## 4. IMGW loading zero + radar-down copy
 
-Aside ([`grom-app.tsx`](../src/components/grom-app.tsx)): `{snapshot?.stormWarningCount ?? 0} burzowych w kraju` while the body still says **Pobieram komunikaty…** (count is hidden only when `warningsUnavailable`). Sheet error string is still „Nie udało się pobrać radaru **albo** ostrzeżeń” even though Slice 2 already settles sources.
+**Landed** on `main` in [#24](https://github.com/ralllf/grom-nowcast/pull/24) (`a87cf57`). Lock: `src/components/threat-sheet.test.ts` — `imgwAsideCountLine` (no `0 burzowych` while missing/unavailable), `grom-app` aside wiring (no `stormWarningCount ?? 0`), and `sheetSourceHonesty` (radar-only / IMGW-only, no combined „albo”).
+
+**The bug (SSR/live before #24):** `{snapshot?.stormWarningCount ?? 0} burzowych w kraju` while the body still said **Pobieram komunikaty…**. Sheet error was „Nie udało się pobrać radaru **albo** ostrzeżeń”.
+
+Mechanism that shipped: count line is null until a settled snapshot with `warningsUnavailable === false`. Radar down → `RADAR_UNAVAILABLE` („Nie udało się pobrać radaru. Spróbuj za chwilę.”). IMGW down → `IMGW_WARNINGS_UNAVAILABLE` in the aside. Not one combined string.
 
 - **Who sees what:** first 10–20 s of every load (SSR/live already showed `0 burzowych` + Pobieram). A radar-only outage must not blame IMGW, and the reverse.
 - **Success check:** never print `0 burzowych w kraju` while Pobieram or niedostępne. Radar down → radar honesty; IMGW down → the existing warn line; not the combined „albo”.
