@@ -1,0 +1,66 @@
+{
+  "when": "2026-09-03T13:44:05.145Z",
+  "viewport": {
+    "width": 390,
+    "height": 844
+  },
+  "pin": "Gdańsk",
+  "peek": {
+    "peeking": true,
+    "handleVisible": true,
+    "ariaExpanded": "false",
+    "detentClass": "max-h-[128px]",
+    "sheetHeight": 128,
+    "sheetClippedPx": 0,
+    "expandedOverflowPx": null,
+    "viewportHeight": 844,
+    "peekNestedScrollers": 0,
+    "peekNestedButtons": 0,
+    "peekText": "Deszcz nad Tobą TERAZ Gdańsk Za ile teraz Szansa 90% 15:40 16:10 16:40 17:10",
+    "zaIle": {
+      "text": "teraz",
+      "px": 30
+    },
+    "szansa": {
+      "text": "90%",
+      "px": 18
+    },
+    "chip": "TERAZ",
+    "sheetText": "Deszcz nad Tobą TERAZ Gdańsk Za ile teraz Szansa 90% 15:40 16:10 16:40 17:10"
+  },
+  "half": {
+    "peeking": false,
+    "handleVisible": true,
+    "ariaExpanded": "true",
+    "detentClass": "max-h-[45dvh]",
+    "sheetHeight": 374,
+    "sheetClippedPx": 0,
+    "expandedOverflowPx": 0,
+    "viewportHeight": 844,
+    "peekNestedScrollers": null,
+    "peekNestedButtons": null,
+    "peekText": null,
+    "zaIle": {
+      "text": "teraz",
+      "px": 30
+    },
+    "szansa": {
+      "text": "90%",
+      "px": 18
+    },
+    "chip": "TERAZ",
+    "sheetText": "Deszcz nad Tobą TERAZ Gdańsk Za ile teraz Szansa 90% 15:40 16:10 16:40 17:10 Idzie od południowego zachodu na północny wschód · 45 km/h · echo 1 km Spodziewaj się: słabego deszczu Komórka może też urosnąć na miejscu — tego radar nie zapowie. Radar 15:40 · 4 min · IMGW ✕ · wyładowania ✕",
+    "statusRow": "Radar 15:40 · 4 min · IMGW ✕ · wyładowania ✕"
+  },
+  "ticks": {
+    "present": true,
+    "aria": "Opad od 15:40 do 17:10, najsilniej ok. 16:15",
+    "ticks": [
+      "15:40",
+      "16:10",
+      "16:40",
+      "17:10"
+    ],
+    "hasNowCursor": true
+  }
+}

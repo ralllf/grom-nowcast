@@ -11,6 +11,12 @@ import {
   nowcastHeadline,
   sheetCaveat,
   sheetExtrasClass,
+  SHEET_CARD_CLASS,
+  SHEET_CARD_GRID_CLASS,
+  SHEET_CELL_ANSWER_CLASS,
+  SHEET_CELL_BOX_CLASS,
+  SHEET_CELL_FULL_CLASS,
+  SHEET_CELL_STRIP_CLASS,
   SHEET_CREDIT_LINE,
   SHEET_DATA_DETAILS,
   SHEET_DETENT_CLASS,
@@ -185,7 +191,7 @@ export function ThreatSheet({
         "flex flex-col rounded-t-3xl pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:block sm:rounded-3xl sm:p-5 sm:pb-5",
         SHEET_DETENT_CLASS[detent],
         detent === "peek" && "min-h-24",
-        "sm:min-h-0 sm:max-h-[calc(100dvh-20rem)] sm:overflow-y-auto",
+        SHEET_CARD_CLASS,
         threat ? PANEL[threat.level] : "border-transparent",
       )}
     >
@@ -221,10 +227,12 @@ export function ThreatSheet({
 
       <div
         className={cn(
-          // One scroller per breakpoint: this block on a phone, the article on sm+.
+          // The phone sheet is the only scroller. On sm+ this block is the card
+          // itself: two columns that grow with the content, no nested scroll.
           "min-h-0 flex-1 overflow-y-auto overscroll-contain p-4",
           !open && "hidden",
-          "sm:block sm:overflow-visible sm:p-0",
+          "sm:overflow-visible sm:p-0",
+          SHEET_CARD_GRID_CLASS,
         )}
       >
         <Answer
@@ -238,10 +246,17 @@ export function ThreatSheet({
           radarTime={radarTime}
           ageMin={ageMin}
           extrasClass={extrasClass}
+          cellClass={SHEET_CELL_ANSWER_CLASS}
+          stripClass={SHEET_CELL_STRIP_CLASS}
         />
 
         {threat && (threat.comingFrom || threat.expect || trendLine || threat.nearestKm != null) ? (
-          <div className="mt-2.5 space-y-1 rounded-2xl bg-surface-2 px-3 py-2.5 text-sm leading-relaxed">
+          <div
+            className={cn(
+              "mt-2.5 space-y-1 rounded-2xl bg-surface-2 px-3 py-2.5 text-sm leading-relaxed",
+              SHEET_CELL_BOX_CLASS,
+            )}
+          >
             {threat.comingFrom ? (
               <p>
                 <span className="text-faint">Idzie od </span>
@@ -274,20 +289,27 @@ export function ThreatSheet({
           </div>
         ) : null}
 
-        <p className="mt-2.5 max-w-prose text-sm leading-relaxed text-muted text-pretty">
+        <p className="mt-2.5 max-w-prose text-sm leading-relaxed text-muted text-pretty sm:col-span-2 sm:mt-0">
           {honesty.radar ?? caveat}
         </p>
 
-        {imgwLine ? <p className="mt-3 text-xs leading-relaxed text-warn">{imgwLine}</p> : null}
+        {imgwLine ? (
+          <p className="mt-3 text-xs leading-relaxed text-warn sm:col-span-2 sm:mt-0">{imgwLine}</p>
+        ) : null}
 
         {statusRow ? (
-          <p className={statusRow.tone === "warn" ? "mt-3 text-xs text-warn" : "mt-3 text-xs text-faint"}>
+          <p
+            className={cn(
+              statusRow.tone === "warn" ? "mt-3 text-xs text-warn" : "mt-3 text-xs text-faint",
+              SHEET_CELL_FULL_CLASS,
+            )}
+          >
             {statusRow.text}
           </p>
         ) : null}
 
         {geoError ? (
-          <p className="mt-3 flex items-start justify-between gap-2 text-xs text-warn">
+          <p className="mt-3 flex items-start justify-between gap-2 text-xs text-warn sm:col-span-2 sm:mt-0">
             <span>{geoError}</span>
             <button
               type="button"
@@ -307,6 +329,8 @@ export function ThreatSheet({
             className={cn(
               "mt-3 flex min-h-9 w-full items-center justify-center rounded-xl bg-surface-2 px-3 text-xs font-medium text-accent hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50",
               extrasClass,
+              SHEET_CELL_FULL_CLASS,
+              "sm:flex",
             )}
           >
             Pokaż ruch opadu na mapie
@@ -314,20 +338,20 @@ export function ThreatSheet({
           </button>
         ) : null}
 
-        <p className={cn("mt-3 text-xs leading-relaxed text-faint", extrasClass)}>
-          Szansa, Za ile i alert są dla pinezki ({place.label}) — miasta albo punktu na mapie — nie
-          dla koła w okolicy. Próg alertu to czas, nie dystans. Na mapie strzałki to pole ruchu;
-          te, które dotyczą pinezki, mówią czy opad dojdzie.
-        </p>
-
-        <p className={cn("mt-4 text-xs leading-relaxed text-faint", extrasClass)}>
-          {SHEET_CREDIT_LINE}
-        </p>
-        <details className={cn("mt-1 text-xs leading-relaxed text-faint", extrasClass)}>
+        {/* One summary line carries the whole tail, so the card fits the page. */}
+        <details
+          className={cn("mt-3 text-xs leading-relaxed text-faint", extrasClass, SHEET_CELL_FULL_CLASS)}
+        >
           <summary className="cursor-pointer list-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 [&::-webkit-details-marker]:hidden">
             O danych ›
           </summary>
-          <p className="mt-1.5">{SHEET_DATA_DETAILS}</p>
+          <p className="mt-1.5">
+            Szansa, Za ile i alert są dla pinezki ({place.label}) — miasta albo punktu na mapie — nie
+            dla koła w okolicy. Próg alertu to czas, nie dystans. Na mapie strzałki to pole ruchu;
+            te, które dotyczą pinezki, mówią czy opad dojdzie.
+          </p>
+          <p className="mt-2">{SHEET_CREDIT_LINE}</p>
+          <p className="mt-2">{SHEET_DATA_DETAILS}</p>
         </details>
       </div>
     </article>
@@ -337,7 +361,8 @@ export function ThreatSheet({
 /**
  * The 3-second answer: headline, level chip, place, Za ile as the hero, Szansa,
  * 90-min strip. Peek and the expanded sheet render the same block, so opening
- * the card adds rows below instead of resizing the answer.
+ * the card adds rows below instead of resizing the answer. Two grid items —
+ * the headline group and the strip — so the sm+ card can put them side by side.
  */
 function Answer({
   headline,
@@ -351,6 +376,8 @@ function Answer({
   ageMin,
   interactive = false,
   extrasClass = "",
+  cellClass = "",
+  stripClass = "",
 }: {
   headline: string;
   place: Place;
@@ -363,37 +390,45 @@ function Answer({
   ageMin: number;
   interactive?: boolean;
   extrasClass?: string;
+  /** Grid placement of the headline / hero group on the sm+ card. */
+  cellClass?: string;
+  /** Grid placement of the strip — the right column on the sm+ card. */
+  stripClass?: string;
 }) {
   return (
     <>
-      <div className="flex items-start justify-between gap-2">
-        <h2 className="min-w-0 truncate font-display text-lg font-semibold leading-none tracking-tight sm:text-2xl">
-          {headline}
-        </h2>
-        {threat ? (
-          <Badge tone={TONE[threat.level]} className="shrink-0 px-2 py-0.5 leading-none">
-            {threatLevelChip(threat.level)}
-          </Badge>
-        ) : null}
-      </div>
-      <div className="mt-0.5 flex items-baseline justify-between gap-2 text-xs leading-none">
-        <p className="min-w-0 truncate text-muted">{place.label}</p>
-        {status ? (
-          <p className={cn("min-w-0 truncate", status.tone === "warn" ? "text-warn" : "text-faint")}>
-            {status.text}
-          </p>
-        ) : null}
-      </div>
-      <dl className="mt-1 flex items-baseline justify-between gap-3 sm:mt-2 sm:justify-start sm:gap-8">
-        <div className="flex min-w-0 items-baseline gap-2">
-          <dt className="order-2 text-xs leading-none text-faint">Za ile</dt>
-          <dd className={cn("order-1", SHEET_NUMBER_CLASS.hero)}>{eta}</dd>
+      <div className={cn("min-w-0", cellClass)}>
+        <div className="flex items-start justify-between gap-2">
+          <h2 className="min-w-0 truncate font-display text-lg font-semibold leading-none tracking-tight sm:text-2xl">
+            {headline}
+          </h2>
+          {threat ? (
+            <Badge tone={TONE[threat.level]} className="shrink-0 px-2 py-0.5 leading-none">
+              {threatLevelChip(threat.level)}
+            </Badge>
+          ) : null}
         </div>
-        <div className="flex shrink-0 items-baseline gap-1.5">
-          <dt className="text-xs leading-none text-faint">Szansa</dt>
-          <dd className={SHEET_NUMBER_CLASS.sub}>{chance}</dd>
+        <div className="mt-0.5 flex items-baseline justify-between gap-2 text-xs leading-none">
+          <p className="min-w-0 truncate text-muted">{place.label}</p>
+          {status ? (
+            <p
+              className={cn("min-w-0 truncate", status.tone === "warn" ? "text-warn" : "text-faint")}
+            >
+              {status.text}
+            </p>
+          ) : null}
         </div>
-      </dl>
+        <dl className="mt-1 flex items-baseline justify-between gap-3 sm:mt-2 sm:justify-start sm:gap-8">
+          <div className="flex min-w-0 items-baseline gap-2">
+            <dt className="order-2 text-xs leading-none text-faint">Za ile</dt>
+            <dd className={cn("order-1", SHEET_NUMBER_CLASS.hero)}>{eta}</dd>
+          </div>
+          <div className="flex shrink-0 items-baseline gap-1.5">
+            <dt className="text-xs leading-none text-faint">Szansa</dt>
+            <dd className={SHEET_NUMBER_CLASS.sub}>{chance}</dd>
+          </div>
+        </dl>
+      </div>
       {points && radarTime != null ? (
         <Strip
           points={points}
@@ -402,7 +437,7 @@ function Answer({
           ageMin={ageMin}
           interactive={interactive}
           extrasClass={extrasClass}
-          className={interactive ? "mt-2" : "mt-1"}
+          className={cn(interactive ? "mt-2 sm:mt-0" : "mt-1", stripClass)}
         />
       ) : null}
     </>
@@ -445,9 +480,19 @@ function Strip({
   return (
     <div className={cn(interactive && "rounded-2xl bg-surface-2 px-3 py-2", className)}>
       {interactive ? (
-        <div className={cn("flex items-baseline justify-between gap-2 text-xs text-faint", extrasClass)}>
-          <span>Opad nad pinezką · 90 min</span>
-          <span>{advected ? "z ruchu echa" : "bez ruchu — jak teraz"}</span>
+        <div
+          className={cn(
+            "flex flex-wrap items-baseline justify-between gap-x-2 text-xs text-faint",
+            // extrasClass carries `hidden`, which cn() resolves against `flex`.
+            // Re-assert the row's display or the card lays this out as a block.
+            extrasClass,
+            "sm:flex",
+          )}
+        >
+          <span className="whitespace-nowrap">Opad nad pinezką · 90 min</span>
+          <span className="whitespace-nowrap">
+            {advected ? "z ruchu echa" : "bez ruchu — jak teraz"}
+          </span>
         </div>
       ) : null}
       <div className={cn("relative", interactive && "sm:mt-2")}>
@@ -509,6 +554,7 @@ function Strip({
           className={cn(
             "mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-faint",
             extrasClass,
+            "sm:flex",
           )}
         >
           {LEGEND.map((l) => (

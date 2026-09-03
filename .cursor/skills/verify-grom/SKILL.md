@@ -60,7 +60,7 @@ It does `GET /` then POSTs the live `getSnapshot` server function (Warszawa pin:
 
 ## Drive
 
-Harness: **Chrome CDP** via the shipped script (system `google-chrome`, no Playwright package). Desktop **1280×800** — below `640px` the sheet collapses to the peek card (`sm:hidden` handle) and the IMGW aside hides. `--feature nowcast-threat-sheet` is the exception: it drives that phone peek at **390×844**, and `--viewport WxH` overrides any feature's default. Chrome must be `--headless=new` plus `--remote-allow-origins=*` (without the latter, `/json/new` returns `Using unsafely HTTP…` instead of JSON).
+Harness: **Chrome CDP** via the shipped script (system `google-chrome`, no Playwright package). Desktop **1280×800** — below `640px` the sheet collapses to the peek card (`sm:hidden` handle) and the IMGW aside hides. At `1280` `location-pin` also measures the two-column pin card (`card.json`: inner scrollers, hero/strip boxes, tail behind `O danych ›`). `--feature nowcast-threat-sheet` is the exception: it drives that phone peek at **390×844**, and `--viewport WxH` overrides any feature's default. Chrome must be `--headless=new` plus `--remote-allow-origins=*` (without the latter, `/json/new` returns `Using unsafely HTTP…` instead of JSON).
 
 ```bash
 .cursor/skills/verify-grom/scripts/drive.mjs --feature location-pin
