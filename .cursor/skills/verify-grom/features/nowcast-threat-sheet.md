@@ -15,11 +15,12 @@ The bottom card (`#grom-threat-sheet`) is the product: when the rain reaches the
 - `Pokaż ruch opadu na mapie` when tracks exist and nearest echo is > 25 km (full detent / sm+)
 - Mobile peek (collapsed, 128px) is the whole 3-second answer: headline, level chip, place, hero `Za ile`, small `Szansa`, and a **static** 90-min strip with `HH:MM` ticks. No nested scroller and no nested button inside the drag handle (`aria-expanded`). Stale/down/offline status rides the place line, not only the expanded sheet.
 - Mobile detents: **peek** `max-h-[128px]` · **half** `max-h-[45dvh]` · **full** `max-h-[85dvh]`. Auto-expand at `now`/`imminent` goes to **half**, not 70dvh.
-- Detent ladder (`sheetExtrasClass`): `half` adds the box, one caveat and the status row; the pin-honesty paragraph, `Dane: IMGW-PIB …`, `O danych ›` and the rain legend wait for `full`. On sm+ the card shows everything.
+- Detent ladder (`sheetExtrasClass`): `half` adds the box, one caveat and the status row; the `O danych ›` disclosure and the rain legend wait for `full`. The pin-honesty paragraph and `Dane: IMGW-PIB …` live **inside** that disclosure, so they are one tap away at `full` and on the card
+- On sm+ the pin card is two columns of the page, not a phone sheet: headline, chip, `Za ile`, `Szansa` and the `Idzie od` box on the left, the 90-min strip on the right, caveat / IMGW lane / status row across both. It sizes to its content — no detent height, no scroller of its own, no drag handle (`sm:hidden`)
 
 ## How to get to it (user POV)
 
-Open `/`. On a viewport ≥ 640 px the full sheet is already open (`sm:block`). On a phone, tap the grab handle (headline is its `aria-label`) or wait for auto-expand to the **half** detent only when level is `imminent` or `now`. Default first visit is Warszawa. Wait until the headline is no longer `Skanuję radar…` (and not `Brak danych` unless the snapshot failed).
+Open `/`. On a viewport ≥ 640 px the card is already open, laid out in its two columns. On a phone, tap the grab handle (headline is its `aria-label`) or wait for auto-expand to the **half** detent only when level is `imminent` or `now`. Default first visit is Warszawa. Wait until the headline is no longer `Skanuję radar…` (and not `Brak danych` unless the snapshot failed).
 
 ## Driving it with Chrome CDP
 
@@ -38,4 +39,6 @@ Driver: `drive.mjs --feature nowcast-threat-sheet` (390×844 phone; `--viewport 
 - `watch` (IMGW-only, no echo) still headlines `Czysto`. Look for the yellow IMGW lane under the title, not a storm headline.
 - ETA is wall-clock (`radarAgeMin` subtracted). Do not compare it to raw `etaMin` from a stale mental model.
 - Sheet auto-expand is mobile-only. Desktop tests must not tap the handle (it is `sm:hidden`).
+- The collapsed handle keeps its own copy of the answer. On sm+ it is `display: none`, so measure the **visible** `Za ile` / `[data-timeline-axis]` (`offsetParent !== null`) or you will read zero-size boxes.
+- `sheetExtrasClass` contributes `hidden`, and `cn()` (tailwind-merge) resolves that against `flex`. Gated flex rows (strip caption, rain legend, `Pokaż ruch opadu na mapie`) re-assert `sm:flex`; if one loses it, the card silently lays that row out as a block.
 - Visible credit is `Dane: IMGW-PIB · mapa OpenFreeMap/OSM`. POLRAD / dBZ / Marshall–Palmer / COMPO_SRI live behind `O danych ›` (`<details>`). That copy is static, not proof the radar loaded.

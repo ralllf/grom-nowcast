@@ -154,6 +154,54 @@ const SHEET_STATE_JS = `(() => {
 
 const ENGLISH_LEAK_RE = /\bNOW\b|\bIMMINENT\b|\bNEARBY\b|\bETA\b|TERYT|\bECHO\b/;
 
+/** Desktop card: two columns, no scroller inside it, map still open on the right. */
+const CARD_JS = `(() => {
+  const sheet = document.querySelector("#grom-threat-sheet");
+  if (!sheet) return null;
+  const box = (el) => {
+    if (!el) return null;
+    const r = el.getBoundingClientRect();
+    return {
+      left: Math.round(r.left),
+      right: Math.round(r.right),
+      top: Math.round(r.top),
+      bottom: Math.round(r.bottom),
+      w: Math.round(r.width),
+      h: Math.round(r.height),
+    };
+  };
+  // The collapsed handle keeps its own copy of the answer; on sm+ it is
+  // display:none, so only the laid-out one has a box.
+  const shown = (el) => !!el && el.offsetParent !== null;
+  const heroRow = [...sheet.querySelectorAll("dt")]
+    .filter((dt) => dt.textContent.trim() === "Za ile" && shown(dt))
+    .map((dt) => dt.parentElement)[0];
+  const axis = [...sheet.querySelectorAll("[data-timeline-axis]")].find(shown);
+  const strip = axis ? axis.parentElement : [...sheet.querySelectorAll('[role="img"]')].find(shown);
+  const handle = sheet.querySelector('button[aria-controls="grom-threat-sheet"]');
+  const details = sheet.querySelector("details");
+  const st = getComputedStyle(sheet);
+  const innerScrollers = [...sheet.querySelectorAll("*")].filter(
+    (el) => /auto|scroll/.test(getComputedStyle(el).overflowY) && el.scrollHeight - el.clientHeight > 2,
+  ).length;
+  return {
+    card: box(sheet),
+    cardOverflowPx: sheet.scrollHeight - sheet.clientHeight,
+    cardOverflowY: st.overflowY,
+    cardRadius: [st.borderTopLeftRadius, st.borderTopRightRadius, st.borderBottomLeftRadius, st.borderBottomRightRadius],
+    innerScrollers,
+    hero: box(heroRow),
+    strip: box(strip),
+    handleVisible: !!handle && getComputedStyle(handle).display !== "none",
+    detailsOpen: details ? details.open : null,
+    mapRightPx: Math.round(window.innerWidth - (sheet.getBoundingClientRect().right || 0)),
+    viewport: { w: window.innerWidth, h: window.innerHeight },
+    text: sheet.innerText.replace(/\\s+/g, " ").trim(),
+  };
+})()`;
+
+const TAIL_COPY = ["Szansa, Za ile i alert są dla pinezki", "Dane: IMGW-PIB"];
+
 class Cdp {
   constructor(ws) {
     this.ws = ws;
@@ -1101,10 +1149,97 @@ try {
   await sleep(200);
   await screenshot(cdp, join(OUT, "03b-krakow-status-row.png"));
 
+  // The sm+ card must use the page: two columns, no scroller of its own, and the
+  // long tail behind `O danych ›` instead of on the first screen.
+  const card = await evalExpr(cdp, CARD_JS);
+  if (!card) throw new Error("#grom-threat-sheet missing at card measurement");
+  const cardTailOnFirstScreen = TAIL_COPY.filter((s) => card.text.includes(s));
+  if (!PHONE) {
+    if (card.handleVisible) {
+      await screenshot(cdp, join(OUT, "00-failed-desktop-handle.png"));
+      throw new Error("drag handle is visible on the desktop card (should be sm:hidden)");
+    }
+    if (card.cardOverflowPx > 2 || card.innerScrollers > 0) {
+      await screenshot(cdp, join(OUT, "00-failed-card-overflow.png"));
+      throw new Error(
+        `card scrolls inside itself: overflow ${card.cardOverflowPx}px, ${card.innerScrollers} inner scroller(s), overflow-y ${card.cardOverflowY}`,
+      );
+    }
+    if (card.strip && card.hero && !(card.strip.left >= card.hero.right && card.strip.top <= card.hero.bottom)) {
+      await screenshot(cdp, join(OUT, "00-failed-card-columns.png"));
+      throw new Error(
+        `strip is not beside the hero: hero ${JSON.stringify(card.hero)} strip ${JSON.stringify(card.strip)}`,
+      );
+    }
+    if (card.card.right > card.viewport.w / 2) {
+      await screenshot(cdp, join(OUT, "00-failed-card-width.png"));
+      throw new Error(`card reaches ${card.card.right}px of ${card.viewport.w} — no real right half for the map`);
+    }
+    if (cardTailOnFirstScreen.length > 0 || card.detailsOpen !== false) {
+      await screenshot(cdp, join(OUT, "00-failed-card-tail.png"));
+      throw new Error(
+        `long tail is on the first screen (details open=${card.detailsOpen}): ${JSON.stringify(cardTailOnFirstScreen)}`,
+      );
+    }
+    if (!card.text.includes("O danych")) {
+      await screenshot(cdp, join(OUT, "00-failed-card-disclosure.png"));
+      throw new Error("no O danych disclosure on the card");
+    }
+    step(
+      `card ${card.card.w}x${card.card.h} at ${card.card.left}..${card.card.right} of ${card.viewport.w}: overflow ${card.cardOverflowPx}px, ${card.innerScrollers} inner scrollers, overflow-y ${card.cardOverflowY}, map keeps ${card.mapRightPx}px on the right`,
+    );
+    step(
+      `two columns: hero ${JSON.stringify(card.hero)} · strip ${JSON.stringify(card.strip)} · radius ${card.cardRadius.join(" ")}`,
+    );
+    step(`first screen has no tail copy (${JSON.stringify(TAIL_COPY)}), O danych › collapsed`);
+    await screenshot(cdp, join(OUT, "03c-krakow-card.png"));
+
+    step("open O danych ›");
+    const disclosed = await evalExpr(
+      cdp,
+      `(() => {
+        const s = document.querySelector("#grom-threat-sheet summary");
+        if (!s) return "missing";
+        s.click();
+        return "clicked";
+      })()`,
+    );
+    if (disclosed !== "clicked") throw new Error("O danych summary missing");
+    await sleep(250);
+    const opened2 = await evalExpr(cdp, CARD_JS);
+    const missingAfterOpen = TAIL_COPY.filter((s) => !opened2.text.includes(s));
+    if (opened2.detailsOpen !== true || missingAfterOpen.length > 0) {
+      await screenshot(cdp, join(OUT, "00-failed-card-open-tail.png"));
+      throw new Error(`O danych did not reveal the tail: ${JSON.stringify({ open: opened2.detailsOpen, missingAfterOpen })}`);
+    }
+    // The tail may outgrow the window; it must stay reachable inside the card
+    // instead of sliding off the top of the page.
+    if (opened2.card.top < 0) {
+      await screenshot(cdp, join(OUT, "00-failed-card-open-offscreen.png"));
+      throw new Error(`open tail pushed the card top to ${opened2.card.top}px, above the viewport`);
+    }
+    step(
+      `O danych open: card ${opened2.card.w}x${opened2.card.h} from ${opened2.card.top}px, overflow ${opened2.cardOverflowPx}px, tail quoted on screen`,
+    );
+    await screenshot(cdp, join(OUT, "03d-krakow-o-danych.png"));
+    writeFileSync(
+      join(OUT, "card.json"),
+      JSON.stringify(
+        { when: new Date().toISOString(), pin: "Kraków", collapsed: card, disclosureOpen: opened2 },
+        null,
+        2,
+      ),
+    );
+  }
+
   notes.ok = true;
   notes.finishedAt = new Date().toISOString();
-  notes.result =
-    "Clicked Ustawienia, chose Kraków chip, threat sheet shows Kraków without TERYT; localStorage still has terc 1261.";
+  notes.result = PHONE
+    ? "Clicked Ustawienia, chose Kraków chip, threat sheet shows Kraków without TERYT; localStorage still has terc 1261."
+    : `Clicked Ustawienia, chose Kraków chip, threat sheet shows Kraków without TERYT; localStorage still has terc 1261. ` +
+      `Card ${card.card.w}x${card.card.h} at ${card.viewport.w}x${card.viewport.h}: 0 inner scrollers (overflow ${card.cardOverflowPx}px, overflow-y ${card.cardOverflowY}), ` +
+      `strip beside the hero (hero right ${card.hero?.right}px, strip left ${card.strip?.left}px), map keeps ${card.mapRightPx}px on the right, ` +
+      `no drag handle, and the tail (${TAIL_COPY.join(" / ")}) only after clicking O danych ›.`;
   await cdp.send("Browser.close").catch(() => {});
   ws.close();
   }
@@ -1160,7 +1295,10 @@ ${
 - \`01b-warszawa-status-row.png\` — sheet scrolled to the grey status row
 - \`02-settings-dialog.png\` — dialog \`Lokalizacja i alerty\` open with \`Miejsce\` / \`Alerty\`
 - \`03-krakow-sheet.png\` — sheet after Kraków chip
-- \`03b-krakow-status-row.png\` — Kraków sheet scrolled to the status row`
+- \`03b-krakow-status-row.png\` — Kraków sheet scrolled to the status row
+- \`03c-krakow-card.png\` — desktop card: two columns, no inner scrollbar (skipped below 640px)
+- \`03d-krakow-o-danych.png\` — same card with \`O danych ›\` opened
+- \`card.json\` — card box, inner-scroller count, hero/strip boxes, tail copy before and after the disclosure`
 }
 
 Mocks: none. Radar snapshot is the live IMGW/RainViewer boundary already checked by doctor.
