@@ -53,7 +53,11 @@ Mechanism that shipped: hail only when pin rate (≤ 8 km) ≥ `HAIL_RATE`; `exp
 
 ## 4. IMGW loading zero + radar-down copy
 
-Aside ([`grom-app.tsx`](../src/components/grom-app.tsx)): `{snapshot?.stormWarningCount ?? 0} burzowych w kraju` while the body still says **Pobieram komunikaty…** (count is hidden only when `warningsUnavailable`). Sheet error string is still „Nie udało się pobrać radaru **albo** ostrzeżeń” even though Slice 2 already settles sources.
+**Landed** on `main` in [#24](https://github.com/ralllf/grom-nowcast/pull/24) (`a87cf57`). Lock: `src/components/threat-sheet.test.ts` — `imgwAsideCountLine` (no `0 burzowych` while missing/unavailable), `grom-app` aside wiring (no `stormWarningCount ?? 0`), and `sheetSourceHonesty` (radar-only / IMGW-only, no combined „albo”).
+
+**The bug (SSR/live before #24):** `{snapshot?.stormWarningCount ?? 0} burzowych w kraju` while the body still said **Pobieram komunikaty…**. Sheet error was „Nie udało się pobrać radaru **albo** ostrzeżeń”.
+
+Mechanism that shipped: count line is null until a settled snapshot with `warningsUnavailable === false`. Radar down → `RADAR_UNAVAILABLE` („Nie udało się pobrać radaru. Spróbuj za chwilę.”). IMGW down → `IMGW_WARNINGS_UNAVAILABLE` in the aside. Not one combined string.
 
 - **Who sees what:** first 10–20 s of every load (SSR/live already showed `0 burzowych` + Pobieram). A radar-only outage must not blame IMGW, and the reverse.
 - **Success check:** never print `0 burzowych w kraju` while Pobieram or niedostępne. Radar down → radar honesty; IMGW down → the existing warn line; not the combined „albo”.
