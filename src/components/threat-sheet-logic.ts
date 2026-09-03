@@ -189,17 +189,17 @@ export const SHEET_DETENT_CLASS: Record<SheetDetent, string> = {
 };
 
 /**
- * Za ile is the hero; Szansa supports it. Peek shaves one step off the hero so
- * headline, place, hero and the 90-min strip all fit the 128 px detent.
+ * Za ile is the hero; Szansa supports it. One scale for peek and for the
+ * expanded sheet, so opening the card adds rows instead of resizing the answer.
+ * sm+ is a standalone card with room for the wider hero.
  */
 export const SHEET_NUMBER_CLASS = {
-  hero: "font-mono text-4xl leading-none tracking-tight tabular-nums",
-  peekHero: "font-mono text-3xl leading-none tracking-tight tabular-nums",
+  hero: "font-mono text-3xl leading-none tracking-tight tabular-nums sm:text-4xl",
   sub: "font-mono text-lg leading-none tabular-nums text-muted",
 } as const;
 
 /** Same scale in px, so a test can assert the hierarchy instead of reading Tailwind. */
-export const SHEET_NUMBER_PX = { hero: 36, peekHero: 30, sub: 18 } as const;
+export const SHEET_NUMBER_PX = { hero: 30, heroWide: 36, sub: 18 } as const;
 
 /**
  * The long tail (pin honesty, credit, O danych, rain legend) waits for `full`.

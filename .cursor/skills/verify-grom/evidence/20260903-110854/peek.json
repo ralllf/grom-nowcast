@@ -1,0 +1,66 @@
+{
+  "when": "2026-09-03T11:10:22.121Z",
+  "viewport": {
+    "width": 390,
+    "height": 844
+  },
+  "pin": "Kraków",
+  "peek": {
+    "peeking": true,
+    "handleVisible": true,
+    "ariaExpanded": "false",
+    "detentClass": "max-h-[128px]",
+    "sheetHeight": 128,
+    "sheetClippedPx": 0,
+    "expandedOverflowPx": null,
+    "viewportHeight": 844,
+    "peekNestedScrollers": 0,
+    "peekNestedButtons": 0,
+    "peekText": "Czysto CZYSTO Kraków Za ile teraz Szansa 10% 13:05 13:35 14:05 14:35",
+    "zaIle": {
+      "text": "teraz",
+      "px": 30
+    },
+    "szansa": {
+      "text": "10%",
+      "px": 18
+    },
+    "chip": "CZYSTO",
+    "sheetText": "Czysto CZYSTO Kraków Za ile teraz Szansa 10% 13:05 13:35 14:05 14:35"
+  },
+  "half": {
+    "peeking": false,
+    "handleVisible": true,
+    "ariaExpanded": "true",
+    "detentClass": "max-h-[45dvh]",
+    "sheetHeight": 380,
+    "sheetClippedPx": 0,
+    "expandedOverflowPx": 21,
+    "viewportHeight": 844,
+    "peekNestedScrollers": null,
+    "peekNestedButtons": null,
+    "peekText": null,
+    "zaIle": {
+      "text": "teraz",
+      "px": 30
+    },
+    "szansa": {
+      "text": "10%",
+      "px": 18
+    },
+    "chip": "CZYSTO",
+    "sheetText": "Czysto CZYSTO Kraków Za ile teraz Szansa 10% 13:05 13:35 14:05 14:35 Idzie od zachodu na wschód · 25 km/h · echo 1 km Spodziewaj się: słabego deszczu Komórka słabnie Komórka może też urosnąć na miejscu — tego radar nie zapowie. Radar 13:05 · 5 min · IMGW ✕ · wyładowania ✕",
+    "statusRow": "Radar 13:05 · 5 min · IMGW ✕ · wyładowania ✕"
+  },
+  "ticks": {
+    "present": true,
+    "aria": "Opad od 13:05 do 13:20, najsilniej ok. 13:05",
+    "ticks": [
+      "13:05",
+      "13:35",
+      "14:05",
+      "14:35"
+    ],
+    "hasNowCursor": true
+  }
+}

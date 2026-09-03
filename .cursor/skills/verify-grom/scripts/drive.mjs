@@ -23,6 +23,8 @@ if (process.argv.includes("--help") || process.argv.includes("-h")) {
 
 Features: location-pin, radar-map, pin-alerts, nowcast-threat-sheet
 Viewport: 1280x800 by default; nowcast-threat-sheet drives the phone sheet at 390x844.
+--pin "Kraków,Gdańsk": nowcast-threat-sheet only. Walks Ustawienia → city chip and stops at
+  the first pin whose level chip is not CZYSTO, so peek is captured under live rain.
 Chrome: system google-chrome / google-chrome-stable. User-data-dir under ${RUN_DIR}/chrome-profile.
 `);
   process.exit(0);
@@ -49,6 +51,10 @@ if (!vp) {
 }
 const VIEWPORT = { width: Number(vp[1]), height: Number(vp[2]) };
 const PHONE = VIEWPORT.width < 640;
+const PINS = arg("--pin", "")
+  .split(",")
+  .map((s) => s.trim())
+  .filter(Boolean);
 
 const CHROME =
   process.env.CHROME ||
@@ -123,6 +129,7 @@ const SHEET_STATE_JS = `(() => {
           el.scrollHeight - el.clientHeight > 2,
       ).length
     : null;
+  const scroller = [...sheet.querySelectorAll(".overflow-y-auto")].find((el) => el.clientHeight > 0);
   const chip = [...sheet.querySelectorAll("span")]
     .map((s) => (s.innerText || "").trim())
     .find((t) => /^(TERAZ|ZARAZ|BLISKO|CZYSTO)$/.test(t));
@@ -133,6 +140,7 @@ const SHEET_STATE_JS = `(() => {
     detentClass: [...sheet.classList].filter((c) => c.startsWith("max-h-")).join(" "),
     sheetHeight: Math.round(sheet.getBoundingClientRect().height),
     sheetClippedPx: sheet.scrollHeight - sheet.clientHeight,
+    expandedOverflowPx: scroller ? scroller.scrollHeight - scroller.clientHeight : null,
     viewportHeight: window.innerHeight,
     peekNestedScrollers: nestedScrollers,
     peekNestedButtons: peek ? peek.querySelectorAll("button").length : null,
@@ -275,7 +283,10 @@ const chromeArgs = [
   "--disable-dev-shm-usage",
   "--disable-extensions",
   "--window-size=1280,800",
-  ...(FEATURE === "radar-map" ? ["--use-angle=swiftshader"] : []),
+  // MapLibre needs WebGL2 or it throws in a loop and can wedge the renderer.
+  ...(FEATURE === "radar-map" || FEATURE === "nowcast-threat-sheet"
+    ? ["--use-angle=swiftshader"]
+    : []),
   "about:blank",
 ];
 
@@ -371,7 +382,7 @@ try {
   }
   // A phone at peek has the answer but not the expanded block, so the trio-label
   // and status-row checks belong to the expanded sheet only.
-  const state0 = await evalExpr(cdp, SHEET_STATE_JS);
+  let state0 = await evalExpr(cdp, SHEET_STATE_JS);
   const collapsed = Boolean(state0?.peeking);
   if (collapsed) {
     step(`sheet is collapsed (${state0.detentClass}); expanded-only checks deferred`);
@@ -768,6 +779,94 @@ try {
       await sleep(400);
     }
 
+    /** Walk Ustawienia → city chip. Real user path; stops on the first pin with rain. */
+    async function choosePin(label) {
+      // SSR can already contain the resolved snapshot, so a "ready" sheet does not
+      // prove hydration: the first tap on Ustawienia can land on a dead button.
+      let dialogOpen = false;
+      for (let attempt = 0; attempt < 8 && !dialogOpen; attempt += 1) {
+        const opened = await evalExpr(
+          cdp,
+          `(() => { const b = document.querySelector('button[aria-label="Ustawienia"]'); if (!b) return "missing"; b.click(); return "clicked"; })()`,
+        );
+        if (opened !== "clicked") throw new Error("settings button missing");
+        for (let i = 0; i < 4 && !dialogOpen; i += 1) {
+          await sleep(250);
+          dialogOpen = await evalExpr(
+            cdp,
+            `!!document.querySelector('[role="dialog"][aria-labelledby="settings-title"] button')`,
+          );
+        }
+        if (!dialogOpen) step(`Ustawienia tap ${attempt + 1} did not open the dialog (hydration?)`);
+      }
+      const clicked = await evalExpr(
+        cdp,
+        `(() => {
+          const btn = [...document.querySelectorAll('[role="dialog"] button')].find(
+            (b) => b.textContent.trim() === ${JSON.stringify(label)},
+          );
+          if (!btn) return "missing";
+          btn.click();
+          return "clicked";
+        })()`,
+      );
+      if (clicked !== "clicked") {
+        // Only the first 12 CITIES get a chip; a missing one is a bad --pin, not a bug.
+        const chips = await evalExpr(
+          cdp,
+          `[...document.querySelectorAll('[role="dialog"] button')].map((b) => b.textContent.trim())`,
+        );
+        step(`no city chip for ${label}; chips are ${JSON.stringify(chips)}`);
+        await evalExpr(
+          cdp,
+          `(() => { const b = document.querySelector('button[aria-label="Zamknij"]'); if (b) b.click(); return true; })()`,
+        );
+        await sleep(300);
+        return null;
+      }
+      const tPin = Date.now();
+      while (Date.now() - tPin < 20000) {
+        const txt = await evalExpr(cdp, `document.querySelector('#grom-threat-sheet')?.innerText || ''`);
+        const gone = await evalExpr(cdp, `!document.querySelector('[role="dialog"][aria-labelledby="settings-title"]')`);
+        if (gone && txt.includes(label) && !txt.includes("Skanuję radar…")) break;
+        await sleep(300);
+      }
+      const s = await evalExpr(cdp, SHEET_STATE_JS);
+      step(`pin ${label}: chip ${s?.chip ?? "none"} · ${String(s?.sheetText).slice(0, 90)}`);
+      return s;
+    }
+
+    let pinLabel = null;
+    let liveHero = null;
+    for (const candidate of PINS) {
+      const s = await choosePin(candidate);
+      if (!s) continue;
+      pinLabel = candidate;
+      if (s.chip && s.chip !== "CZYSTO") {
+        step(`stopping on ${candidate}: live level chip ${s.chip}`);
+        liveHero = null;
+        break;
+      }
+      // Second choice: a clear pin whose hero still has rain in the 90-min window.
+      if (!liveHero && s.zaIle && s.zaIle.text !== "—" && s.zaIle.text !== "minie") {
+        liveHero = candidate;
+      }
+    }
+    if (liveHero && pinLabel !== liveHero) {
+      step(`no live level chip; going back to ${liveHero}, the one pin with a real Za ile`);
+      await choosePin(liveHero);
+      pinLabel = liveHero;
+    }
+    if (PINS.length > 0 && !pinLabel) {
+      throw new Error(`none of --pin ${JSON.stringify(PINS)} has a city chip in the dialog`);
+    }
+    pinLabel = pinLabel ?? (await evalExpr(
+      cdp,
+      `(() => { try { return JSON.parse(localStorage.getItem("grom-settings-v1") || "{}").place?.label || "Warszawa"; } catch { return "Warszawa"; } })()`,
+    ));
+    notes.sideEffects.push({ storage: "grom-settings-v1", pin: pinLabel });
+    state0 = await evalExpr(cdp, SHEET_STATE_JS);
+
     let peekState = null;
     let halfState = null;
     let first = await sheetState(state0?.peeking ? "peek" : "auto-expanded");
@@ -816,16 +915,17 @@ try {
     step(`half text: ${halfState.sheetText.slice(0, 320)}`);
     await screenshot(cdp, join(OUT, "02-half-390x844.png"));
 
+    const pinTicks = await evalExpr(cdp, TICKS_JS);
     writeFileSync(
       join(OUT, "peek.json"),
       JSON.stringify(
         {
           when: new Date().toISOString(),
           viewport: VIEWPORT,
-          pin: "Warszawa",
+          pin: pinLabel,
           peek: peekState,
           half: { ...halfState, statusRow: halfStatus },
-          ticks,
+          ticks: pinTicks,
         },
         null,
         2,

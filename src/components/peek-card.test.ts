@@ -30,6 +30,13 @@ function peekBlock(): string {
   return SHEET.slice(openTagEnd, end);
 }
 
+/** The shared answer block: headline, chip, place, hero, Szansa, strip. */
+function answerBlock(): string {
+  const m = SHEET.match(/function Answer\(\{[\s\S]*?\n\}\n/);
+  assert.ok(m, "expected the shared Answer block");
+  return m[0];
+}
+
 /** Block of source that renders the two-sentence Idzie od / Spodziewaj się box. */
 function boxBlock(): string {
   const m = SHEET.match(/\{threat && \([\s\S]*?Spodziewaj się[\s\S]*?\n {8}\) : null\}/);
@@ -40,14 +47,24 @@ function boxBlock(): string {
 describe("peek is the product (§3 above-the-fold)", () => {
   it("peek prints headline, level chip, place, Za ile, Szansa and the strip", () => {
     const peek = peekBlock();
-    assert.match(peek, /\{headline\}/);
-    assert.match(peek, /threatLevelChip\(threat\.level\)/);
-    assert.match(peek, /\{place\.label\}/);
-    assert.match(peek, />Za ile</);
-    assert.match(peek, />Szansa</);
-    assert.match(peek, /\{eta\}/);
-    assert.match(peek, /\{chance\}/);
-    assert.match(peek, /<Strip/);
+    assert.match(peek, /<Answer\b/);
+    assert.match(peek, /headline=\{headline\}/);
+    assert.match(peek, /status=\{peekStatus\}/);
+    const answer = answerBlock();
+    assert.match(answer, /\{headline\}/);
+    assert.match(answer, /threatLevelChip\(threat\.level\)/);
+    assert.match(answer, /\{place\.label\}/);
+    assert.match(answer, />Za ile</);
+    assert.match(answer, />Szansa</);
+    assert.match(answer, /\{eta\}/);
+    assert.match(answer, /\{chance\}/);
+    assert.match(answer, /<Strip/);
+  });
+
+  it("peek and the expanded sheet share one answer block, so nothing resizes", () => {
+    assert.equal((SHEET.match(/<Answer\b/g) ?? []).length, 2);
+    assert.doesNotMatch(peekBlock(), /interactive/);
+    assert.match(SHEET, /<Answer\s+interactive/);
   });
 
   it("peek has no nested scroller and no nested interactive control", () => {
@@ -63,21 +80,19 @@ describe("peek is the product (§3 above-the-fold)", () => {
 
   it("peek strip is static bars — the tappable strip belongs to the expanded sheet", () => {
     assert.match(SHEET, /interactive\?: boolean/);
-    assert.equal((SHEET.match(/<Strip\s+interactive/g) ?? []).length, 1);
-    assert.equal((SHEET.match(/<Strip\s/g) ?? []).length, 2);
-    const peek = peekBlock();
-    assert.match(peek, /<Strip /);
-    assert.doesNotMatch(peek, /interactive/);
+    assert.match(answerBlock(), /interactive=\{interactive\}/);
+    assert.match(SHEET, /interactive \? \(\s*<button/);
+    assert.match(SHEET, /\) : \(\s*<span/);
   });
 });
 
 describe("Za ile is the hero number (§3 / 10d type)", () => {
   it("hero beats Szansa in the type scale and nothing drops below 12px", () => {
     assert.ok(SHEET_NUMBER_PX.hero > SHEET_NUMBER_PX.sub, "hero must be the largest number");
-    assert.ok(SHEET_NUMBER_PX.peekHero > SHEET_NUMBER_PX.sub, "peek hero must beat Szansa too");
+    assert.ok(SHEET_NUMBER_PX.heroWide > SHEET_NUMBER_PX.hero, "sm+ hero is the wider step");
     assert.ok(SHEET_NUMBER_PX.sub >= 12);
-    assert.match(SHEET_NUMBER_CLASS.hero, /text-4xl/);
-    assert.match(SHEET_NUMBER_CLASS.peekHero, /text-3xl/);
+    assert.match(SHEET_NUMBER_CLASS.hero, /text-3xl/);
+    assert.match(SHEET_NUMBER_CLASS.hero, /sm:text-4xl/);
     assert.match(SHEET_NUMBER_CLASS.sub, /text-lg/);
     for (const cls of Object.values(SHEET_NUMBER_CLASS)) {
       assert.match(cls, /font-mono/);
@@ -87,16 +102,12 @@ describe("Za ile is the hero number (§3 / 10d type)", () => {
 
   it("wires the hero class to Za ile and the small class to Szansa", () => {
     const hero = SHEET.match(/Za ile<\/dt>[\s\S]{0,160}?<\/dd>/g) ?? [];
-    assert.ok(hero.length >= 2, "expected Za ile in peek and in the expanded sheet");
-    for (const block of hero) {
-      assert.match(block, /SHEET_NUMBER_CLASS\.(?:hero|peekHero)/);
-    }
+    assert.equal(hero.length, 1, "one answer block owns Za ile");
+    assert.match(hero[0], /SHEET_NUMBER_CLASS\.hero/);
     const chance = SHEET.match(/Szansa<\/dt>[\s\S]{0,160}?<\/dd>/g) ?? [];
-    assert.ok(chance.length >= 2, "expected Szansa in peek and in the expanded sheet");
-    for (const block of chance) {
-      assert.match(block, /SHEET_NUMBER_CLASS\.sub/);
-      assert.doesNotMatch(block, /SHEET_NUMBER_CLASS\.(?:hero|peekHero)/);
-    }
+    assert.equal(chance.length, 1, "one answer block owns Szansa");
+    assert.match(chance[0], /SHEET_NUMBER_CLASS\.sub/);
+    assert.doesNotMatch(chance[0], /SHEET_NUMBER_CLASS\.hero/);
   });
 
   it("keeps mono for Za ile / Szansa / clocks only", () => {

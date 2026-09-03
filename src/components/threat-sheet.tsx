@@ -1,4 +1,4 @@
-import { MapPin, X } from "lucide-react";
+import { X } from "lucide-react";
 import { useEffect, useRef, useState, type PointerEvent } from "react";
 import {
   autoExpandDetent,
@@ -23,6 +23,7 @@ import {
   timelineAriaLabel,
   timelineBarReadout,
   type SheetDetent,
+  type SheetStatusRow,
 } from "@/components/threat-sheet-logic";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
@@ -199,45 +200,21 @@ export function ThreatSheet({
         onPointerUp={onHandlePointerUp}
         onClick={onHandleClick}
       >
-        <span className="mx-auto mt-2 mb-1 h-1 w-10 rounded-full bg-faint" aria-hidden />
+        <span className="mx-auto mt-1.5 mb-0.5 h-1 w-10 rounded-full bg-faint" aria-hidden />
         {!open ? (
-          <div className="px-4 pb-2 text-left">
-            <div className="flex items-start justify-between gap-2">
-              <h2 className="min-w-0 truncate font-display text-lg font-semibold leading-none tracking-tight">
-                {headline}
-              </h2>
-              {threat ? (
-                <Badge tone={TONE[threat.level]} className="shrink-0 px-2 py-0.5">
-                  {threatLevelChip(threat.level)}
-                </Badge>
-              ) : null}
-            </div>
-            <div className="mt-1 flex items-baseline justify-between gap-2 text-xs leading-none">
-              <p className="min-w-0 truncate text-muted">{place.label}</p>
-              {peekStatus ? (
-                <p
-                  className={cn(
-                    "min-w-0 truncate",
-                    peekStatus.tone === "warn" ? "text-warn" : "text-faint",
-                  )}
-                >
-                  {peekStatus.text}
-                </p>
-              ) : null}
-            </div>
-            <div className="mt-1.5 flex items-baseline justify-between gap-3">
-              <dl className="flex min-w-0 items-baseline gap-2">
-                <dt className="order-2 text-xs leading-none text-faint">Za ile</dt>
-                <dd className={cn("order-1", SHEET_NUMBER_CLASS.peekHero)}>{eta}</dd>
-              </dl>
-              <dl className="flex shrink-0 items-baseline gap-1.5">
-                <dt className="text-xs leading-none text-faint">Szansa</dt>
-                <dd className={SHEET_NUMBER_CLASS.sub}>{chance}</dd>
-              </dl>
-            </div>
-            {strip && radarTime != null ? (
-              <Strip points={strip} radarTime={radarTime} ageMin={ageMin} className="mt-1.5" />
-            ) : null}
+          // Every row here is measured: headline, place, hero and strip fit 128px.
+          <div className="px-4 pb-1.5 text-left">
+            <Answer
+              headline={headline}
+              place={place}
+              threat={threat}
+              eta={eta}
+              chance={chance}
+              status={peekStatus}
+              points={strip}
+              radarTime={radarTime}
+              ageMin={ageMin}
+            />
           </div>
         ) : null}
       </button>
@@ -250,44 +227,21 @@ export function ThreatSheet({
           "sm:block sm:overflow-visible sm:p-0",
         )}
       >
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <MapPin className="size-4 text-accent" />
-              <p className="text-sm font-medium">{place.label}</p>
-            </div>
-            <h2 className="mt-1.5 font-display text-2xl font-semibold leading-tight tracking-tight text-balance">
-              {headline}
-            </h2>
-          </div>
-          {threat ? <Badge tone={TONE[threat.level]}>{threatLevelChip(threat.level)}</Badge> : null}
-        </div>
-
-        <dl className="mt-3 flex items-end gap-8">
-          <div>
-            <dt className="text-xs font-medium text-faint">Za ile</dt>
-            <dd className={cn("mt-1.5", SHEET_NUMBER_CLASS.hero)}>{eta}</dd>
-          </div>
-          <div>
-            <dt className="text-xs font-medium text-faint">Szansa</dt>
-            <dd className={cn("mt-1.5", SHEET_NUMBER_CLASS.sub)}>{chance}</dd>
-          </div>
-        </dl>
-
-        {strip && radarTime != null ? (
-          <Strip
-            interactive
-            points={strip}
-            advected={threat?.timelineAdvected ?? false}
-            radarTime={radarTime}
-            ageMin={ageMin}
-            extrasClass={extrasClass}
-            className="mt-3"
-          />
-        ) : null}
+        <Answer
+          interactive
+          headline={headline}
+          place={place}
+          threat={threat}
+          eta={eta}
+          chance={chance}
+          points={strip}
+          radarTime={radarTime}
+          ageMin={ageMin}
+          extrasClass={extrasClass}
+        />
 
         {threat && (threat.comingFrom || threat.expect || trendLine || threat.nearestKm != null) ? (
-          <div className="mt-3 space-y-1.5 rounded-2xl bg-surface-2 px-3 py-3 text-sm leading-relaxed">
+          <div className="mt-2.5 space-y-1 rounded-2xl bg-surface-2 px-3 py-2.5 text-sm leading-relaxed">
             {threat.comingFrom ? (
               <p>
                 <span className="text-faint">Idzie od </span>
@@ -320,7 +274,7 @@ export function ThreatSheet({
           </div>
         ) : null}
 
-        <p className="mt-3 max-w-prose text-sm leading-relaxed text-muted text-pretty">
+        <p className="mt-2.5 max-w-prose text-sm leading-relaxed text-muted text-pretty">
           {honesty.radar ?? caveat}
         </p>
 
@@ -380,6 +334,81 @@ export function ThreatSheet({
   );
 }
 
+/**
+ * The 3-second answer: headline, level chip, place, Za ile as the hero, Szansa,
+ * 90-min strip. Peek and the expanded sheet render the same block, so opening
+ * the card adds rows below instead of resizing the answer.
+ */
+function Answer({
+  headline,
+  place,
+  threat,
+  eta,
+  chance,
+  status = null,
+  points,
+  radarTime,
+  ageMin,
+  interactive = false,
+  extrasClass = "",
+}: {
+  headline: string;
+  place: Place;
+  threat: Threat | null;
+  eta: string;
+  chance: string;
+  status?: SheetStatusRow | null;
+  points: TimelinePoint[] | null;
+  radarTime: number | null;
+  ageMin: number;
+  interactive?: boolean;
+  extrasClass?: string;
+}) {
+  return (
+    <>
+      <div className="flex items-start justify-between gap-2">
+        <h2 className="min-w-0 truncate font-display text-lg font-semibold leading-none tracking-tight sm:text-2xl">
+          {headline}
+        </h2>
+        {threat ? (
+          <Badge tone={TONE[threat.level]} className="shrink-0 px-2 py-0.5 leading-none">
+            {threatLevelChip(threat.level)}
+          </Badge>
+        ) : null}
+      </div>
+      <div className="mt-0.5 flex items-baseline justify-between gap-2 text-xs leading-none">
+        <p className="min-w-0 truncate text-muted">{place.label}</p>
+        {status ? (
+          <p className={cn("min-w-0 truncate", status.tone === "warn" ? "text-warn" : "text-faint")}>
+            {status.text}
+          </p>
+        ) : null}
+      </div>
+      <dl className="mt-1 flex items-baseline justify-between gap-3 sm:mt-2 sm:justify-start sm:gap-8">
+        <div className="flex min-w-0 items-baseline gap-2">
+          <dt className="order-2 text-xs leading-none text-faint">Za ile</dt>
+          <dd className={cn("order-1", SHEET_NUMBER_CLASS.hero)}>{eta}</dd>
+        </div>
+        <div className="flex shrink-0 items-baseline gap-1.5">
+          <dt className="text-xs leading-none text-faint">Szansa</dt>
+          <dd className={SHEET_NUMBER_CLASS.sub}>{chance}</dd>
+        </div>
+      </dl>
+      {points && radarTime != null ? (
+        <Strip
+          points={points}
+          advected={threat?.timelineAdvected ?? false}
+          radarTime={radarTime}
+          ageMin={ageMin}
+          interactive={interactive}
+          extrasClass={extrasClass}
+          className={interactive ? "mt-2" : "mt-1"}
+        />
+      ) : null}
+    </>
+  );
+}
+
 const LEGEND: Array<{ level: RadarLevel; range: string }> = [
   { level: 1, range: "<1" },
   { level: 2, range: "1–4" },
@@ -414,13 +443,13 @@ function Strip({
   const aria = timelineAriaLabel(points, radarTime);
   const pickedPoint = picked != null ? points.find((p) => p.t === picked) : undefined;
   return (
-    <div className={cn(interactive && "rounded-2xl bg-surface-2 px-3 py-2.5", className)}>
+    <div className={cn(interactive && "rounded-2xl bg-surface-2 px-3 py-2", className)}>
       {interactive ? (
-        <p className="text-xs text-faint">Opad nad pinezką · 90 min</p>
+        <p className={cn("text-xs text-faint", extrasClass)}>Opad nad pinezką · 90 min</p>
       ) : null}
-      <div className={cn("relative", interactive && "mt-2")}>
+      <div className={cn("relative", interactive && "sm:mt-2")}>
         <div
-          className={cn("flex items-end gap-px", interactive ? "h-9" : "h-3.5")}
+          className={cn("flex items-end gap-px", interactive ? "h-6 sm:h-8" : "h-3")}
           role="img"
           aria-label={aria}
         >
@@ -462,7 +491,10 @@ function Strip({
       ) : null}
       <div
         data-timeline-axis
-        className="mt-1 flex justify-between font-mono text-xs leading-none tabular-nums text-faint"
+        className={cn(
+          "flex justify-between font-mono text-xs leading-none tabular-nums text-faint",
+          interactive ? "mt-1" : "mt-0.5",
+        )}
       >
         <span>{wallClockAxisLabel(0, radarTime)}</span>
         <span>{wallClockAxisLabel(30, radarTime)}</span>

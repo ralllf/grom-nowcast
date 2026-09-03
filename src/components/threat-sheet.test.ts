@@ -256,8 +256,11 @@ describe("threatLevelChip", () => {
   });
 
   it("wires the sheet Badge through threatLevelChip", () => {
-    assert.match(SHEET_SRC, /<Badge tone=\{TONE\[threat\.level\]\}>\{threatLevelChip\(threat\.level\)\}<\/Badge>/);
-    assert.doesNotMatch(SHEET_SRC, /<Badge tone=\{TONE\[threat\.level\]\}>\{threat\.level\}<\/Badge>/);
+    assert.match(
+      SHEET_SRC,
+      /<Badge tone=\{TONE\[threat\.level\]\}[^>]*>\s*\{threatLevelChip\(threat\.level\)\}\s*<\/Badge>/,
+    );
+    assert.doesNotMatch(SHEET_SRC, /<Badge tone=\{TONE\[threat\.level\]\}[^>]*>\s*\{threat\.level\}/);
   });
 });
 
@@ -275,7 +278,7 @@ describe("threat-sheet user copy", () => {
     assert.match(SHEET_SRC, /\{trendLine \? \(/);
     assert.match(SHEET_SRC, /honesty\.radar \?\? caveat/);
     const grey = SHEET_SRC.match(
-      /<p className="mt-3 max-w-prose[\s\S]*?<\/p>/,
+      /<p className="[^"]*max-w-prose[\s\S]*?<\/p>/,
     );
     assert.ok(grey, "expected the muted detail paragraph");
     assert.doesNotMatch(grey[0], /Spodziewaj się/);
@@ -298,8 +301,8 @@ describe("threat-sheet user copy", () => {
   });
 
   it("prints Za ile and Szansa as the two numbers, not the English ETA acronym", () => {
-    assert.equal((SHEET_SRC.match(/>Za ile<\/dt>/g) ?? []).length, 2);
-    assert.equal((SHEET_SRC.match(/>Szansa<\/dt>/g) ?? []).length, 2);
+    assert.equal((SHEET_SRC.match(/>Za ile<\/dt>/g) ?? []).length, 1);
+    assert.equal((SHEET_SRC.match(/>Szansa<\/dt>/g) ?? []).length, 1);
     assert.match(SHEET_SRC, /\{eta\}/);
     assert.match(SHEET_SRC, /\{chance\}/);
     assert.doesNotMatch(SHEET_SRC, /label="ETA"/);
@@ -329,8 +332,8 @@ describe("threat-sheet user copy", () => {
   it("shows stale/offline status in the peek block, not only expanded", () => {
     const handle = SHEET_SRC.match(/sm:hidden[\s\S]*?<\/button>/);
     assert.ok(handle, "expected the mobile peek handle");
-    assert.match(handle[0], /peekStatus/);
-    assert.match(handle[0], /peekStatus\.text/);
+    assert.match(handle[0], /status=\{peekStatus\}/);
+    assert.match(SHEET_SRC, /\{status\.text\}/);
     assert.match(SHEET_SRC, /sheetPeekStatus\(/);
     assert.match(SHEET_SRC, /offline/);
     assert.match(APP_SRC, /navigator\.onLine/);
