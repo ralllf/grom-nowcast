@@ -1,5 +1,5 @@
 {
-  "when": "2026-09-03T11:10:10.703Z",
+  "when": "2026-09-03T11:16:38.621Z",
   "pin": "Warszawa",
   "labels": [
     "Za ile",
@@ -9,7 +9,7 @@
     {
       "label": "Za ile",
       "shown": "Za ile",
-      "value": "teraz"
+      "value": "—"
     },
     {
       "label": "Szansa",
@@ -19,7 +19,7 @@
     {
       "label": "Za ile",
       "shown": "Za ile",
-      "value": "teraz"
+      "value": "—"
     },
     {
       "label": "Szansa",

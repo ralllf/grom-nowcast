@@ -1,10 +1,10 @@
 {
-  "when": "2026-09-03T11:10:22.121Z",
+  "when": "2026-09-03T11:16:59.997Z",
   "viewport": {
     "width": 390,
     "height": 844
   },
-  "pin": "Kraków",
+  "pin": "Poznań",
   "peek": {
     "peeking": true,
     "handleVisible": true,
@@ -16,7 +16,7 @@
     "viewportHeight": 844,
     "peekNestedScrollers": 0,
     "peekNestedButtons": 0,
-    "peekText": "Czysto CZYSTO Kraków Za ile teraz Szansa 10% 13:05 13:35 14:05 14:35",
+    "peekText": "Czysto CZYSTO Poznań Za ile teraz Szansa 10% 13:15 13:45 14:15 14:45",
     "zaIle": {
       "text": "teraz",
       "px": 30
@@ -26,16 +26,16 @@
       "px": 18
     },
     "chip": "CZYSTO",
-    "sheetText": "Czysto CZYSTO Kraków Za ile teraz Szansa 10% 13:05 13:35 14:05 14:35"
+    "sheetText": "Czysto CZYSTO Poznań Za ile teraz Szansa 10% 13:15 13:45 14:15 14:45"
   },
   "half": {
     "peeking": false,
     "handleVisible": true,
     "ariaExpanded": "true",
     "detentClass": "max-h-[45dvh]",
-    "sheetHeight": 380,
+    "sheetHeight": 374,
     "sheetClippedPx": 0,
-    "expandedOverflowPx": 21,
+    "expandedOverflowPx": 0,
     "viewportHeight": 844,
     "peekNestedScrollers": null,
     "peekNestedButtons": null,
@@ -49,17 +49,17 @@
       "px": 18
     },
     "chip": "CZYSTO",
-    "sheetText": "Czysto CZYSTO Kraków Za ile teraz Szansa 10% 13:05 13:35 14:05 14:35 Idzie od zachodu na wschód · 25 km/h · echo 1 km Spodziewaj się: słabego deszczu Komórka słabnie Komórka może też urosnąć na miejscu — tego radar nie zapowie. Radar 13:05 · 5 min · IMGW ✕ · wyładowania ✕",
-    "statusRow": "Radar 13:05 · 5 min · IMGW ✕ · wyładowania ✕"
+    "sheetText": "Czysto CZYSTO Poznań Za ile teraz Szansa 10% 13:15 13:45 14:15 14:45 Idzie od zachodu na wschód · 37 km/h · echo 2 km Spodziewaj się: słabego deszczu Komórka może też urosnąć na miejscu — tego radar nie zapowie. Radar 13:15 · 2 min · IMGW ✕ · wyładowania ✕",
+    "statusRow": "Radar 13:15 · 2 min · IMGW ✕ · wyładowania ✕"
   },
   "ticks": {
     "present": true,
-    "aria": "Opad od 13:05 do 13:20, najsilniej ok. 13:05",
+    "aria": "Opad od 13:15 do 14:40, najsilniej ok. 14:30",
     "ticks": [
-      "13:05",
-      "13:35",
-      "14:05",
-      "14:35"
+      "13:15",
+      "13:45",
+      "14:15",
+      "14:45"
     ],
     "hasNowCursor": true
   }

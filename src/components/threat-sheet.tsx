@@ -445,7 +445,10 @@ function Strip({
   return (
     <div className={cn(interactive && "rounded-2xl bg-surface-2 px-3 py-2", className)}>
       {interactive ? (
-        <p className={cn("text-xs text-faint", extrasClass)}>Opad nad pinezką · 90 min</p>
+        <div className={cn("flex items-baseline justify-between gap-2 text-xs text-faint", extrasClass)}>
+          <span>Opad nad pinezką · 90 min</span>
+          <span>{advected ? "z ruchu echa" : "bez ruchu — jak teraz"}</span>
+        </div>
       ) : null}
       <div className={cn("relative", interactive && "sm:mt-2")}>
         <div
@@ -517,8 +520,7 @@ function Strip({
               {levelLabelPl(l.level)} {l.range}
             </span>
           ))}
-          <span className="ml-auto">{advected ? "z ruchu echa" : "bez ruchu — jak teraz"}</span>
-          {!any ? <span className="w-full">nic w oknie 90 min</span> : null}
+          {!any ? <span className="ml-auto">nic w oknie 90 min</span> : null}
         </div>
       ) : null}
     </div>
