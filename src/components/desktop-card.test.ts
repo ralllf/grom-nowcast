@@ -107,6 +107,16 @@ describe("desktop card is two columns of the page (§ pin card at 1280)", () => 
     assert.match(tailDisclosure(), /SHEET_CELL_FULL_CLASS|sm:col-span-2/);
   });
 
+  it("keeps every gated flex row flex on the card — cn() resolves hidden against flex", () => {
+    // `sheetExtrasClass` contributes `hidden`, so tailwind-merge drops the row's
+    // `flex`: the strip caption, the rain legend and the rain-motion button all
+    // laid out as blocks on the card until they re-asserted their display.
+    const blocks = [...SHEET.matchAll(/className=\{cn\(([\s\S]*?)\n\s*\)\}/g)].map((m) => m[1]);
+    const gatedFlex = blocks.filter((b) => /extrasClass/.test(b) && /"[^"]*\bflex\b[^"]*"/.test(b));
+    assert.equal(gatedFlex.length, 3, "expected the strip caption, the legend and the motion button");
+    for (const row of gatedFlex) assert.match(row, /"sm:flex"/);
+  });
+
   it("does not fake the layout with zoom or transform: scale", () => {
     for (const src of [SHEET, APP]) {
       assert.doesNotMatch(src, /\bzoom-\[|\bzoom:\s*\d/);
@@ -124,19 +134,27 @@ describe("desktop card is two columns of the page (§ pin card at 1280)", () => 
 });
 
 describe("no scroller inside the desktop card (§ 1280 overflow)", () => {
-  it("drops the sm max-height clamp and the sm scroller", () => {
-    assert.doesNotMatch(SHEET, /sm:overflow-y-auto/);
-    assert.doesNotMatch(SHEET, /sm:max-h-\[calc\(100dvh-20rem\)\]/);
-    assert.match(SHEET_CARD_CLASS, /sm:max-h-none/);
-    assert.match(SHEET_CARD_CLASS, /sm:overflow-visible/);
+  it("takes the card off the detent heights so its content decides the size", () => {
     assert.match(SHEET, /SHEET_CARD_CLASS/);
+    assert.match(SHEET_CARD_CLASS, /sm:min-h-0/);
+    assert.doesNotMatch(SHEET_CARD_CLASS, /sm:max-h-\[\d+px\]|sm:max-h-\[\d+dvh\]/);
+    // The clamp is the short-window guard, not the layout: it must leave the map
+    // chrome (radar pill at top-28, chip stack at top-40) uncovered.
+    const clamp = SHEET_CARD_CLASS.match(/sm:max-h-\[calc\(100dvh-(\d+)rem\)\]/);
+    assert.ok(clamp, "expected a viewport clamp on the card");
+    assert.ok(Number(clamp[1]) >= 16, `clamp ${clamp[1]}rem must leave room for the map chrome`);
   });
 
-  it("leaves exactly one scroller in the sheet — the phone block", () => {
+  it("keeps the answer, the strip and the tail summary short enough to fit", () => {
+    // Runtime proof that the scroller never engages at 1280×800 is the
+    // verify-grom drive (`card.json`: cardOverflowPx 0, innerScrollers 0).
+    // Here: nothing but the phone block and the card carries a scroller, and the
+    // tail that used to overflow the card is behind the disclosure.
     const scrollers = SHEET.match(/overflow-y-auto/g) ?? [];
-    assert.equal(scrollers.length, 1, "the phone expanded block is the only scroller");
-    assert.match(cardBlock(), /overflow-y-auto/);
+    assert.equal(scrollers.length, 1, "the phone block is the only scroller in the markup");
+    assert.match(SHEET_CARD_CLASS, /sm:overflow-y-auto/);
     assert.match(cardBlock(), /sm:overflow-visible/);
+    assert.doesNotMatch(firstScreen(), /SHEET_DATA_DETAILS|SHEET_CREDIT_LINE/);
   });
 
   it("adds no fourth detent to make the card fit", () => {

@@ -330,6 +330,7 @@ export function ThreatSheet({
               "mt-3 flex min-h-9 w-full items-center justify-center rounded-xl bg-surface-2 px-3 text-xs font-medium text-accent hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50",
               extrasClass,
               SHEET_CELL_FULL_CLASS,
+              "sm:flex",
             )}
           >
             Pokaż ruch opadu na mapie
@@ -479,9 +480,19 @@ function Strip({
   return (
     <div className={cn(interactive && "rounded-2xl bg-surface-2 px-3 py-2", className)}>
       {interactive ? (
-        <div className={cn("flex items-baseline justify-between gap-2 text-xs text-faint", extrasClass)}>
-          <span>Opad nad pinezką · 90 min</span>
-          <span>{advected ? "z ruchu echa" : "bez ruchu — jak teraz"}</span>
+        <div
+          className={cn(
+            "flex flex-wrap items-baseline justify-between gap-x-2 text-xs text-faint",
+            // extrasClass carries `hidden`, which cn() resolves against `flex`.
+            // Re-assert the row's display or the card lays this out as a block.
+            extrasClass,
+            "sm:flex",
+          )}
+        >
+          <span className="whitespace-nowrap">Opad nad pinezką · 90 min</span>
+          <span className="whitespace-nowrap">
+            {advected ? "z ruchu echa" : "bez ruchu — jak teraz"}
+          </span>
         </div>
       ) : null}
       <div className={cn("relative", interactive && "sm:mt-2")}>
@@ -543,6 +554,7 @@ function Strip({
           className={cn(
             "mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-faint",
             extrasClass,
+            "sm:flex",
           )}
         >
           {LEGEND.map((l) => (

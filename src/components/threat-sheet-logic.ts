@@ -189,11 +189,14 @@ export const SHEET_DETENT_CLASS: Record<SheetDetent, string> = {
 };
 
 /**
- * Detents belong to the phone sheet. From `sm` up the pin card is a page block:
- * it sizes to its own content instead of clamping to a detent height, so the
- * card never becomes a phone card with its own scrollbar inside a laptop.
+ * Detents belong to the phone sheet. From `sm` up the pin card sizes to its own
+ * content: the answer, the strip, the caveat and the status row, with the long
+ * tail behind `O danych ›`. That fits, so the scroller below never engages on
+ * the first screen — it is the guard for a reader who opens the tail on a short
+ * window, where the app root (`h-dvh overflow-hidden`) would otherwise carry the
+ * top of the card off the page.
  */
-export const SHEET_CARD_CLASS = "sm:min-h-0 sm:max-h-none sm:overflow-visible";
+export const SHEET_CARD_CLASS = "sm:min-h-0 sm:max-h-[calc(100dvh-18rem)] sm:overflow-y-auto";
 
 /**
  * The sm+ card is two columns: the answer and the Idzie od box on the left, the
@@ -201,9 +204,10 @@ export const SHEET_CARD_CLASS = "sm:min-h-0 sm:max-h-none sm:overflow-visible";
  * `sm` the same DOM stacks in reading order, so the phone sheet is unchanged.
  */
 export const SHEET_CARD_GRID_CLASS =
-  "sm:grid sm:grid-cols-[minmax(0,17rem)_minmax(0,1fr)] sm:items-start sm:gap-x-5 sm:gap-y-2.5";
+  "sm:grid sm:grid-cols-[minmax(0,16rem)_minmax(0,1fr)] sm:items-start sm:gap-x-4 sm:gap-y-2.5";
 export const SHEET_CELL_ANSWER_CLASS = "sm:col-start-1 sm:row-start-1";
-export const SHEET_CELL_STRIP_CLASS = "sm:col-start-2 sm:row-start-1 sm:row-span-2";
+/** `min-w-0`: a grid item defaults to min-content, and the caption does not wrap. */
+export const SHEET_CELL_STRIP_CLASS = "sm:col-start-2 sm:row-start-1 sm:row-span-2 sm:min-w-0";
 export const SHEET_CELL_BOX_CLASS = "sm:col-start-1 sm:row-start-2 sm:mt-0";
 /** Caveat, IMGW lane, status row and the tail disclosure: one full-width row each. */
 export const SHEET_CELL_FULL_CLASS = "sm:col-span-2 sm:mt-0";

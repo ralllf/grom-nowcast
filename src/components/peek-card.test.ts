@@ -72,10 +72,10 @@ describe("peek is the product (§3 above-the-fold)", () => {
     assert.doesNotMatch(peek, /overflow-y-auto|overflow-auto|overflow-scroll/);
     assert.doesNotMatch(peek, /<button/);
     assert.match(SHEET_DETENT_CLASS.peek, /overflow-hidden/);
-    // The one scroller in the sheet is the phone expanded block, hidden while
-    // peeking. The sm+ card uses the page — see desktop-card.test.ts.
+    // The one scroller in the markup is the expanded block, hidden while peeking.
+    // The sm+ card keeps its own short-window guard in `SHEET_CARD_CLASS`.
     const scrollers = SHEET.match(/overflow-y-auto/g) ?? [];
-    assert.equal(scrollers.length, 1, "expected overflow-y-auto only on the phone expanded block");
+    assert.equal(scrollers.length, 1, "expected overflow-y-auto only on the expanded block");
     assert.match(SHEET, /!open && "hidden"/);
   });
 
