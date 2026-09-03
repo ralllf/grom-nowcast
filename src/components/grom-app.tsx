@@ -73,15 +73,16 @@ const RAW_FOCUS =
 const CHIP =
   `inline-flex min-h-9 items-center justify-center rounded-full px-3 text-xs font-medium ${RAW_FOCUS}`;
 const MAP_CHIP =
-  `pointer-events-auto flex min-h-9 items-center gap-2 rounded-full bg-surface/90 px-3 text-xs shadow-[0_0_0_1px_rgba(255,255,255,0.08)] backdrop-blur-md ${RAW_FOCUS}`;
+  `pointer-events-auto flex min-h-9 items-center gap-2 rounded-full bg-surface/90 px-3 text-xs shadow-chip backdrop-blur-md ${RAW_FOCUS}`;
 /** Chip swatches. IMGW rides the warn token (its degree-1 tint); vermilion belongs to rain-4. */
 const IMGW_CHIP_ON = "var(--color-warn)";
 const CHIP_OFF = "var(--color-faint)";
 
-const ALERT_TONE: Record<AlertKind, string> = {
-  incoming: "border-warn/60 bg-surface/95",
-  now: "border-danger bg-surface/95",
-  allclear: "border-ok/60 bg-surface/95",
+/** The banner card stays white; the alert kind tints only its icon disc. */
+const ALERT_ICON_TONE: Record<AlertKind, string> = {
+  incoming: "bg-warn/15 text-warn",
+  now: "bg-danger/15 text-danger",
+  allclear: "bg-ok/15 text-ok",
 };
 
 function AlertIcon({ kind }: { kind: AlertKind }) {
@@ -449,12 +450,15 @@ export function GromApp() {
         }}
       />
 
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-2/5 bg-linear-to-t from-bg/50 to-transparent" />
-
       <header className="pointer-events-none absolute inset-x-0 top-0 z-10 p-3 pt-[max(0.75rem,env(safe-area-inset-top))] sm:p-5">
         <div className="mx-auto flex max-w-6xl items-start justify-between gap-3">
-          <div className="pointer-events-auto flex items-center gap-1.5 rounded-full bg-surface/85 px-3 py-2 shadow-[0_0_0_1px_rgba(255,255,255,0.08)] backdrop-blur-md">
-            <Zap className="size-4 text-accent" aria-hidden />
+          <div className="pointer-events-auto flex items-center gap-2.5 rounded-full bg-surface/90 py-1.5 pl-1.5 pr-4 shadow-chip backdrop-blur-md">
+            <span
+              className="grid size-8 place-items-center rounded-full bg-accent text-accent-fg"
+              aria-hidden
+            >
+              <Zap className="size-4" aria-hidden />
+            </span>
             <h1 className="font-display text-lg font-semibold leading-none tracking-tight">
               GROM
             </h1>
@@ -483,8 +487,8 @@ export function GromApp() {
       </header>
 
       {slider.length > 1 ? (
-        <div className="pointer-events-none absolute inset-x-0 top-24 z-10 flex justify-center px-3 sm:top-28">
-          <div className="pointer-events-auto flex max-w-md items-center gap-3 rounded-full bg-surface/85 px-4 py-2 shadow-[0_0_0_1px_rgba(255,255,255,0.08)] backdrop-blur-md">
+        <div className="pointer-events-none absolute inset-x-0 top-24 z-10 flex justify-center px-3">
+          <div className="pointer-events-auto flex max-w-md items-center gap-3 rounded-full bg-surface/90 px-4 py-2 shadow-chip backdrop-blur-md">
             <Radar className="size-4 text-accent" />
             <input
               type="range"
@@ -498,11 +502,11 @@ export function GromApp() {
             <span className="w-12 text-right font-mono text-xs tabular-nums text-muted">
               {activeSlider?.time != null ? formatRadarClock(activeSlider.time) : "—"}
             </span>
-            <span className="max-w-[9rem] truncate text-[10px] text-faint" aria-label="Źródło radaru na mapie">
+            <span className="max-w-[9rem] truncate text-xs text-faint" aria-label="Źródło radaru na mapie">
               {radarPaintWho(radarPaint)}
             </span>
             {radarDegraded ? (
-              <span className="text-[10px] text-faint" title="Brakowało kafelka radaru">
+              <span className="text-xs text-faint" title="Brakowało kafelka radaru">
                 niepełne
               </span>
             ) : null}
@@ -515,12 +519,14 @@ export function GromApp() {
           <div
             role="status"
             aria-live="assertive"
-            className={cn(
-              "pointer-events-auto flex w-full max-w-md items-start gap-3 rounded-2xl border p-3 shadow-[0_8px_30px_rgba(0,0,0,0.35)] backdrop-blur-md",
-              ALERT_TONE[activeAlert.kind],
-            )}
+            className="pointer-events-auto flex w-full max-w-md items-start gap-3 rounded-3xl bg-surface/95 p-4 shadow-card backdrop-blur-xl"
           >
-            <div className="mt-0.5 shrink-0">
+            <div
+              className={cn(
+                "grid size-9 shrink-0 place-items-center rounded-full",
+                ALERT_ICON_TONE[activeAlert.kind],
+              )}
+            >
               <AlertIcon kind={activeAlert.kind} />
             </div>
             <div className="min-w-0 flex-1">
@@ -528,7 +534,7 @@ export function GromApp() {
                 {activeAlert.title}
               </p>
               <p className="mt-1 text-xs leading-relaxed text-muted">{activeAlert.body}</p>
-              <p className="mt-1 font-mono text-[11px] text-faint">
+              <p className="mt-1 font-mono text-xs text-faint">
                 {formatAlertTime(activeAlert.at)} · {activeAlert.placeLabel}
               </p>
             </div>
@@ -536,7 +542,7 @@ export function GromApp() {
               type="button"
               onClick={dismissAlert}
               aria-label="Zamknij alert"
-              className={cn("shrink-0 rounded-full p-1 text-faint hover:bg-surface-2 hover:text-fg", RAW_FOCUS)}
+              className={cn("shrink-0 rounded-full p-1.5 text-faint hover:bg-surface-2 hover:text-fg", RAW_FOCUS)}
             >
               <X className="size-4" />
             </button>
@@ -553,7 +559,7 @@ export function GromApp() {
           )}
         >
           {tracks.length > 0 ? (
-            <div className="pointer-events-auto flex min-h-9 items-center gap-1 rounded-full bg-surface/90 px-1 text-xs shadow-[0_0_0_1px_rgba(255,255,255,0.08)] backdrop-blur-md">
+            <div className="pointer-events-auto flex min-h-9 items-center gap-1 rounded-full bg-surface/90 px-1 text-xs shadow-chip backdrop-blur-md">
               <button
                 type="button"
                 aria-pressed={tracksMap}
@@ -561,7 +567,7 @@ export function GromApp() {
                 className={cn("flex min-h-9 items-center gap-2 px-2", RAW_FOCUS)}
               >
                 <span
-                  className="inline-block size-2.5 rounded-full ring-2 ring-fg"
+                  className="inline-block size-2.5 rounded-full"
                   style={{ backgroundColor: tracksMap ? "#f0a202" : CHIP_OFF }}
                 />
                 <span className={tracksMap ? "text-fg" : "text-muted"}>tor komórki</span>
@@ -583,7 +589,7 @@ export function GromApp() {
               className={MAP_CHIP}
             >
               <span
-                className="inline-block size-2.5 rounded-sm ring-2 ring-fg"
+                className="inline-block size-2.5 rounded-sm"
                 style={{ backgroundColor: imgwMap ? IMGW_CHIP_ON : CHIP_OFF }}
               />
               <span className={imgwMap ? "text-fg" : "text-muted"}>IMGW</span>
@@ -597,7 +603,7 @@ export function GromApp() {
               className={MAP_CHIP}
             >
               <span
-                className="inline-block size-2.5 rounded-full ring-2 ring-fg"
+                className="inline-block size-2.5 rounded-full"
                 style={{ backgroundColor: drizzleMap ? "#36bae5" : CHIP_OFF }}
               />
               <span className={drizzleMap ? "text-fg" : "text-muted"}>Pokaż mżawkę</span>
@@ -630,10 +636,10 @@ export function GromApp() {
             })}
           />
 
-          <aside className="pointer-events-auto hidden max-h-72 overflow-y-auto rounded-3xl bg-surface/85 p-4 shadow-[0_0_0_1px_rgba(255,255,255,0.08)] backdrop-blur-md sm:block">
-            <div className="mb-3 flex items-center justify-between gap-2">
-              <h3 className="text-sm font-medium">Ostrzeżenia IMGW</h3>
-              {imgwCountLine ? <span className="text-xs text-muted">{imgwCountLine}</span> : null}
+          <aside className="pointer-events-auto hidden rounded-3xl bg-surface/92 p-4 shadow-card backdrop-blur-xl sm:block lg:w-[21rem] lg:justify-self-end">
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <h3 className="text-sm font-semibold">Ostrzeżenia IMGW</h3>
+              {imgwCountLine ? <span className="text-xs text-faint">{imgwCountLine}</span> : null}
             </div>
             {snapshot?.warningsUnavailable ? (
               <p className="text-sm text-warn">{IMGW_WARNINGS_UNAVAILABLE}</p>
@@ -642,17 +648,17 @@ export function GromApp() {
             ) : shownWarnings.length === 0 ? (
               <p className="text-sm text-muted">Brak aktywnych ostrzeżeń burzowych.</p>
             ) : (
-              <ul className="space-y-3">
-                {shownWarnings.slice(0, 4).map((w) => (
-                  <li key={w.id} className="rounded-xl bg-surface-2 p-3">
+              <ul className="divide-y divide-border/70">
+                {shownWarnings.slice(0, 2).map((w) => (
+                  <li key={w.id} className="py-2.5 first:pt-0 last:pb-0">
                     <div className="flex items-center justify-between gap-2">
-                      <p className="text-sm font-medium">{w.event}</p>
+                      <p className="min-w-0 truncate text-sm font-medium">{w.event}</p>
                       <Badge tone={w.degree >= 2 ? "danger" : "warn"}>stopień {w.degree}</Badge>
                     </div>
                     <p className="mt-1 text-xs text-muted">{formatImgwRange(w.from, w.to)}</p>
-                    <p className="mt-2 text-xs leading-relaxed text-fg/80">{w.body}</p>
+                    <p className="mt-1.5 line-clamp-2 text-xs leading-relaxed text-fg/80">{w.body}</p>
                     {!w.matchesPlace ? (
-                      <p className="mt-2 text-xs text-faint">Inny powiat — podgląd krajowy.</p>
+                      <p className="mt-1.5 text-xs text-faint">Inny powiat — podgląd krajowy.</p>
                     ) : null}
                   </li>
                 ))}
@@ -664,7 +670,7 @@ export function GromApp() {
 
       {settingsOpen ? (
         <div
-          className="absolute inset-0 z-20 flex items-end justify-center bg-bg/60 p-3 sm:items-center"
+          className="absolute inset-0 z-20 flex items-end justify-center bg-[#101d26]/45 p-3 backdrop-blur-sm sm:items-center"
           onClick={(e) => {
             if (isSettingsScrimClick(e.target, e.currentTarget)) setSettingsOpen(false);
           }}
@@ -675,7 +681,7 @@ export function GromApp() {
             aria-modal={true}
             aria-labelledby="settings-title"
             tabIndex={-1}
-            className="w-full max-w-lg max-h-[min(40rem,88dvh)] overflow-y-auto rounded-3xl bg-surface p-5 shadow-[0_0_0_1px_rgba(255,255,255,0.08)]"
+            className="w-full max-w-lg max-h-[min(40rem,88dvh)] overflow-y-auto rounded-[28px] bg-surface p-6 shadow-card"
             onKeyDown={(e) => {
               if (shouldCloseSettingsOnKey(e.key)) {
                 e.preventDefault();
@@ -728,7 +734,7 @@ export function GromApp() {
                     value={query}
                     onChange={(e) => setQuery(e.target.value)}
                     placeholder="Szukaj miasta w Polsce"
-                    className="h-11 w-full rounded-xl border border-border bg-surface-2 pl-10 pr-3 text-sm text-fg placeholder:text-faint focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+                    className="h-11 w-full rounded-full border border-transparent bg-surface-2 pl-10 pr-3 text-sm text-fg placeholder:text-faint focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
                   />
                 </label>
                 <Button type="submit" disabled={searchMut.isPending}>
@@ -743,12 +749,12 @@ export function GromApp() {
               ) : null}
 
               {searchMut.data && searchMut.data.length > 0 ? (
-                <ul className="mt-3 max-h-40 overflow-y-auto rounded-xl bg-surface-2">
+                <ul className="mt-3 max-h-40 overflow-y-auto rounded-2xl bg-surface-2 p-1">
                   {searchMut.data.map((p) => (
                     <li key={`${p.lat}-${p.lon}-${p.label}`}>
                       <button
                         type="button"
-                        className={cn("w-full px-3 py-2.5 text-left text-sm hover:bg-bg", RAW_FOCUS)}
+                        className={cn("w-full rounded-xl px-3 py-2.5 text-left text-sm hover:bg-surface", RAW_FOCUS)}
                         onClick={() => pickPlace(p)}
                       >
                         {p.label}
@@ -780,7 +786,9 @@ export function GromApp() {
                     onClick={() => pickPlace(c)}
                     className={cn(
                       CHIP,
-                      place.label === c.label ? "bg-accent text-accent-fg" : "bg-surface-2 text-fg",
+                      place.label === c.label
+                        ? "bg-accent text-accent-fg"
+                        : "bg-surface-2 text-fg hover:bg-border/60",
                     )}
                   >
                     {c.label}
@@ -791,7 +799,7 @@ export function GromApp() {
 
             <section aria-labelledby="settings-alerty" className="mt-5">
               <h3 id="settings-alerty" className="font-display text-base font-semibold">Alerty</h3>
-            <div className="mt-3 rounded-xl bg-surface-2 px-3 py-3">
+            <div className="mt-3 rounded-2xl bg-surface-2 px-4 py-4">
               <div className="flex items-center justify-between gap-3">
                 <div>
                   <p className="text-sm font-medium">Alerty na pinezkę</p>
@@ -929,7 +937,7 @@ export function GromApp() {
                     ) : null}
                   </div>
 
-                  <details className="rounded-xl bg-surface px-3 py-2">
+                  <details className="rounded-2xl bg-surface px-3.5 py-2.5">
                     <summary className="cursor-pointer text-sm font-medium">Zaawansowane</summary>
                     <div className="mt-3 space-y-4">
                       <label className="block text-sm">
@@ -1049,7 +1057,7 @@ function HourSelect({ value, onChange }: { value: number; onChange: (h: number) 
     <select
       value={value}
       onChange={(e) => onChange(Number(e.target.value))}
-      className={cn("h-8 rounded-lg border border-border bg-surface px-2 font-mono text-xs text-fg", RAW_FOCUS)}
+      className={cn("h-9 rounded-xl border border-transparent bg-surface-2 px-2.5 font-mono text-xs text-fg", RAW_FOCUS)}
     >
       {Array.from({ length: 24 }, (_, h) => (
         <option key={h} value={h}>

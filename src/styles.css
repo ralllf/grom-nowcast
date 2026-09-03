@@ -2,19 +2,20 @@
 @import "maplibre-gl/dist/maplibre-gl.css";
 
 @theme {
-  --color-bg: #07090c;
+  /* Daylight theme: the map is the page; UI floats as white paper cards. */
+  --color-bg: #e9edf1;
   --color-map: #e8edf2;
-  --color-surface: #12171f;
-  --color-surface-2: #1a212c;
-  --color-fg: #e8edf2;
-  --color-muted: #8b95a3;
-  --color-faint: #7a8593;
-  --color-border: #2a3340;
-  --color-accent: #6ec8d4;
-  --color-accent-fg: #071114;
-  --color-danger: #e25c4a;
-  --color-warn: #c9a36a;
-  --color-ok: #5ea88a;
+  --color-surface: #ffffff;
+  --color-surface-2: #edf1f5;
+  --color-fg: #17242e;
+  --color-muted: #4b5a68;
+  --color-faint: #5d6b77;
+  --color-border: #d9e1e8;
+  --color-accent: #0e7a8a;
+  --color-accent-fg: #ffffff;
+  --color-danger: #c93318;
+  --color-warn: #8f6108;
+  --color-ok: #177b4c;
   --color-vector: #f0a202;
 
   --font-sans: "Sora", ui-sans-serif, system-ui, sans-serif;
@@ -26,6 +27,10 @@
   --radius-lg: 16px;
   --radius-xl: 24px;
   --radius-3xl: 28px;
+
+  /* Soft elevation instead of 1px ring hairlines. */
+  --shadow-chip: 0 1px 2px rgb(15 35 50 / 0.07), 0 6px 16px -6px rgb(15 35 50 / 0.16);
+  --shadow-card: 0 1px 2px rgb(15 35 50 / 0.06), 0 20px 48px -16px rgb(15 35 50 / 0.22);
 }
 
 @layer base {
@@ -63,8 +68,33 @@
   button:focus-visible,
   [role="button"]:focus-visible,
   input[type="range"]:focus-visible {
-    outline: 2px solid color-mix(in oklab, var(--color-accent) 50%, transparent);
+    outline: 2px solid color-mix(in oklab, var(--color-accent) 55%, transparent);
     outline-offset: 2px;
+  }
+}
+
+/* Threat-level wash: a soft tint at the top of the sheet card, gone by 9rem.
+   The state of the sky tints the answer; the card itself stays white. */
+@layer components {
+  .sheet-wash {
+    background-image: linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--wash) 9%, transparent),
+      color-mix(in srgb, var(--wash) 0%, transparent) 9rem
+    );
+  }
+  .level-clear {
+    --wash: var(--color-ok);
+  }
+  .level-watch {
+    --wash: var(--color-warn);
+  }
+  .level-nearby {
+    --wash: var(--color-accent);
+  }
+  .level-imminent,
+  .level-now {
+    --wash: var(--color-danger);
   }
 }
 

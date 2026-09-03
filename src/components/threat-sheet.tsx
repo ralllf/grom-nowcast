@@ -51,12 +51,13 @@ const TONE: Record<ThreatLevel, "ok" | "warn" | "danger" | "accent" | "mute"> = 
   now: "danger",
 };
 
+/** The sky tints the top of the white card — glanceable state without a hairline border. */
 const PANEL: Record<ThreatLevel, string> = {
-  clear: "border-ok/30",
-  watch: "border-warn/40",
-  nearby: "border-accent/40",
-  imminent: "border-danger/50",
-  now: "border-danger",
+  clear: "sheet-wash level-clear",
+  watch: "sheet-wash level-watch",
+  nearby: "sheet-wash level-nearby",
+  imminent: "sheet-wash level-imminent",
+  now: "sheet-wash level-now",
 };
 
 const SM_UP = "(min-width: 640px)";
@@ -181,12 +182,13 @@ export function ThreatSheet({
     <article
       id="grom-threat-sheet"
       className={cn(
-        "pointer-events-auto border bg-surface/90 shadow-[0_0_0_1px_rgba(255,255,255,0.08)] backdrop-blur-md",
-        "flex flex-col rounded-t-3xl pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:block sm:rounded-3xl sm:p-5 sm:pb-5",
+        "pointer-events-auto bg-surface/92 shadow-card backdrop-blur-xl",
+        "flex flex-col rounded-t-3xl pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:block sm:rounded-3xl sm:p-5",
         SHEET_DETENT_CLASS[detent],
         detent === "peek" && "min-h-24",
-        "sm:min-h-0 sm:max-h-[calc(100dvh-20rem)] sm:overflow-y-auto",
-        threat ? PANEL[threat.level] : "border-transparent",
+        // Desktop is one content-sized card — the answer never scrolls inside it.
+        "sm:min-h-0 sm:max-h-none",
+        threat ? PANEL[threat.level] : "",
       )}
     >
       <button
@@ -200,7 +202,7 @@ export function ThreatSheet({
         onPointerUp={onHandlePointerUp}
         onClick={onHandleClick}
       >
-        <span className="mx-auto mt-1.5 mb-0.5 h-1 w-10 rounded-full bg-faint" aria-hidden />
+        <span className="mx-auto mt-1.5 mb-0.5 h-1 w-10 rounded-full bg-faint/50" aria-hidden />
         {!open ? (
           // Every row here is measured: headline, place, hero and strip fit 128px.
           <div className="px-4 pb-1.5 text-left">
@@ -221,7 +223,7 @@ export function ThreatSheet({
 
       <div
         className={cn(
-          // One scroller per breakpoint: this block on a phone, the article on sm+.
+          // One scroller per breakpoint: this block on a phone; the desktop card sizes to content.
           "min-h-0 flex-1 overflow-y-auto overscroll-contain p-4",
           !open && "hidden",
           "sm:block sm:overflow-visible sm:p-0",
@@ -241,7 +243,7 @@ export function ThreatSheet({
         />
 
         {threat && (threat.comingFrom || threat.expect || trendLine || threat.nearestKm != null) ? (
-          <div className="mt-2.5 space-y-1 rounded-2xl bg-surface-2 px-3 py-2.5 text-sm leading-relaxed">
+          <div className="mt-2.5 space-y-1 rounded-2xl bg-surface-2 px-3.5 py-3 text-sm leading-relaxed">
             {threat.comingFrom ? (
               <p>
                 <span className="text-faint">Idzie od </span>
@@ -278,10 +280,14 @@ export function ThreatSheet({
           {honesty.radar ?? caveat}
         </p>
 
-        {imgwLine ? <p className="mt-3 text-xs leading-relaxed text-warn">{imgwLine}</p> : null}
+        {imgwLine ? (
+          <p className="mt-3 rounded-2xl bg-warn/10 px-3.5 py-2.5 text-xs leading-relaxed text-warn">
+            {imgwLine}
+          </p>
+        ) : null}
 
         {statusRow ? (
-          <p className={statusRow.tone === "warn" ? "mt-3 text-xs text-warn" : "mt-3 text-xs text-faint"}>
+          <p className={statusRow.tone === "warn" ? "mt-3 text-xs font-medium text-warn" : "mt-3 text-xs text-faint"}>
             {statusRow.text}
           </p>
         ) : null}
@@ -305,7 +311,7 @@ export function ThreatSheet({
             type="button"
             onClick={onShowRainMotion}
             className={cn(
-              "mt-3 flex min-h-9 w-full items-center justify-center rounded-xl bg-surface-2 px-3 text-xs font-medium text-accent hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50",
+              "mt-3 flex min-h-9 w-full items-center justify-center rounded-xl bg-accent/10 px-3 text-xs font-medium text-accent hover:bg-accent/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50",
               extrasClass,
             )}
           >
@@ -366,8 +372,8 @@ function Answer({
 }) {
   return (
     <>
-      <div className="flex items-start justify-between gap-2">
-        <h2 className="min-w-0 truncate font-display text-lg font-semibold leading-none tracking-tight sm:text-2xl">
+      <div className="flex items-start justify-between gap-3">
+        <h2 className="min-w-0 truncate font-display text-lg font-semibold leading-none tracking-tight sm:text-3xl">
           {headline}
         </h2>
         {threat ? (
@@ -377,14 +383,14 @@ function Answer({
         ) : null}
       </div>
       <div className="mt-0.5 flex items-baseline justify-between gap-2 text-xs leading-none">
-        <p className="min-w-0 truncate text-muted">{place.label}</p>
+        <p className="min-w-0 truncate font-medium text-fg sm:text-sm">{place.label}</p>
         {status ? (
           <p className={cn("min-w-0 truncate", status.tone === "warn" ? "text-warn" : "text-faint")}>
             {status.text}
           </p>
         ) : null}
       </div>
-      <dl className="mt-1 flex items-baseline justify-between gap-3 sm:mt-2 sm:justify-start sm:gap-8">
+      <dl className="mt-1 flex items-baseline justify-between gap-3 sm:mt-3 sm:justify-start sm:gap-10">
         <div className="flex min-w-0 items-baseline gap-2">
           <dt className="order-2 text-xs leading-none text-faint">Za ile</dt>
           <dd className={cn("order-1", SHEET_NUMBER_CLASS.hero)}>{eta}</dd>
@@ -402,7 +408,7 @@ function Answer({
           ageMin={ageMin}
           interactive={interactive}
           extrasClass={extrasClass}
-          className={interactive ? "mt-2" : "mt-1"}
+          className={interactive ? "mt-2.5" : "mt-1"}
         />
       ) : null}
     </>
@@ -443,11 +449,11 @@ function Strip({
   const aria = timelineAriaLabel(points, radarTime);
   const pickedPoint = picked != null ? points.find((p) => p.t === picked) : undefined;
   return (
-    <div className={cn(interactive && "rounded-2xl bg-surface-2 px-3 py-2", className)}>
+    <div className={cn(interactive && "rounded-2xl bg-surface-2 px-3.5 py-3", className)}>
       {interactive ? (
-        <div className={cn("flex items-baseline justify-between gap-2 text-xs text-faint", extrasClass)}>
-          <span>Opad nad pinezką · 90 min</span>
-          <span>{advected ? "z ruchu echa" : "bez ruchu — jak teraz"}</span>
+        <div className={cn("flex items-baseline justify-between gap-2 text-xs", extrasClass)}>
+          <span className="font-medium text-muted">Opad nad pinezką · 90 min</span>
+          <span className="text-faint">{advected ? "z ruchu echa" : "bez ruchu — jak teraz"}</span>
         </div>
       ) : null}
       <div className={cn("relative", interactive && "sm:mt-2")}>
@@ -496,7 +502,7 @@ function Strip({
         data-timeline-axis
         className={cn(
           "flex justify-between font-mono text-xs leading-none tabular-nums text-faint",
-          interactive ? "mt-1" : "mt-0.5",
+          interactive ? "mt-1.5" : "mt-0.5",
         )}
       >
         <span>{wallClockAxisLabel(0, radarTime)}</span>
