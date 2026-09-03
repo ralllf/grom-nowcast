@@ -19,9 +19,10 @@ function arg(name, fallback) {
 }
 
 if (process.argv.includes("--help") || process.argv.includes("-h")) {
-  process.stdout.write(`drive.mjs --feature location-pin|radar-map|pin-alerts [--base URL] [--out DIR]
+  process.stdout.write(`drive.mjs --feature location-pin|radar-map|pin-alerts|nowcast-threat-sheet [--base URL] [--out DIR] [--viewport WxH]
 
-Features: location-pin, radar-map, pin-alerts
+Features: location-pin, radar-map, pin-alerts, nowcast-threat-sheet
+Viewport: 1280x800 by default; nowcast-threat-sheet drives the phone sheet at 390x844.
 Chrome: system google-chrome / google-chrome-stable. User-data-dir under ${RUN_DIR}/chrome-profile.
 `);
   process.exit(0);
@@ -32,10 +33,22 @@ const BASE = (arg("--base", process.env.BASE || "http://127.0.0.1:8080")).replac
 const runId = new Date().toISOString().replace(/[-:]/g, "").replace("T", "-").slice(0, 15);
 const OUT = arg("--out", join(ROOT, ".cursor/skills/verify-grom/evidence", runId));
 
-if (FEATURE !== "location-pin" && FEATURE !== "radar-map" && FEATURE !== "pin-alerts") {
-  console.error(`Unknown feature '${FEATURE}'. Shipped drivers: location-pin, radar-map, pin-alerts`);
+const FEATURES = ["location-pin", "radar-map", "pin-alerts", "nowcast-threat-sheet"];
+if (!FEATURES.includes(FEATURE)) {
+  console.error(`Unknown feature '${FEATURE}'. Shipped drivers: ${FEATURES.join(", ")}`);
   process.exit(2);
 }
+
+/** The peek card only exists below sm (640px), so the sheet feature drives a phone. */
+const DEFAULT_VIEWPORT = FEATURE === "nowcast-threat-sheet" ? "390x844" : "1280x800";
+const viewportArg = arg("--viewport", DEFAULT_VIEWPORT);
+const vp = /^(\d+)x(\d+)$/.exec(viewportArg);
+if (!vp) {
+  console.error(`--viewport must look like 390x844, got '${viewportArg}'`);
+  process.exit(2);
+}
+const VIEWPORT = { width: Number(vp[1]), height: Number(vp[2]) };
+const PHONE = VIEWPORT.width < 640;
 
 const CHROME =
   process.env.CHROME ||
@@ -85,6 +98,53 @@ const TICKS_JS = `(() => {
 function ticksLookLikeMinutes(ticks) {
   return ticks.some((t) => /min|teraz/i.test(t) || !CLOCK_TICK_RE.test(t));
 }
+
+/** Sheet geometry + the peek card's own facts: hero size, clipping, nested scrollers. */
+const SHEET_STATE_JS = `(() => {
+  const sheet = document.querySelector("#grom-threat-sheet");
+  if (!sheet) return null;
+  const handle = sheet.querySelector('button[aria-controls="grom-threat-sheet"]');
+  const handleVisible = !!handle && getComputedStyle(handle).display !== "none";
+  const ariaExpanded = handle ? handle.getAttribute("aria-expanded") : null;
+  const peek = handleVisible && ariaExpanded === "false" ? handle : null;
+  const px = (el) => (el ? Math.round(parseFloat(getComputedStyle(el).fontSize)) : null);
+  const valueFor = (label) => {
+    for (const dt of sheet.querySelectorAll("dt")) {
+      if (dt.textContent.trim() !== label) continue;
+      const dd = dt.parentElement.querySelector("dd");
+      if (dd && dd.offsetParent !== null) return { text: dd.textContent.trim(), px: px(dd) };
+    }
+    return null;
+  };
+  const nestedScrollers = peek
+    ? [...peek.querySelectorAll("*")].filter(
+        (el) =>
+          /auto|scroll/.test(getComputedStyle(el).overflowY) &&
+          el.scrollHeight - el.clientHeight > 2,
+      ).length
+    : null;
+  const chip = [...sheet.querySelectorAll("span")]
+    .map((s) => (s.innerText || "").trim())
+    .find((t) => /^(TERAZ|ZARAZ|BLISKO|CZYSTO)$/.test(t));
+  return {
+    peeking: !!peek,
+    handleVisible,
+    ariaExpanded,
+    detentClass: [...sheet.classList].filter((c) => c.startsWith("max-h-")).join(" "),
+    sheetHeight: Math.round(sheet.getBoundingClientRect().height),
+    sheetClippedPx: sheet.scrollHeight - sheet.clientHeight,
+    viewportHeight: window.innerHeight,
+    peekNestedScrollers: nestedScrollers,
+    peekNestedButtons: peek ? peek.querySelectorAll("button").length : null,
+    peekText: peek ? peek.innerText.replace(/\\s+/g, " ").trim() : null,
+    zaIle: valueFor("Za ile"),
+    szansa: valueFor("Szansa"),
+    chip: chip || null,
+    sheetText: sheet.innerText.replace(/\\s+/g, " ").trim(),
+  };
+})()`;
+
+const ENGLISH_LEAK_RE = /\bNOW\b|\bIMMINENT\b|\bNEARBY\b|\bETA\b|TERYT|\bECHO\b/;
 
 class Cdp {
   constructor(ws) {
@@ -262,11 +322,12 @@ try {
   await cdp.send("Page.enable");
   await cdp.send("Runtime.enable");
   await cdp.send("Emulation.setDeviceMetricsOverride", {
-    width: 1280,
-    height: 800,
-    deviceScaleFactor: 1,
-    mobile: false,
+    width: VIEWPORT.width,
+    height: VIEWPORT.height,
+    deviceScaleFactor: PHONE ? 2 : 1,
+    mobile: PHONE,
   });
+  step(`viewport ${VIEWPORT.width}x${VIEWPORT.height}${PHONE ? " (phone)" : ""}`);
 
   step(`navigate ${BASE}/`);
   await cdp.send("Page.navigate", { url: `${BASE}/` });
@@ -308,11 +369,21 @@ try {
     await screenshot(cdp, join(OUT, "00-failed-eta-label.png"));
     throw new Error(`sheet still shows ETA: ${JSON.stringify(trio)}`);
   }
-  if (!trio.labels.includes("Za ile") || !trio.labels.includes("Szansa")) {
+  // A phone at peek has the answer but not the expanded block, so the trio-label
+  // and status-row checks belong to the expanded sheet only.
+  const state0 = await evalExpr(cdp, SHEET_STATE_JS);
+  const collapsed = Boolean(state0?.peeking);
+  if (collapsed) {
+    step(`sheet is collapsed (${state0.detentClass}); expanded-only checks deferred`);
+    if (!state0.zaIle || !state0.szansa) {
+      await screenshot(cdp, join(OUT, "00-failed-za-ile.png"));
+      throw new Error(`peek missing Za ile / Szansa: ${JSON.stringify(state0)}`);
+    }
+  } else if (!trio.labels.includes("Za ile") || !trio.labels.includes("Szansa")) {
     await screenshot(cdp, join(OUT, "00-failed-za-ile.png"));
     throw new Error(`sheet missing Za ile / Szansa: ${JSON.stringify(trio.labels)}`);
   }
-  const statusRow = quoteStatusRow(sheet);
+  const statusRow = collapsed ? null : quoteStatusRow(sheet);
   writeFileSync(
     join(OUT, "status-row.json"),
     JSON.stringify({ when: new Date().toISOString(), pin: "Warszawa", statusRow, sheetHasAmberSentences: hasAmberOutageSentences(sheet) }, null, 2),
@@ -321,7 +392,7 @@ try {
     await screenshot(cdp, join(OUT, "00-failed-amber-sentences.png"));
     throw new Error(`sheet still has amber outage sentences: ${JSON.stringify(sheet.slice(0, 400))}`);
   }
-  if (!statusRow) {
+  if (!statusRow && !collapsed) {
     await screenshot(cdp, join(OUT, "00-failed-status-row.png"));
     throw new Error(`sheet missing status row: ${JSON.stringify(sheet.slice(0, 400))}`);
   }
@@ -486,9 +557,9 @@ try {
   } else if (FEATURE === "pin-alerts") {
     await screenshot(cdp, join(OUT, "01-sheet-before.png"));
     const sheetBefore = await evalExpr(cdp, `document.querySelector('#grom-threat-sheet')?.innerText || ''`);
-    const sheetHasStats = /szansa/i.test(sheetBefore) && /za ile/i.test(sheetBefore) && /echo/i.test(sheetBefore);
+    const sheetHasStats = /szansa/i.test(sheetBefore) && /za ile/i.test(sheetBefore);
     if (!sheetBefore.includes("Warszawa") || !sheetHasStats) {
-      throw new Error(`sheet missing Warszawa / Szansa/Za ile/Echo before alerts: ${JSON.stringify(sheetBefore.slice(0, 400))}`);
+      throw new Error(`sheet missing Warszawa / Szansa / Za ile before alerts: ${JSON.stringify(sheetBefore.slice(0, 400))}`);
     }
 
     step('click button[aria-label="Ustawienia"]');
@@ -621,22 +692,154 @@ try {
 
     const sheetAfter = (await evalExpr(cdp, `document.querySelector('#grom-threat-sheet')?.innerText || ''`)) || "";
     const sheetAfterOk =
-      sheetAfter.includes("Warszawa") &&
-      /szansa/i.test(sheetAfter) &&
-      /za ile/i.test(sheetAfter) &&
-      /echo/i.test(sheetAfter);
+      sheetAfter.includes("Warszawa") && /szansa/i.test(sheetAfter) && /za ile/i.test(sheetAfter);
     if (!sheetAfterOk) {
       await screenshot(cdp, join(OUT, "00-failed-sheet.png"));
       throw new Error(`sheet broken after pin-alerts: ${JSON.stringify(sheetAfter.slice(0, 400))}`);
     }
-    step("sheet still Warszawa + Szansa/Za ile/Echo after test alert");
+    step("sheet still Warszawa + Szansa / Za ile after test alert");
     await screenshot(cdp, join(OUT, "04-sheet-after.png"));
 
     notes.ok = true;
     notes.finishedAt = new Date().toISOString();
     notes.result =
       "Enabled pin alerts, Testuj alert showed Deszcz za ok. 18 min for Warszawa, " +
-      "dismissed banner, log + grom-alerts-v1 kept the title. Sheet still Warszawa / Szansa / Za ile / Echo.";
+      "dismissed banner, log + grom-alerts-v1 kept the title. Sheet still Warszawa / Szansa / Za ile.";
+    await cdp.send("Browser.close").catch(() => {});
+    ws.close();
+  } else if (FEATURE === "nowcast-threat-sheet") {
+    if (!PHONE) {
+      throw new Error(`nowcast-threat-sheet drives the peek card; use a viewport below 640px (got ${VIEWPORT.width})`);
+    }
+
+    async function sheetState(label) {
+      const s = await evalExpr(cdp, SHEET_STATE_JS);
+      if (!s) throw new Error("#grom-threat-sheet missing");
+      step(
+        `${label}: detent ${s.detentClass} · height ${s.sheetHeight}px · aria-expanded=${s.ariaExpanded} · chip ${s.chip ?? "none"}`,
+      );
+      if (ENGLISH_LEAK_RE.test(s.sheetText)) {
+        await screenshot(cdp, join(OUT, "00-failed-english-leak.png"));
+        throw new Error(`sheet DOM leaked NOW/IMMINENT/ETA/TERYT/ECHO at ${label}: ${JSON.stringify(s.sheetText.slice(0, 400))}`);
+      }
+      if (!s.zaIle || !s.szansa) {
+        await screenshot(cdp, join(OUT, `00-failed-numbers-${label}.png`));
+        throw new Error(`sheet missing Za ile / Szansa at ${label}: ${JSON.stringify(s)}`);
+      }
+      if (!(s.zaIle.px > s.szansa.px)) {
+        await screenshot(cdp, join(OUT, `00-failed-hero-${label}.png`));
+        throw new Error(`Za ile is not the hero number at ${label}: ${JSON.stringify({ zaIle: s.zaIle, szansa: s.szansa })}`);
+      }
+      step(`${label}: Za ile ${s.zaIle.text} @${s.zaIle.px}px > Szansa ${s.szansa.text} @${s.szansa.px}px`);
+      return s;
+    }
+
+    async function checkPeek(s) {
+      if (!s.detentClass.includes("max-h-[128px]")) {
+        throw new Error(`peek is not the 128px detent: ${JSON.stringify(s.detentClass)}`);
+      }
+      if (s.peekNestedScrollers !== 0) {
+        await screenshot(cdp, join(OUT, "00-failed-peek-scroller.png"));
+        throw new Error(`peek has a nested scroller: ${JSON.stringify(s)}`);
+      }
+      if (s.peekNestedButtons !== 0) {
+        await screenshot(cdp, join(OUT, "00-failed-peek-nested-button.png"));
+        throw new Error(`peek has ${s.peekNestedButtons} button(s) inside the drag handle`);
+      }
+      if (s.sheetClippedPx > 2) {
+        await screenshot(cdp, join(OUT, "00-failed-peek-clipped.png"));
+        throw new Error(`peek content is clipped by ${s.sheetClippedPx}px inside 128px`);
+      }
+      step(`peek fits: clipped ${s.sheetClippedPx}px, nested scrollers ${s.peekNestedScrollers}, nested buttons ${s.peekNestedButtons}`);
+      step(`peek text: ${s.peekText}`);
+    }
+
+    async function clickHandle() {
+      const clicked = await evalExpr(
+        cdp,
+        `(() => {
+          const b = document.querySelector('button[aria-controls="grom-threat-sheet"]');
+          if (!b) return "missing";
+          b.click();
+          return "clicked";
+        })()`,
+      );
+      if (clicked !== "clicked") throw new Error("sheet handle missing");
+      await sleep(400);
+    }
+
+    let peekState = null;
+    let halfState = null;
+    let first = await sheetState(state0?.peeking ? "peek" : "auto-expanded");
+    if (first.peeking) {
+      peekState = first;
+      await checkPeek(peekState);
+      await screenshot(cdp, join(OUT, "01-peek-390x844.png"));
+      step("tap the grab handle");
+      await clickHandle();
+      halfState = await sheetState("half");
+    } else {
+      halfState = first;
+      await screenshot(cdp, join(OUT, "01-auto-expanded-390x844.png"));
+      step("auto-expanded on a now/imminent pin; tap the handle back to peek");
+      await clickHandle();
+      peekState = await sheetState("peek");
+      await checkPeek(peekState);
+      await screenshot(cdp, join(OUT, "01-peek-390x844.png"));
+      await clickHandle();
+      halfState = await sheetState("half");
+    }
+
+    if (halfState.ariaExpanded !== "true") {
+      await screenshot(cdp, join(OUT, "00-failed-expand.png"));
+      throw new Error(`handle did not expand the sheet: aria-expanded=${halfState.ariaExpanded}`);
+    }
+    if (!halfState.detentClass.includes("max-h-[45dvh]")) {
+      await screenshot(cdp, join(OUT, "00-failed-half-detent.png"));
+      throw new Error(`expanded detent is not 45dvh: ${JSON.stringify(halfState.detentClass)}`);
+    }
+    const halfMax = Math.round(halfState.viewportHeight * 0.45) + 4;
+    if (halfState.sheetHeight > halfMax) {
+      await screenshot(cdp, join(OUT, "00-failed-half-height.png"));
+      throw new Error(`half detent is ${halfState.sheetHeight}px, over 45dvh (${halfMax}px)`);
+    }
+    const halfStatus = quoteStatusRow(halfState.sheetText);
+    if (!halfStatus) {
+      await screenshot(cdp, join(OUT, "00-failed-half-status.png"));
+      throw new Error(`half is missing the grey status row: ${JSON.stringify(halfState.sheetText.slice(0, 400))}`);
+    }
+    if (/Dane: IMGW-PIB|O danych/.test(halfState.sheetText)) {
+      await screenshot(cdp, join(OUT, "00-failed-half-tail.png"));
+      throw new Error(`half still prints the full-detent tail: ${JSON.stringify(halfState.sheetText.slice(0, 400))}`);
+    }
+    step(`half status row: ${halfStatus}`);
+    step(`half text: ${halfState.sheetText.slice(0, 320)}`);
+    await screenshot(cdp, join(OUT, "02-half-390x844.png"));
+
+    writeFileSync(
+      join(OUT, "peek.json"),
+      JSON.stringify(
+        {
+          when: new Date().toISOString(),
+          viewport: VIEWPORT,
+          pin: "Warszawa",
+          peek: peekState,
+          half: { ...halfState, statusRow: halfStatus },
+          ticks,
+        },
+        null,
+        2,
+      ),
+    );
+
+    notes.ok = true;
+    notes.finishedAt = new Date().toISOString();
+    notes.result =
+      `Peek at ${VIEWPORT.width}x${VIEWPORT.height}: ${peekState.detentClass}, ${peekState.sheetHeight}px, ` +
+      `no nested scroller or button, Za ile ${peekState.zaIle.text} @${peekState.zaIle.px}px over Szansa ` +
+      `${peekState.szansa.text} @${peekState.szansa.px}px, chip ${peekState.chip ?? "none"}. ` +
+      `Handle tap → ${halfState.detentClass} at ${halfState.sheetHeight}px with the status row "${halfStatus}" ` +
+      `and no Dane:/O danych tail. No NOW/IMMINENT/ETA/TERYT/ECHO in the sheet DOM.`;
     await cdp.send("Browser.close").catch(() => {});
     ws.close();
   } else {
@@ -844,6 +1047,10 @@ ${
   n.feature === "radar-map"
     ? `- \`01-tracks-off.png\` — fresh load, \`tor komórki\` aria-pressed false, no orange arrows
 - \`02-tracks-on.png\` — chip on, arrows drawn`
+    : n.feature === "nowcast-threat-sheet"
+      ? `- \`01-peek-390x844.png\` — phone peek: headline, chip, place, hero \`Za ile\`, \`Szansa\`, 90-min strip
+- \`02-half-390x844.png\` — after the handle tap: \`Idzie od\` / \`Spodziewaj się\`, one caveat, status row
+- \`peek.json\` — quoted detent, heights, font sizes, nested-scroller count, sheet text`
     : n.feature === "pin-alerts"
       ? `- \`01-sheet-before.png\` — sheet after snapshot, default pin
 - \`02-settings-dialog.png\` — dialog \`Lokalizacja i alerty\` open

@@ -60,18 +60,18 @@ It does `GET /` then POSTs the live `getSnapshot` server function (Warszawa pin:
 
 ## Drive
 
-Harness: **Chrome CDP** via the shipped script (system `google-chrome`, no Playwright package). Desktop **1280×800** — below `640px` the sheet collapses (`sm:hidden` handle) and the IMGW aside hides. Chrome must be `--headless=new` plus `--remote-allow-origins=*` (without the latter, `/json/new` returns `Using unsafely HTTP…` instead of JSON).
+Harness: **Chrome CDP** via the shipped script (system `google-chrome`, no Playwright package). Desktop **1280×800** — below `640px` the sheet collapses to the peek card (`sm:hidden` handle) and the IMGW aside hides. `--feature nowcast-threat-sheet` is the exception: it drives that phone peek at **390×844**, and `--viewport WxH` overrides any feature's default. Chrome must be `--headless=new` plus `--remote-allow-origins=*` (without the latter, `/json/new` returns `Using unsafely HTTP…` instead of JSON).
 
 ```bash
 .cursor/skills/verify-grom/scripts/drive.mjs --feature location-pin
-# optional: --base http://127.0.0.1:8080 --out .cursor/skills/verify-grom/evidence/<id>
+# optional: --base http://127.0.0.1:8080 --out .cursor/skills/verify-grom/evidence/<id> --viewport 390x844
 ```
 
 Recipes. Prefer ARIA / ids / visible Polish copy. There are almost no `data-*` hooks.
 
 | Control | Selector / copy |
 |---|---|
-| App | `/` only. `h1` = `GROM`, eyebrow `Nowcast PL` |
+| App | `/` only. Wordmark is a bolt glyph + `h1` `GROM` (no eyebrow) |
 | Threat sheet | `#grom-threat-sheet`. Mobile handle: `button[aria-controls="grom-threat-sheet"]` (`aria-label` = headline) |
 | Locate | `button[aria-label="Wybierz lokalizację"]` |
 | Settings | `button[aria-label="Ustawienia"]` → `[role="dialog"][aria-labelledby="settings-title"]` title `Lokalizacja i alerty`; headings `Miejsce` / `Alerty` |
@@ -135,7 +135,7 @@ All executable; invoke from repo root.
 |---|---|
 | `.cursor/skills/verify-grom/scripts/launch.sh` | `npm run dev`, wait until `/` is 200, write `/tmp/verify-grom/launch.json` |
 | `.cursor/skills/verify-grom/scripts/doctor.mjs` | read-only worth-driving check → JSON on stdout, exit 0/1 |
-| `.cursor/skills/verify-grom/scripts/drive.mjs` | Chrome CDP; `--feature location-pin` (see `--help`) |
+| `.cursor/skills/verify-grom/scripts/drive.mjs` | Chrome CDP; `--feature location-pin` / `nowcast-threat-sheet`, `--viewport WxH` (see `--help`) |
 | `.cursor/skills/verify-grom/scripts/cleanup.sh` | SIGTERM recorded PIDs only |
 
 ```bash
