@@ -114,7 +114,8 @@ export function startTitleFlash(event: AlertEvent) {
   if (typeof document === "undefined") return;
   stopTitleFlash();
   if (prefersReducedMotion()) return;
-  const interval = titleFlashIntervalMs(false);
+  // Reduced motion already returned above, so this is always the 1.5 s cadence.
+  const interval = titleFlashIntervalMs(false) ?? 1500;
   baseTitle = document.title;
   stopFlashAt = Date.now() + 5 * 60_000;
   const alt = `⚡ ${event.title}`;

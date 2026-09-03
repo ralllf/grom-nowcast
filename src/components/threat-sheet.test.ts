@@ -204,8 +204,8 @@ describe("etaLabel", () => {
 describe("imgwAsideCountLine", () => {
   it("does not print 0 burzowych while snapshot is missing", () => {
     const line = imgwAsideCountLine(undefined);
-    assert.equal(line, null);
     assert.equal(line?.includes("0 burzowych"), undefined);
+    assert.equal(line, null);
   });
 
   it("does not print a fake zero-count when warningsUnavailable", () => {
