@@ -220,6 +220,32 @@ describe("imgwAsideCountLine", () => {
   });
 });
 
+describe("grom-app IMGW aside wiring", () => {
+  const aside = APP_SRC.match(/<aside[\s\S]*?<\/aside>/);
+
+  it("SSR/loading aside does not interpolate a fake 0 burzowych", () => {
+    assert.doesNotMatch(APP_SRC, /stormWarningCount \?\? 0/);
+    assert.match(APP_SRC, /imgwAsideCountLine\(snapshot\)/);
+    assert.match(APP_SRC, /\{imgwCountLine \?[\s\S]*?\{imgwCountLine\}[\s\S]*?: null\}/);
+  });
+
+  it("Pobieram komunikaty is the loading body, not a count", () => {
+    assert.ok(aside, "expected the IMGW aside");
+    assert.match(aside[0], /Pobieram komunikaty…/);
+    assert.match(aside[0], /snapshotQuery\.isPending && !snapshot/);
+    assert.doesNotMatch(aside[0], /0 burzowych/);
+    assert.doesNotMatch(aside[0], /stormWarningCount \?\? 0/);
+  });
+
+  it("IMGW-down aside uses the existing warn line, not a combined albo string", () => {
+    assert.ok(aside, "expected the IMGW aside");
+    assert.match(aside[0], /IMGW_WARNINGS_UNAVAILABLE/);
+    assert.doesNotMatch(aside[0], /albo/);
+    assert.doesNotMatch(aside[0], /RADAR_UNAVAILABLE/);
+    assert.doesNotMatch(aside[0], /radaru albo ostrzeżeń/);
+  });
+});
+
 describe("echoLabel", () => {
   it("prints an em dash while threat is still null, not brak", () => {
     assert.equal(echoLabel(null), "—");
@@ -636,6 +662,13 @@ describe("sheetSourceHonesty", () => {
     assert.equal(h.radar, RADAR_UNAVAILABLE);
     assert.doesNotMatch(h.radar ?? "", /albo|ostrzeżeń/);
     assert.equal(h.imgw, null);
+  });
+
+  it("sheet and app never share a combined radaru albo ostrzeżeń string", () => {
+    assert.doesNotMatch(APP_SRC, /radaru albo ostrzeżeń/);
+    assert.doesNotMatch(SHEET_SRC, /radaru albo ostrzeżeń/);
+    assert.doesNotMatch(RADAR_UNAVAILABLE, /albo|ostrzeżeń/);
+    assert.doesNotMatch(IMGW_WARNINGS_UNAVAILABLE, /albo|radaru/);
   });
 });
 

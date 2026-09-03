@@ -1,0 +1,19 @@
+{
+  "when": "2026-09-03T10:05:59.605Z",
+  "loading": {
+    "text": "Ostrzeżenia IMGW\n\nPobieram komunikaty…",
+    "has0": false,
+    "hasPobieram": true,
+    "hasWarn": false,
+    "hasAlbo": false,
+    "hasCombined": false
+  },
+  "hydrated": {
+    "text": "Ostrzeżenia IMGW\n\nOstrzeżenia IMGW chwilowo niedostępne",
+    "has0": false,
+    "hasPobieram": false,
+    "hasWarn": true,
+    "hasAlbo": false,
+    "hasCombined": false
+  }
+}
