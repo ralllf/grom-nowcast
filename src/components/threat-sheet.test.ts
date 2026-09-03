@@ -234,10 +234,10 @@ describe("echoLabel", () => {
     assert.equal(echoLabel(threat({ nearestKm: 12.4 })), "12 km");
   });
 
-  it("wires both Echo stats through echoLabel", () => {
+  it("wires echo through echoLabel — as a box line, not a third KPI tile", () => {
     assert.match(SHEET_SRC, /const echo = echoLabel\(threat\)/);
-    assert.match(SHEET_SRC, /PeekStat label="Echo" value=\{echo\}/);
-    assert.match(SHEET_SRC, /Stat label="Echo" value=\{echoFull\}/);
+    assert.match(SHEET_SRC, /Echo <\/span>\s*<span className="font-medium">\{echo\}<\/span>/);
+    assert.doesNotMatch(SHEET_SRC, /label="Echo"/);
     assert.doesNotMatch(
       SHEET_SRC,
       /threat\?\.nearestKm != null \? `\$\{threat\.nearestKm\.toFixed\(0\)\} km` : "brak"/,
@@ -250,7 +250,8 @@ describe("threatLevelChip", () => {
     assert.equal(threatLevelChip("now"), "teraz");
     assert.equal(threatLevelChip("imminent"), "zaraz");
     assert.equal(threatLevelChip("nearby"), "blisko");
-    assert.equal(threatLevelChip("watch"), "uwaga");
+    // IMGW-only `watch` already headlines Czysto; the chip must agree with it.
+    assert.equal(threatLevelChip("watch"), "czysto");
     assert.equal(threatLevelChip("clear"), "czysto");
   });
 
@@ -272,7 +273,7 @@ describe("threat-sheet user copy", () => {
   it("box owns Spodziewaj się / Komórka; grey paragraph is threat.detail only", () => {
     assert.match(SHEET_SRC, /Spodziewaj się:[\s\S]{0,80}\{threat\.expect\}/);
     assert.match(SHEET_SRC, /\{trendLine \? \(/);
-    assert.match(SHEET_SRC, /honesty\.radar \?\? detail \?\? threat\?\.detail/);
+    assert.match(SHEET_SRC, /honesty\.radar \?\? caveat/);
     const grey = SHEET_SRC.match(
       /<p className="mt-3 max-w-prose[\s\S]*?<\/p>/,
     );
@@ -296,13 +297,11 @@ describe("threat-sheet user copy", () => {
     assert.doesNotMatch(honesty[0], /leadMin/);
   });
 
-  it("prints Za ile on the trio, not the English ETA acronym", () => {
-    assert.match(SHEET_SRC, /PeekStat label="Za ile" value=\{eta\}/);
-    assert.match(SHEET_SRC, /Stat label="Za ile" value=\{eta\}/);
-    assert.match(SHEET_SRC, /PeekStat label="Szansa"/);
-    assert.match(SHEET_SRC, /Stat label="Szansa"/);
-    assert.match(SHEET_SRC, /PeekStat label="Echo"/);
-    assert.match(SHEET_SRC, /Stat label="Echo"/);
+  it("prints Za ile and Szansa as the two numbers, not the English ETA acronym", () => {
+    assert.equal((SHEET_SRC.match(/>Za ile<\/dt>/g) ?? []).length, 2);
+    assert.equal((SHEET_SRC.match(/>Szansa<\/dt>/g) ?? []).length, 2);
+    assert.match(SHEET_SRC, /\{eta\}/);
+    assert.match(SHEET_SRC, /\{chance\}/);
     assert.doesNotMatch(SHEET_SRC, /label="ETA"/);
     assert.doesNotMatch(SHEET_SRC, /\bETA\b/);
   });
