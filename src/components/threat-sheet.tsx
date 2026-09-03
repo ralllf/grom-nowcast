@@ -1,16 +1,20 @@
-import { MapPin, X } from "lucide-react";
+import { X } from "lucide-react";
 import { useEffect, useRef, useState, type PointerEvent } from "react";
 import {
   autoExpandDetent,
   cellTrendLine,
   echoLabel,
   etaLabel,
+  idzieOdEchoSuffix,
   idzieOdTowardSuffix,
   nextSheetDetent,
   nowcastHeadline,
+  sheetCaveat,
+  sheetExtrasClass,
   SHEET_CREDIT_LINE,
   SHEET_DATA_DETAILS,
   SHEET_DETENT_CLASS,
+  SHEET_NUMBER_CLASS,
   sheetPeekStatus,
   sheetSourceHonesty,
   sheetStatusRow,
@@ -19,6 +23,7 @@ import {
   timelineAriaLabel,
   timelineBarReadout,
   type SheetDetent,
+  type SheetStatusRow,
 } from "@/components/threat-sheet-logic";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
@@ -100,6 +105,7 @@ export function ThreatSheet({
   const startY = useRef<number | null>(null);
   const dragged = useRef(false);
   const open = detent !== "peek";
+  const extrasClass = sheetExtrasClass(detent);
   const onDetentChangeRef = useRef(onDetentChange);
   onDetentChangeRef.current = onDetentChange;
   const onShowRainMotionRef = useRef(onShowRainMotion);
@@ -115,11 +121,8 @@ export function ThreatSheet({
   const ageMin = radarAgeMin(radarTime, nowMs);
   const eta = etaLabel(threat, ageMin);
   const detail = threat ? rewriteArrivalMinutes(threat.detail, threat.etaMin, ageMin) : null;
+  const caveat = sheetCaveat(detail);
   const echo = echoLabel(threat);
-  const echoFull =
-    threat?.nearestKm != null
-      ? `${echo}${threat.pinLevel > 0 ? ` · ${levelLabelPl(threat.pinLevel)}` : ""}`
-      : echo;
   const chance = threat ? `${threat.chancePct}%` : "—";
   const headline = nowcastHeadline(threat, pending);
   const trendLine = cellTrendLine(threat?.cellTrend);
@@ -138,6 +141,7 @@ export function ThreatSheet({
     offline,
   });
   const peekStatus = sheetPeekStatus(statusRow, offline);
+  const strip = threat && threat.timeline.length > 0 && radarTime != null ? threat.timeline : null;
 
   useEffect(() => {
     const desktop = window.matchMedia(SM_UP).matches;
@@ -196,62 +200,48 @@ export function ThreatSheet({
         onPointerUp={onHandlePointerUp}
         onClick={onHandleClick}
       >
-        <span className="mx-auto mt-2.5 mb-1 h-1 w-10 rounded-full bg-faint" aria-hidden />
+        <span className="mx-auto mt-1.5 mb-0.5 h-1 w-10 rounded-full bg-faint" aria-hidden />
         {!open ? (
-          <div className="px-4 pt-1 pb-3">
-            <div className="flex items-end justify-between gap-3">
-              <div className="min-w-0 text-left">
-                <h2 className="truncate font-display text-xl font-semibold leading-none tracking-tight">
-                  {headline}
-                </h2>
-                <p className="mt-1.5 truncate text-sm text-muted">{place.label}</p>
-                {imgwLine ? (
-                  <p className="mt-0.5 truncate text-[11px] text-warn">{imgwLine}</p>
-                ) : null}
-              </div>
-              <dl className="flex shrink-0 gap-3 text-center">
-                <PeekStat label="Szansa" value={chance} />
-                <PeekStat label="Za ile" value={eta} />
-                <PeekStat label="Echo" value={echo} />
-              </dl>
-            </div>
-            {peekStatus ? (
-              <p
-                className={
-                  peekStatus.tone === "warn"
-                    ? "mt-1 truncate text-[11px] text-warn"
-                    : "mt-1 truncate text-[11px] text-faint"
-                }
-              >
-                {peekStatus.text}
-              </p>
-            ) : null}
+          // Every row here is measured: headline, place, hero and strip fit 128px.
+          <div className="px-4 pb-1.5 text-left">
+            <Answer
+              headline={headline}
+              place={place}
+              threat={threat}
+              eta={eta}
+              chance={chance}
+              status={peekStatus}
+              points={strip}
+              radarTime={radarTime}
+              ageMin={ageMin}
+            />
           </div>
         ) : null}
       </button>
 
       <div
         className={cn(
+          // One scroller per breakpoint: this block on a phone, the article on sm+.
           "min-h-0 flex-1 overflow-y-auto overscroll-contain p-4",
           !open && "hidden",
-          "sm:block sm:overflow-y-auto sm:p-0",
+          "sm:block sm:overflow-visible sm:p-0",
         )}
       >
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <div className="flex flex-wrap items-center gap-2">
-              <MapPin className="size-4 text-accent" />
-              <p className="text-sm font-medium">{place.label}</p>
-            </div>
-            <h2 className="mt-2 font-display text-3xl font-semibold leading-none tracking-tight text-balance">
-              {headline}
-            </h2>
-          </div>
-          {threat ? <Badge tone={TONE[threat.level]}>{threatLevelChip(threat.level)}</Badge> : null}
-        </div>
+        <Answer
+          interactive
+          headline={headline}
+          place={place}
+          threat={threat}
+          eta={eta}
+          chance={chance}
+          points={strip}
+          radarTime={radarTime}
+          ageMin={ageMin}
+          extrasClass={extrasClass}
+        />
 
-        {threat && (threat.comingFrom || threat.expect || trendLine) ? (
-          <div className="mt-3 space-y-1.5 rounded-2xl bg-surface-2 px-3 py-3 text-sm leading-relaxed">
+        {threat && (threat.comingFrom || threat.expect || trendLine || threat.nearestKm != null) ? (
+          <div className="mt-2.5 space-y-1 rounded-2xl bg-surface-2 px-3 py-2.5 text-sm leading-relaxed">
             {threat.comingFrom ? (
               <p>
                 <span className="text-faint">Idzie od </span>
@@ -260,11 +250,14 @@ export function ThreatSheet({
                   <span className="text-muted">{idzieOdTowardSuffix(threat.toward)}</span>
                 ) : null}
                 {threat.speedKmh ? (
-                  <span className="font-mono text-xs text-muted">
-                    {" "}
-                    · {Math.round(threat.speedKmh)} km/h
-                  </span>
+                  <span className="text-muted"> · {Math.round(threat.speedKmh)} km/h</span>
                 ) : null}
+                <span className="text-muted">{idzieOdEchoSuffix(threat.nearestKm)}</span>
+              </p>
+            ) : threat.nearestKm != null ? (
+              <p>
+                <span className="text-faint">Echo </span>
+                <span className="font-medium">{echo}</span>
               </p>
             ) : null}
             {threat.expect ? (
@@ -281,45 +274,11 @@ export function ThreatSheet({
           </div>
         ) : null}
 
-        <p className="mt-3 max-w-prose text-sm leading-relaxed text-muted text-pretty">
-          {honesty.radar ?? detail ?? threat?.detail}
+        <p className="mt-2.5 max-w-prose text-sm leading-relaxed text-muted text-pretty">
+          {honesty.radar ?? caveat}
         </p>
 
-        <dl className="mt-4 grid grid-cols-3 gap-2 text-center">
-          <Stat label="Szansa" value={chance} />
-          <Stat label="Za ile" value={eta} />
-          <Stat label="Echo" value={echoFull} />
-        </dl>
-
-        {threat && threat.timeline.length > 0 && radarTime != null ? (
-          <Timeline
-            points={threat.timeline}
-            advected={threat.timelineAdvected}
-            radarTime={radarTime}
-            ageMin={ageMin}
-          />
-        ) : null}
-
-        {tracks.length > 0 && (threat?.nearestKm == null || threat.nearestKm > 25) ? (
-          <button
-            type="button"
-            onClick={onShowRainMotion}
-            className="mt-3 flex min-h-9 w-full items-center justify-center rounded-xl bg-surface-2 px-3 text-xs font-medium text-accent hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50"
-          >
-            Pokaż ruch opadu na mapie
-            {threat?.nearestKm != null ? ` · ${threat.nearestKm.toFixed(0)} km` : ""}
-          </button>
-        ) : null}
-
-        <p className="mt-3 text-xs leading-relaxed text-faint">
-          Szansa, Za ile i alert są dla pinezki ({place.label}) — miasta albo punktu na mapie — nie
-          dla koła w okolicy. Próg alertu to czas, nie dystans. Na mapie strzałki to pole ruchu;
-          te, które dotyczą pinezki, mówią czy opad dojdzie.
-        </p>
-
-        {imgwLine ? (
-          <p className="mt-3 text-xs leading-relaxed text-warn">{imgwLine}</p>
-        ) : null}
+        {imgwLine ? <p className="mt-3 text-xs leading-relaxed text-warn">{imgwLine}</p> : null}
 
         {statusRow ? (
           <p className={statusRow.tone === "warn" ? "mt-3 text-xs text-warn" : "mt-3 text-xs text-faint"}>
@@ -341,8 +300,30 @@ export function ThreatSheet({
           </p>
         ) : null}
 
-        <p className="mt-4 text-xs leading-relaxed text-faint">{SHEET_CREDIT_LINE}</p>
-        <details className="mt-1 text-xs leading-relaxed text-faint">
+        {tracks.length > 0 && (threat?.nearestKm == null || threat.nearestKm > 25) ? (
+          <button
+            type="button"
+            onClick={onShowRainMotion}
+            className={cn(
+              "mt-3 flex min-h-9 w-full items-center justify-center rounded-xl bg-surface-2 px-3 text-xs font-medium text-accent hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50",
+              extrasClass,
+            )}
+          >
+            Pokaż ruch opadu na mapie
+            {threat?.nearestKm != null ? ` · ${threat.nearestKm.toFixed(0)} km` : ""}
+          </button>
+        ) : null}
+
+        <p className={cn("mt-3 text-xs leading-relaxed text-faint", extrasClass)}>
+          Szansa, Za ile i alert są dla pinezki ({place.label}) — miasta albo punktu na mapie — nie
+          dla koła w okolicy. Próg alertu to czas, nie dystans. Na mapie strzałki to pole ruchu;
+          te, które dotyczą pinezki, mówią czy opad dojdzie.
+        </p>
+
+        <p className={cn("mt-4 text-xs leading-relaxed text-faint", extrasClass)}>
+          {SHEET_CREDIT_LINE}
+        </p>
+        <details className={cn("mt-1 text-xs leading-relaxed text-faint", extrasClass)}>
           <summary className="cursor-pointer list-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 [&::-webkit-details-marker]:hidden">
             O danych ›
           </summary>
@@ -353,6 +334,81 @@ export function ThreatSheet({
   );
 }
 
+/**
+ * The 3-second answer: headline, level chip, place, Za ile as the hero, Szansa,
+ * 90-min strip. Peek and the expanded sheet render the same block, so opening
+ * the card adds rows below instead of resizing the answer.
+ */
+function Answer({
+  headline,
+  place,
+  threat,
+  eta,
+  chance,
+  status = null,
+  points,
+  radarTime,
+  ageMin,
+  interactive = false,
+  extrasClass = "",
+}: {
+  headline: string;
+  place: Place;
+  threat: Threat | null;
+  eta: string;
+  chance: string;
+  status?: SheetStatusRow | null;
+  points: TimelinePoint[] | null;
+  radarTime: number | null;
+  ageMin: number;
+  interactive?: boolean;
+  extrasClass?: string;
+}) {
+  return (
+    <>
+      <div className="flex items-start justify-between gap-2">
+        <h2 className="min-w-0 truncate font-display text-lg font-semibold leading-none tracking-tight sm:text-2xl">
+          {headline}
+        </h2>
+        {threat ? (
+          <Badge tone={TONE[threat.level]} className="shrink-0 px-2 py-0.5 leading-none">
+            {threatLevelChip(threat.level)}
+          </Badge>
+        ) : null}
+      </div>
+      <div className="mt-0.5 flex items-baseline justify-between gap-2 text-xs leading-none">
+        <p className="min-w-0 truncate text-muted">{place.label}</p>
+        {status ? (
+          <p className={cn("min-w-0 truncate", status.tone === "warn" ? "text-warn" : "text-faint")}>
+            {status.text}
+          </p>
+        ) : null}
+      </div>
+      <dl className="mt-1 flex items-baseline justify-between gap-3 sm:mt-2 sm:justify-start sm:gap-8">
+        <div className="flex min-w-0 items-baseline gap-2">
+          <dt className="order-2 text-xs leading-none text-faint">Za ile</dt>
+          <dd className={cn("order-1", SHEET_NUMBER_CLASS.hero)}>{eta}</dd>
+        </div>
+        <div className="flex shrink-0 items-baseline gap-1.5">
+          <dt className="text-xs leading-none text-faint">Szansa</dt>
+          <dd className={SHEET_NUMBER_CLASS.sub}>{chance}</dd>
+        </div>
+      </dl>
+      {points && radarTime != null ? (
+        <Strip
+          points={points}
+          advected={threat?.timelineAdvected ?? false}
+          radarTime={radarTime}
+          ageMin={ageMin}
+          interactive={interactive}
+          extrasClass={extrasClass}
+          className={interactive ? "mt-2" : "mt-1"}
+        />
+      ) : null}
+    </>
+  );
+}
+
 const LEGEND: Array<{ level: RadarLevel; range: string }> = [
   { level: 1, range: "<1" },
   { level: 2, range: "1–4" },
@@ -360,33 +416,51 @@ const LEGEND: Array<{ level: RadarLevel; range: string }> = [
   { level: 4, range: ">10" },
 ];
 
-/** MeteoSwiss-style strip: rain at the pin for the next 90 min, one bar per 5 min. */
-function Timeline({
+/**
+ * MeteoSwiss-style strip: rain at the pin for the next 90 min, one bar per 5 min.
+ * Peek gets the static version — a second scroller or a nested button inside the
+ * drag handle is exactly what made the old card feel like a dashboard.
+ */
+function Strip({
   points,
-  advected,
+  advected = false,
   radarTime,
   ageMin,
+  interactive = false,
+  extrasClass = "",
+  className,
 }: {
   points: TimelinePoint[];
-  advected: boolean;
+  advected?: boolean;
   radarTime: number;
   ageMin: number;
+  interactive?: boolean;
+  extrasClass?: string;
+  className?: string;
 }) {
   const [picked, setPicked] = useState<number | null>(null);
   const any = points.some((p) => p.level > 0);
   const aria = timelineAriaLabel(points, radarTime);
   const pickedPoint = picked != null ? points.find((p) => p.t === picked) : undefined;
   return (
-    <div className="mt-3 rounded-2xl bg-surface-2 px-3 py-2.5">
-      <div className="flex items-center justify-between gap-2 text-xs">
-        <span className="text-faint">Opad nad pinezką · 90 min · mm/h</span>
-        <span className="text-faint">{advected ? "z ruchu echa" : "bez ruchu — jak teraz"}</span>
-      </div>
-      <div className="relative mt-2">
-        <div className="flex h-9 items-end gap-px" role="img" aria-label={aria}>
+    <div className={cn(interactive && "rounded-2xl bg-surface-2 px-3 py-2", className)}>
+      {interactive ? (
+        <div className={cn("flex items-baseline justify-between gap-2 text-xs text-faint", extrasClass)}>
+          <span>Opad nad pinezką · 90 min</span>
+          <span>{advected ? "z ruchu echa" : "bez ruchu — jak teraz"}</span>
+        </div>
+      ) : null}
+      <div className={cn("relative", interactive && "sm:mt-2")}>
+        <div
+          className={cn("flex items-end gap-px", interactive ? "h-6 sm:h-8" : "h-3")}
+          role="img"
+          aria-label={aria}
+        >
           {points.map((p) => {
             const readout = timelineBarReadout(p, radarTime);
-            return (
+            const height = p.level > 0 ? `${25 + p.level * 18}%` : "4px";
+            const background = p.level > 0 ? LEVEL_SWATCH[p.level] : "var(--color-border)";
+            return interactive ? (
               <button
                 key={p.t}
                 type="button"
@@ -394,10 +468,14 @@ function Timeline({
                 aria-pressed={picked === p.t}
                 onClick={() => setPicked((cur) => (cur === p.t ? null : p.t))}
                 className="min-w-0 flex-1 rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50"
-                style={{
-                  height: p.level > 0 ? `${25 + p.level * 18}%` : "4px",
-                  backgroundColor: p.level > 0 ? LEVEL_SWATCH[p.level] : "var(--color-border)",
-                }}
+                style={{ height, backgroundColor: background }}
+              />
+            ) : (
+              <span
+                key={p.t}
+                aria-hidden
+                className="min-w-0 flex-1 rounded-sm"
+                style={{ height, backgroundColor: background }}
               />
             );
           })}
@@ -409,50 +487,42 @@ function Timeline({
           style={{ left: `${nowCursorFrac(ageMin) * 100}%` }}
         />
       </div>
-      {pickedPoint ? (
+      {interactive && pickedPoint ? (
         <p className="mt-1 font-mono text-xs tabular-nums text-muted">
           {timelineBarReadout(pickedPoint, radarTime)}
         </p>
       ) : null}
       <div
         data-timeline-axis
-        className="mt-1 flex justify-between font-mono text-[10px] text-faint"
+        className={cn(
+          "flex justify-between font-mono text-xs leading-none tabular-nums text-faint",
+          interactive ? "mt-1" : "mt-0.5",
+        )}
       >
         <span>{wallClockAxisLabel(0, radarTime)}</span>
         <span>{wallClockAxisLabel(30, radarTime)}</span>
         <span>{wallClockAxisLabel(60, radarTime)}</span>
         <span>{wallClockAxisLabel(90, radarTime)}</span>
       </div>
-      <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-faint">
-        {LEGEND.map((l) => (
-          <span key={l.level} className="inline-flex items-center gap-1">
-            <span
-              className="inline-block size-2 rounded-sm"
-              style={{ backgroundColor: LEVEL_SWATCH[l.level] }}
-            />
-            {levelLabelPl(l.level)} {l.range}
-          </span>
-        ))}
-        {!any ? <span className="ml-auto">nic w oknie 90 min</span> : null}
-      </div>
-    </div>
-  );
-}
-
-function PeekStat({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="min-w-[2.75rem]">
-      <dt className="text-[10px] uppercase tracking-wider text-faint">{label}</dt>
-      <dd className="mt-0.5 font-mono text-xs tabular-nums">{value}</dd>
-    </div>
-  );
-}
-
-function Stat({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-xl bg-surface-2 px-2 py-3">
-      <dt className="text-xs uppercase tracking-wider text-faint">{label}</dt>
-      <dd className="mt-1 font-mono text-sm tabular-nums">{value}</dd>
+      {interactive ? (
+        <div
+          className={cn(
+            "mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-faint",
+            extrasClass,
+          )}
+        >
+          {LEGEND.map((l) => (
+            <span key={l.level} className="inline-flex items-center gap-1">
+              <span
+                className="inline-block size-2 rounded-sm"
+                style={{ backgroundColor: LEVEL_SWATCH[l.level] }}
+              />
+              {levelLabelPl(l.level)} {l.range}
+            </span>
+          ))}
+          {!any ? <span className="ml-auto">nic w oknie 90 min</span> : null}
+        </div>
+      ) : null}
     </div>
   );
 }

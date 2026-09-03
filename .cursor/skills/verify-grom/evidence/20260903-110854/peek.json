@@ -1,0 +1,66 @@
+{
+  "when": "2026-09-03T11:16:59.997Z",
+  "viewport": {
+    "width": 390,
+    "height": 844
+  },
+  "pin": "Poznań",
+  "peek": {
+    "peeking": true,
+    "handleVisible": true,
+    "ariaExpanded": "false",
+    "detentClass": "max-h-[128px]",
+    "sheetHeight": 128,
+    "sheetClippedPx": 0,
+    "expandedOverflowPx": null,
+    "viewportHeight": 844,
+    "peekNestedScrollers": 0,
+    "peekNestedButtons": 0,
+    "peekText": "Czysto CZYSTO Poznań Za ile teraz Szansa 10% 13:15 13:45 14:15 14:45",
+    "zaIle": {
+      "text": "teraz",
+      "px": 30
+    },
+    "szansa": {
+      "text": "10%",
+      "px": 18
+    },
+    "chip": "CZYSTO",
+    "sheetText": "Czysto CZYSTO Poznań Za ile teraz Szansa 10% 13:15 13:45 14:15 14:45"
+  },
+  "half": {
+    "peeking": false,
+    "handleVisible": true,
+    "ariaExpanded": "true",
+    "detentClass": "max-h-[45dvh]",
+    "sheetHeight": 374,
+    "sheetClippedPx": 0,
+    "expandedOverflowPx": 0,
+    "viewportHeight": 844,
+    "peekNestedScrollers": null,
+    "peekNestedButtons": null,
+    "peekText": null,
+    "zaIle": {
+      "text": "teraz",
+      "px": 30
+    },
+    "szansa": {
+      "text": "10%",
+      "px": 18
+    },
+    "chip": "CZYSTO",
+    "sheetText": "Czysto CZYSTO Poznań Za ile teraz Szansa 10% 13:15 13:45 14:15 14:45 Idzie od zachodu na wschód · 37 km/h · echo 2 km Spodziewaj się: słabego deszczu Komórka może też urosnąć na miejscu — tego radar nie zapowie. Radar 13:15 · 2 min · IMGW ✕ · wyładowania ✕",
+    "statusRow": "Radar 13:15 · 2 min · IMGW ✕ · wyładowania ✕"
+  },
+  "ticks": {
+    "present": true,
+    "aria": "Opad od 13:15 do 14:40, najsilniej ok. 14:30",
+    "ticks": [
+      "13:15",
+      "13:45",
+      "14:15",
+      "14:45"
+    ],
+    "hasNowCursor": true
+  }
+}

@@ -12,6 +12,7 @@ import {
   Volume2,
   VolumeX,
   X,
+  Zap,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Badge } from "@/components/ui/badge";
@@ -73,6 +74,9 @@ const CHIP =
   `inline-flex min-h-9 items-center justify-center rounded-full px-3 text-xs font-medium ${RAW_FOCUS}`;
 const MAP_CHIP =
   `pointer-events-auto flex min-h-9 items-center gap-2 rounded-full bg-surface/90 px-3 text-xs shadow-[0_0_0_1px_rgba(255,255,255,0.08)] backdrop-blur-md ${RAW_FOCUS}`;
+/** Chip swatches. IMGW rides the warn token (its degree-1 tint); vermilion belongs to rain-4. */
+const IMGW_CHIP_ON = "var(--color-warn)";
+const CHIP_OFF = "var(--color-faint)";
 
 const ALERT_TONE: Record<AlertKind, string> = {
   incoming: "border-warn/60 bg-surface/95",
@@ -449,11 +453,9 @@ export function GromApp() {
 
       <header className="pointer-events-none absolute inset-x-0 top-0 z-10 p-3 pt-[max(0.75rem,env(safe-area-inset-top))] sm:p-5">
         <div className="mx-auto flex max-w-6xl items-start justify-between gap-3">
-          <div className="pointer-events-auto rounded-2xl bg-surface/85 px-4 py-3 shadow-[0_0_0_1px_rgba(255,255,255,0.08)] backdrop-blur-md">
-            <p className="font-display text-xs font-medium uppercase tracking-widest text-muted">
-              Nowcast PL
-            </p>
-            <h1 className="font-display text-2xl font-semibold leading-none tracking-tight">
+          <div className="pointer-events-auto flex items-center gap-1.5 rounded-full bg-surface/85 px-3 py-2 shadow-[0_0_0_1px_rgba(255,255,255,0.08)] backdrop-blur-md">
+            <Zap className="size-4 text-accent" aria-hidden />
+            <h1 className="font-display text-lg font-semibold leading-none tracking-tight">
               GROM
             </h1>
           </div>
@@ -560,7 +562,7 @@ export function GromApp() {
               >
                 <span
                   className="inline-block size-2.5 rounded-full ring-2 ring-fg"
-                  style={{ backgroundColor: tracksMap ? "#f0a202" : "#7a8593" }}
+                  style={{ backgroundColor: tracksMap ? "#f0a202" : CHIP_OFF }}
                 />
                 <span className={tracksMap ? "text-fg" : "text-muted"}>tor komórki</span>
               </button>
@@ -582,7 +584,7 @@ export function GromApp() {
             >
               <span
                 className="inline-block size-2.5 rounded-sm ring-2 ring-fg"
-                style={{ backgroundColor: imgwMap ? "#e4572e" : "#7a8593" }}
+                style={{ backgroundColor: imgwMap ? IMGW_CHIP_ON : CHIP_OFF }}
               />
               <span className={imgwMap ? "text-fg" : "text-muted"}>IMGW</span>
             </button>
@@ -596,7 +598,7 @@ export function GromApp() {
             >
               <span
                 className="inline-block size-2.5 rounded-full ring-2 ring-fg"
-                style={{ backgroundColor: drizzleMap ? "#36bae5" : "#7a8593" }}
+                style={{ backgroundColor: drizzleMap ? "#36bae5" : CHIP_OFF }}
               />
               <span className={drizzleMap ? "text-fg" : "text-muted"}>Pokaż mżawkę</span>
             </button>

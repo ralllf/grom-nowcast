@@ -115,6 +115,12 @@ export function idzieOdTowardSuffix(toward: string | null | undefined): string {
   return toward ? ` na ${toward}` : "";
 }
 
+/** Echo distance rides the Idzie od line instead of a third KPI tile. */
+export function idzieOdEchoSuffix(nearestKm: number | null | undefined): string {
+  if (nearestKm == null) return "";
+  return ` · echo ${nearestKm.toFixed(0)} km`;
+}
+
 /** Full Idzie od line for a west→east cell: "Idzie od zachodu na wschód". */
 export function idzieOdLine(
   comingFrom: string | null | undefined,
@@ -151,11 +157,16 @@ export function echoLabel(threat: Threat | null): string {
   return "brak";
 }
 
+/**
+ * Four nowcast words, uppercased by the Badge: TERAZ / ZARAZ / BLISKO / CZYSTO.
+ * `watch` is IMGW-only, and `nowcastHeadline` already forces its headline to
+ * Czysto — the chip must not contradict it. The warning itself is the IMGW lane.
+ */
 const LEVEL_CHIP: Record<ThreatLevel, string> = {
   now: "teraz",
   imminent: "zaraz",
   nearby: "blisko",
-  watch: "uwaga",
+  watch: "czysto",
   clear: "czysto",
 };
 
@@ -172,10 +183,67 @@ export const SHEET_FIT_GAP_PX = 24;
 export const SHEET_EDGE_PAD_PX = 90;
 
 export const SHEET_DETENT_CLASS: Record<SheetDetent, string> = {
-  peek: "max-h-[128px]",
+  peek: "max-h-[128px] overflow-hidden",
   half: "max-h-[45dvh] overflow-hidden",
   full: "max-h-[85dvh] overflow-hidden",
 };
+
+/**
+ * Za ile is the hero; Szansa supports it. One scale for peek and for the
+ * expanded sheet, so opening the card adds rows instead of resizing the answer.
+ * sm+ is a standalone card with room for the wider hero.
+ */
+export const SHEET_NUMBER_CLASS = {
+  hero: "font-mono text-3xl leading-none tracking-tight tabular-nums sm:text-4xl",
+  sub: "font-mono text-lg leading-none tabular-nums text-muted",
+} as const;
+
+/** Same scale in px, so a test can assert the hierarchy instead of reading Tailwind. */
+export const SHEET_NUMBER_PX = { hero: 30, heroWide: 36, sub: 18 } as const;
+
+/**
+ * The long tail (pin honesty, credit, O danych, rain legend) waits for `full`.
+ * `half` is the answer plus the two-sentence box and one caveat; sm+ is one card
+ * and always shows everything, so the gate is a class, not a JS media query.
+ */
+export function sheetExtrasClass(detent: SheetDetent): string {
+  return detent === "full" ? "" : "hidden sm:block";
+}
+
+/** Facts the two-sentence box, the headline or the hero numbers already print. */
+const CAVEAT_DUPLICATE = [
+  /^Idzie od /,
+  /^Echo /,
+  /^Dojście /,
+  /^Opad jest .*teraz/,
+  /szansa[^.]*~\s*\d+\s*%/i,
+];
+
+const SHEET_CAVEAT_MAX_SENTENCES = 2;
+
+/**
+ * Sentence boundary that survives Polish nowcast copy: "echo ok. 13 km" and
+ * "za ~20 min." are one sentence, so a break needs a capital after the dot.
+ */
+const SENTENCE_BOUNDARY = /(?<=[.!?])\s+(?=[A-ZŁŚŻĆÓĘĄŃ])/;
+
+/**
+ * The box *is* the copy; the caveat carries only what the box does not — in-situ
+ * growth, miss distance, "to ruch echa". Drops the sentences that would print a
+ * second time and keeps at most two, so `half` stays one screen.
+ */
+export function sheetCaveat(detail: string | null | undefined): string | null {
+  if (!detail) return null;
+  const kept = detail
+    .split(SENTENCE_BOUNDARY)
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0 && !CAVEAT_DUPLICATE.some((re) => re.test(s)));
+  if (kept.length === 0) return null;
+  if (kept.length > SHEET_CAVEAT_MAX_SENTENCES) {
+    return [kept[0], kept[kept.length - 1]].join(" ");
+  }
+  return kept.join(" ");
+}
 
 const DETENT_ORDER: SheetDetent[] = ["peek", "half", "full"];
 

@@ -6,7 +6,7 @@ Drive against a doctor-passing local Vite instance (`http://127.0.0.1:8080`). Hi
 
 | File | What the user is doing |
 |---|---|
-| [nowcast-threat-sheet.md](nowcast-threat-sheet.md) | Reading chance / ETA / echo / timeline for the pin |
+| [nowcast-threat-sheet.md](nowcast-threat-sheet.md) | Reading the peek card: Za ile, Szansa, 90-min strip for the pin (driver: 390×844) |
 | [location-pin.md](location-pin.md) | Choosing Warszawa, a chip, search, GPS, or a map click |
 | [pin-alerts.md](pin-alerts.md) | Enabling in-tab alerts and firing `Testuj alert` |
 | [radar-map.md](radar-map.md) | Radar overlay, time scrub, drizzle, cell-track arrows, map chrome |
