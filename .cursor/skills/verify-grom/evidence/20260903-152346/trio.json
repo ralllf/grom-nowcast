@@ -1,0 +1,31 @@
+{
+  "when": "2026-09-03T15:23:50.189Z",
+  "pin": "Warszawa",
+  "labels": [
+    "Za ile",
+    "Szansa"
+  ],
+  "stats": [
+    {
+      "label": "Za ile",
+      "shown": "Za ile",
+      "value": "—"
+    },
+    {
+      "label": "Szansa",
+      "shown": "Szansa",
+      "value": "10%"
+    },
+    {
+      "label": "Za ile",
+      "shown": "Za ile",
+      "value": "—"
+    },
+    {
+      "label": "Szansa",
+      "shown": "Szansa",
+      "value": "10%"
+    }
+  ],
+  "sheetHasETA": false
+}

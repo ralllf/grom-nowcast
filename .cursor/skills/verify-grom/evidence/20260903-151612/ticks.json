@@ -1,0 +1,13 @@
+{
+  "when": "2026-09-03T15:16:23.982Z",
+  "pin": "Warszawa",
+  "present": true,
+  "aria": "Brak opadu od 17:10 do 18:40",
+  "ticks": [
+    "17:10",
+    "17:40",
+    "18:10",
+    "18:40"
+  ],
+  "hasNowCursor": true
+}

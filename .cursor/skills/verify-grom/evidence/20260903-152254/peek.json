@@ -1,0 +1,66 @@
+{
+  "when": "2026-09-03T15:23:06.705Z",
+  "viewport": {
+    "width": 390,
+    "height": 844
+  },
+  "pin": "Warszawa",
+  "peek": {
+    "peeking": true,
+    "handleVisible": true,
+    "ariaExpanded": "false",
+    "detentClass": "max-h-[128px]",
+    "sheetHeight": 126,
+    "sheetClippedPx": 0,
+    "expandedOverflowPx": null,
+    "viewportHeight": 844,
+    "peekNestedScrollers": 0,
+    "peekNestedButtons": 0,
+    "peekText": "Czysto CZYSTO Warszawa Za ile — Szansa 10% 17:20 17:50 18:20 18:50",
+    "zaIle": {
+      "text": "—",
+      "px": 30
+    },
+    "szansa": {
+      "text": "10%",
+      "px": 18
+    },
+    "chip": "CZYSTO",
+    "sheetText": "Czysto CZYSTO Warszawa Za ile — Szansa 10% 17:20 17:50 18:20 18:50"
+  },
+  "half": {
+    "peeking": false,
+    "handleVisible": true,
+    "ariaExpanded": "true",
+    "detentClass": "max-h-[45dvh]",
+    "sheetHeight": 380,
+    "sheetClippedPx": 0,
+    "expandedOverflowPx": 31,
+    "viewportHeight": 844,
+    "peekNestedScrollers": null,
+    "peekNestedButtons": null,
+    "peekText": null,
+    "zaIle": {
+      "text": "—",
+      "px": 30
+    },
+    "szansa": {
+      "text": "10%",
+      "px": 18
+    },
+    "chip": "CZYSTO",
+    "sheetText": "Czysto CZYSTO Warszawa Za ile — Szansa 10% 17:20 17:50 18:20 18:50 Idzie od zachodu na wschód · 49 km/h · echo 15 km Spodziewaj się: ulewy i porywistego wiatru Tor minie Warszawa ok. 46 km obok. Komórka może też urosnąć na miejscu — tego radar nie zapowie. Radar 17:20 · 3 min · IMGW ✕ · wyładowania ✕",
+    "statusRow": "Radar 17:20 · 3 min · IMGW ✕ · wyładowania ✕"
+  },
+  "ticks": {
+    "present": true,
+    "aria": "Brak opadu od 17:20 do 18:50",
+    "ticks": [
+      "17:20",
+      "17:50",
+      "18:20",
+      "18:50"
+    ],
+    "hasNowCursor": true
+  }
+}
