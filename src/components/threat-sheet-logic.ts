@@ -189,6 +189,26 @@ export const SHEET_DETENT_CLASS: Record<SheetDetent, string> = {
 };
 
 /**
+ * Detents belong to the phone sheet. From `sm` up the pin card is a page block:
+ * it sizes to its own content instead of clamping to a detent height, so the
+ * card never becomes a phone card with its own scrollbar inside a laptop.
+ */
+export const SHEET_CARD_CLASS = "sm:min-h-0 sm:max-h-none sm:overflow-visible";
+
+/**
+ * The sm+ card is two columns: the answer and the Idzie od box on the left, the
+ * 90-min strip on the right, everything under them across the whole card. Below
+ * `sm` the same DOM stacks in reading order, so the phone sheet is unchanged.
+ */
+export const SHEET_CARD_GRID_CLASS =
+  "sm:grid sm:grid-cols-[minmax(0,17rem)_minmax(0,1fr)] sm:items-start sm:gap-x-5 sm:gap-y-2.5";
+export const SHEET_CELL_ANSWER_CLASS = "sm:col-start-1 sm:row-start-1";
+export const SHEET_CELL_STRIP_CLASS = "sm:col-start-2 sm:row-start-1 sm:row-span-2";
+export const SHEET_CELL_BOX_CLASS = "sm:col-start-1 sm:row-start-2 sm:mt-0";
+/** Caveat, IMGW lane, status row and the tail disclosure: one full-width row each. */
+export const SHEET_CELL_FULL_CLASS = "sm:col-span-2 sm:mt-0";
+
+/**
  * Za ile is the hero; Szansa supports it. One scale for peek and for the
  * expanded sheet, so opening the card adds rows instead of resizing the answer.
  * sm+ is a standalone card with room for the wider hero.
@@ -202,9 +222,11 @@ export const SHEET_NUMBER_CLASS = {
 export const SHEET_NUMBER_PX = { hero: 30, heroWide: 36, sub: 18 } as const;
 
 /**
- * The long tail (pin honesty, credit, O danych, rain legend) waits for `full`.
- * `half` is the answer plus the two-sentence box and one caveat; sm+ is one card
- * and always shows everything, so the gate is a class, not a JS media query.
+ * The long tail (the tail disclosure, the rain legend, the strip caption) waits
+ * for `full`. `half` is the answer plus the two-sentence box and one caveat.
+ * sm+ is one card and shows all of it, so the gate is a class, not a JS media
+ * query — on the card the tail is a single `O danych ›` summary line, which is
+ * why showing it there costs one row instead of three paragraphs.
  */
 export function sheetExtrasClass(detent: SheetDetent): string {
   return detent === "full" ? "" : "hidden sm:block";

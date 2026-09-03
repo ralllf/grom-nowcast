@@ -607,7 +607,8 @@ export function GromApp() {
       ) : null}
 
       <section className="pointer-events-none absolute inset-x-0 bottom-0 z-10 sm:p-5">
-        <div className="mx-auto grid max-w-6xl gap-3 lg:grid-cols-[minmax(0,26rem)_1fr] lg:items-end">
+        {/* The pin card is two columns of its own on sm+, so it needs a wider track than a phone sheet. */}
+        <div className="mx-auto grid max-w-6xl gap-3 lg:grid-cols-[minmax(0,32rem)_1fr] lg:items-end">
           <ThreatSheet
             place={place}
             threat={threat}

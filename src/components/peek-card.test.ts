@@ -72,9 +72,10 @@ describe("peek is the product (§3 above-the-fold)", () => {
     assert.doesNotMatch(peek, /overflow-y-auto|overflow-auto|overflow-scroll/);
     assert.doesNotMatch(peek, /<button/);
     assert.match(SHEET_DETENT_CLASS.peek, /overflow-hidden/);
-    // The one scroller in the sheet is the expanded block, hidden while peeking.
+    // The one scroller in the sheet is the phone expanded block, hidden while
+    // peeking. The sm+ card uses the page — see desktop-card.test.ts.
     const scrollers = SHEET.match(/overflow-y-auto/g) ?? [];
-    assert.equal(scrollers.length, 2, "expected overflow-y-auto only on the expanded block (mobile + sm)");
+    assert.equal(scrollers.length, 1, "expected overflow-y-auto only on the phone expanded block");
     assert.match(SHEET, /!open && "hidden"/);
   });
 
@@ -215,15 +216,13 @@ describe("detent content ladder (§2 fix)", () => {
   });
 
   it("hides the honesty paragraph, the credit line and O danych until full", () => {
-    const honesty = SHEET.match(/<p[^>]*>\s*\{?\s*Szansa, Za ile i alert są dla pinezki/);
-    assert.ok(honesty, "expected the pin-honesty paragraph");
-    assert.match(honesty[0], /extrasClass/);
-    const credit = SHEET.match(/<p[^>]*>\s*\{SHEET_CREDIT_LINE\}/);
-    assert.ok(credit, "expected the credit line");
-    assert.match(credit[0], /extrasClass/);
-    const details = SHEET.match(/<details[^>]*>/);
-    assert.ok(details, "expected O danych details");
-    assert.match(details[0], /extrasClass/);
+    // All three live behind the one O danych disclosure, gated by extrasClass.
+    const details = SHEET.match(/<details[\s\S]*?<\/details>/);
+    assert.ok(details, "expected the O danych disclosure");
+    assert.match(SHEET.match(/<details[\s\S]*?>/)![0], /extrasClass/);
+    assert.match(details[0], /Szansa, Za ile i alert są dla pinezki/);
+    assert.match(details[0], /\{SHEET_CREDIT_LINE\}/);
+    assert.match(details[0], /\{SHEET_DATA_DETAILS\}/);
   });
 
   it("does not touch the shipped detent heights", () => {
