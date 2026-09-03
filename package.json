@@ -9,7 +9,7 @@
     "build": "vite build",
     "preview": "vite preview --host 0.0.0.0 --port 8080",
     "typecheck": "tsc --noEmit",
-    "test": "node --experimental-strip-types --test src/lib/weather/*.test.ts src/components/threat-sheet.test.ts src/components/peek-card.test.ts src/components/map-boot.test.ts src/components/tap-targets.test.ts src/components/map-chrome.test.ts src/components/settings-dialog.test.ts src/components/pwa-shell.test.ts",
+    "test": "node --experimental-strip-types --test src/lib/weather/*.test.ts src/components/threat-sheet.test.ts src/components/peek-card.test.ts src/components/desktop-card.test.ts src/components/map-boot.test.ts src/components/tap-targets.test.ts src/components/map-chrome.test.ts src/components/settings-dialog.test.ts src/components/pwa-shell.test.ts",
     "hindcast": "node --experimental-strip-types scripts/hindcast.ts"
   },
   "dependencies": {
