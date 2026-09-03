@@ -1,0 +1,62 @@
+{
+  "when": "2026-09-03T13:43:48.835Z",
+  "warszawa": {
+    "labels": [
+      "Za ile",
+      "Szansa"
+    ],
+    "stats": [
+      {
+        "label": "Za ile",
+        "shown": "Za ile",
+        "value": "teraz"
+      },
+      {
+        "label": "Szansa",
+        "shown": "Szansa",
+        "value": "90%"
+      },
+      {
+        "label": "Za ile",
+        "shown": "Za ile",
+        "value": "teraz"
+      },
+      {
+        "label": "Szansa",
+        "shown": "Szansa",
+        "value": "90%"
+      }
+    ],
+    "sheetHasETA": false
+  },
+  "krakow": {
+    "pin": "Kraków",
+    "labels": [
+      "Za ile",
+      "Szansa"
+    ],
+    "stats": [
+      {
+        "label": "Za ile",
+        "shown": "Za ile",
+        "value": "minie"
+      },
+      {
+        "label": "Szansa",
+        "shown": "Szansa",
+        "value": "10%"
+      },
+      {
+        "label": "Za ile",
+        "shown": "Za ile",
+        "value": "minie"
+      },
+      {
+        "label": "Szansa",
+        "shown": "Szansa",
+        "value": "10%"
+      }
+    ],
+    "sheetHasETA": false
+  }
+}

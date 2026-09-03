@@ -1,0 +1,90 @@
+{
+  "when": "2026-09-03T13:43:49.522Z",
+  "pin": "Kraków",
+  "collapsed": {
+    "card": {
+      "left": 64,
+      "right": 576,
+      "top": 347,
+      "bottom": 780,
+      "w": 512,
+      "h": 433
+    },
+    "cardOverflowPx": 0,
+    "cardOverflowY": "auto",
+    "cardRadius": [
+      "28px",
+      "28px",
+      "28px",
+      "28px"
+    ],
+    "innerScrollers": 0,
+    "hero": {
+      "left": 85,
+      "right": 228,
+      "top": 414,
+      "bottom": 450,
+      "w": 143,
+      "h": 36
+    },
+    "strip": {
+      "left": 357,
+      "right": 555,
+      "top": 368,
+      "bottom": 556,
+      "w": 198,
+      "h": 188
+    },
+    "handleVisible": false,
+    "detailsOpen": false,
+    "mapRightPx": 704,
+    "viewport": {
+      "w": 1280,
+      "h": 800
+    },
+    "text": "Czysto CZYSTO Kraków Za ile minie Szansa 10% Opad nad pinezką · 90 min z ruchu echa 15:40 16:10 16:40 17:10 słaby <1 umiarkowany 1–4 silny 4–10 ulewny >10 nic w oknie 90 min Idzie od północy na południe · 44 km/h · echo 35 km Spodziewaj się: silnej ulewy, porywów wiatru Komórka rośnie Tor minie Kraków ok. 74 km obok. Komórka może też urosnąć na miejscu — tego radar nie zapowie. Radar 15:40 · 4 min · IMGW ✕ · wyładowania ✕ Pokaż ruch opadu na mapie · 35 km O danych ›"
+  },
+  "disclosureOpen": {
+    "card": {
+      "left": 64,
+      "right": 576,
+      "top": 268,
+      "bottom": 780,
+      "w": 512,
+      "h": 512
+    },
+    "cardOverflowPx": 157,
+    "cardOverflowY": "auto",
+    "cardRadius": [
+      "28px",
+      "28px",
+      "28px",
+      "28px"
+    ],
+    "innerScrollers": 0,
+    "hero": {
+      "left": 85,
+      "right": 228,
+      "top": 335,
+      "bottom": 371,
+      "w": 143,
+      "h": 36
+    },
+    "strip": {
+      "left": 357,
+      "right": 540,
+      "top": 289,
+      "bottom": 497,
+      "w": 183,
+      "h": 208
+    },
+    "handleVisible": false,
+    "detailsOpen": true,
+    "mapRightPx": 704,
+    "viewport": {
+      "w": 1280,
+      "h": 800
+    },
+    "text": "Czysto CZYSTO Kraków Za ile minie Szansa 10% Opad nad pinezką · 90 min z ruchu echa 15:40 16:10 16:40 17:10 słaby <1 umiarkowany 1–4 silny 4–10 ulewny >10 nic w oknie 90 min Idzie od północy na południe · 44 km/h · echo 35 km Spodziewaj się: silnej ulewy, porywów wiatru Komórka rośnie Tor minie Kraków ok. 74 km obok. Komórka może też urosnąć na miejscu — tego radar nie zapowie. Radar 15:40 · 4 min · IMGW ✕ · wyładowania ✕ Pokaż ruch opadu na mapie · 35 km O danych › Szansa, Za ile i alert są dla pinezki (Kraków) — miasta albo punktu na mapie — nie dla koła w okolicy. Próg alertu to czas, nie dystans. Na mapie strzałki to pole ruchu; te, które dotyczą pinezki, mówią czy opad dojdzie. Dane: IMGW-PIB · mapa OpenFreeMap/OSM Źródłem danych ostrzeżeń i sieci POLRAD jest Instytut Meteorologii i Gospodarki Wodnej – Państwowy Instytut Badawczy. Dane radarowe zostały przetworzone (SRI mm/h IMGW, siatka ~3 km; RainViewer dBZ → Marshall–Palmer gdy SRI niedostępne). Analiza: IMGW COMPO_SRI. Mapa: IMGW SRI (4 klasy) / RainViewer fallback / OpenFreeMap / OSM. To nie jest oficjalny alert RCB. Komórka burzowa może powstać lokalnie nawet przy czystym radarze."
+  }
+}
