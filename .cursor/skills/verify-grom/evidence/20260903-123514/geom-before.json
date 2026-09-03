@@ -1,0 +1,54 @@
+{
+  "viewport": {
+    "w": 1280,
+    "h": 800
+  },
+  "sheet": {
+    "present": true,
+    "top": 300,
+    "bottom": 780,
+    "left": 64,
+    "right": 480,
+    "h": 480,
+    "z": "auto",
+    "hasLeadMin": false,
+    "textStart": "Czysto | CZYSTO |  | Warszawa |  | Za ile"
+  },
+  "honesty": "Szansa, Za ile i alert są dla pinezki (Warszawa) — miasta albo punktu na mapie — nie dla koła w okolicy. Próg alertu to czas, nie dystans. Na mapie strzałki to pole ruchu; te, które dotyczą pinezki, mówią czy opad dojdzie.",
+  "track": {
+    "present": true,
+    "pressed": "false",
+    "text": "tor komórki",
+    "top": 160,
+    "bottom": 196,
+    "left": 24,
+    "right": 129,
+    "w": 105,
+    "h": 36,
+    "z": "auto",
+    "parentZ": "20",
+    "cx": 76,
+    "cy": 178,
+    "hitIsSelf": true,
+    "hitInSheet": false,
+    "hitText": "tor komórki"
+  },
+  "drizzle": {
+    "present": true,
+    "pressed": "false",
+    "text": "Pokaż mżawkę",
+    "top": 204,
+    "bottom": 240,
+    "left": 20,
+    "right": 149,
+    "w": 129,
+    "h": 36,
+    "z": "auto",
+    "parentZ": "20",
+    "cx": 84,
+    "cy": 222,
+    "hitIsSelf": true,
+    "hitInSheet": false,
+    "hitText": "Pokaż mżawkę"
+  }
+}

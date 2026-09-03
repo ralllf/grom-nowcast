@@ -1,0 +1,23 @@
+{
+  "when": "2026-09-03T12:35:26.747Z",
+  "clicks": [
+    {
+      "label": "tor komórki",
+      "before": "false",
+      "after": "true",
+      "hitIsSelf": true,
+      "hitInSheet": false,
+      "cx": 76,
+      "cy": 178
+    },
+    {
+      "label": "Pokaż mżawkę",
+      "before": "false",
+      "after": "true",
+      "hitIsSelf": true,
+      "hitInSheet": false,
+      "cx": 84,
+      "cy": 222
+    }
+  ]
+}

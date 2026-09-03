@@ -547,7 +547,7 @@ export function GromApp() {
       {tracks.length > 0 || hasImgwTint || overlays.length > 0 ? (
         <div
           className={cn(
-            "pointer-events-none absolute left-3 z-10 flex flex-col items-start gap-2 sm:left-5",
+            "pointer-events-none absolute left-3 z-20 flex flex-col items-start gap-2 sm:left-5",
             // On phones the centered banner sits over the pill; on wider screens they do not touch.
             activeAlert ? "top-64 sm:top-40" : "top-36 sm:top-40",
           )}
