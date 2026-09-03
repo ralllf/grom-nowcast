@@ -67,7 +67,11 @@ Mechanism that shipped: count line is null until a settled snapshot with `warnin
 
 ## 5. Sheet vs map chips, plus drop `leadMin` from user copy
 
-Map pills **tor komórki** / **Pokaż mżawkę** sit `absolute` top-left (`z-10`); the sheet is the same `z-10` and grows without a desktop max-height, so at ~1280 px the left column covers the pills. Footer still says *„leadMin to czas, nie dystans”* (live HTML).
+**Landed** on `main` in [#67](https://github.com/ralllf/grom-nowcast/pull/67). Lock: `src/components/threat-sheet.test.ts` — no `leadMin` in user-visible sheet copy; left map chips (`tor komórki` / `Pokaż mżawkę`) stack above the threat sheet (`z-20` vs sheet `z-10`) so the left column cannot steal clicks at ~1280 px.
+
+**Live HTML already (2026-09-03):** honesty says *„Próg alertu to czas, nie dystans”* — no `leadMin`. Not rewritten here.
+
+**The hole:** map pills sat `absolute` top-left at the same `z-10` as the sheet. At ~1280 px the left column can cover them — they look clickable and are not.
 
 - **Who sees what:** desktop ~1280 px — chips that look clickable and are not; every sheet, an identifier in the honesty paragraph.
 - **Success check:** **tor komórki** and **Pokaż mżawkę** both click at ~1280 px; no `leadMin` in the sheet. Declension table can wait.

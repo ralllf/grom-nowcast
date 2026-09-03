@@ -318,12 +318,32 @@ describe("threat-sheet user copy", () => {
     assert.doesNotMatch(SHEET_SRC, />TERYT /);
   });
 
-  it("does not leak leadMin into the honesty paragraph", () => {
+  it("does not leak leadMin into user-visible sheet copy", () => {
     const honesty = SHEET_SRC.match(
       /Szansa, Za ile i alert są dla pinezki[\s\S]*?opad dojdzie\./,
     );
     assert.ok(honesty, "expected the pin-honesty paragraph in threat-sheet.tsx");
     assert.doesNotMatch(honesty[0], /leadMin/);
+    // Live HTML already dropped the identifier (2026-09-03). Lock the whole sheet, not a rewrite.
+    assert.doesNotMatch(SHEET_SRC, /leadMin/);
+    assert.match(honesty[0], /Próg alertu to czas, nie dystans/);
+  });
+
+  it("stacks tor komórki / Pokaż mżawkę above the sheet so they stay clickable at 1280", () => {
+    const chipStack = APP_SRC.match(
+      /pointer-events-none absolute left-3 z-(\d+) flex flex-col[\s\S]{0,120}sm:left-5/,
+    );
+    const sheetSection = APP_SRC.match(
+      /pointer-events-none absolute inset-x-0 bottom-0 z-(\d+)/,
+    );
+    assert.ok(chipStack, "expected the left map-chip stack (tor komórki / Pokaż mżawkę)");
+    assert.ok(sheetSection, "expected the bottom threat-sheet section");
+    assert.match(APP_SRC, /tor komórki/);
+    assert.match(APP_SRC, /Pokaż mżawkę/);
+    assert.ok(
+      Number(chipStack[1]) > Number(sheetSection[1]),
+      `chips z-${chipStack[1]} must stack above sheet z-${sheetSection[1]} — same z-index lets the left column steal clicks at ~1280`,
+    );
   });
 
   it("prints Za ile and Szansa as the two numbers, not the English ETA acronym", () => {
