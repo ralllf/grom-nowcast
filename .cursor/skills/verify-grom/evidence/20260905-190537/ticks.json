@@ -1,0 +1,13 @@
+{
+  "when": "2026-09-05T19:05:40.191Z",
+  "pin": "Warszawa",
+  "present": true,
+  "aria": "Opad od 21:20 do 22:30, najsilniej ok. 21:35",
+  "ticks": [
+    "21:00",
+    "21:30",
+    "22:00",
+    "22:30"
+  ],
+  "hasNowCursor": true
+}

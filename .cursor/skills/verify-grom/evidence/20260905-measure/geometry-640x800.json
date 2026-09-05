@@ -1,0 +1,117 @@
+{
+  "viewport": {
+    "w": 640,
+    "h": 800
+  },
+  "sheet": {
+    "rect": {
+      "x": 20,
+      "y": 120,
+      "w": 600,
+      "h": 569,
+      "top": 120,
+      "bottom": 688
+    },
+    "scrollHeight": 569,
+    "clientHeight": 569,
+    "overflowY": "hidden",
+    "maxHeight": "none",
+    "innerOverflowPx": 0
+  },
+  "sheetScrollableDescendants": 0,
+  "aside": {
+    "rect": {
+      "x": 20,
+      "y": 700,
+      "w": 600,
+      "h": 80,
+      "top": 700,
+      "bottom": 780
+    },
+    "scrollHeight": 80,
+    "clientHeight": 80,
+    "overflowY": "visible",
+    "maxHeight": "none",
+    "innerOverflowPx": 0
+  },
+  "chrome": {
+    "rect": {
+      "x": 349,
+      "y": 237,
+      "w": 271,
+      "h": 211,
+      "top": 237,
+      "bottom": 448
+    },
+    "scrollHeight": 211,
+    "clientHeight": 211,
+    "overflowY": "visible",
+    "maxHeight": "none",
+    "innerOverflowPx": 0
+  },
+  "sliderPill": {
+    "rect": {
+      "x": 104,
+      "y": 96,
+      "w": 431,
+      "h": 32,
+      "top": 96,
+      "bottom": 128
+    },
+    "scrollHeight": 32,
+    "clientHeight": 32,
+    "overflowY": "visible",
+    "maxHeight": "none",
+    "innerOverflowPx": 0
+  },
+  "chipStack": {
+    "rect": {
+      "x": 167,
+      "y": 24,
+      "w": 306,
+      "h": 36,
+      "top": 24,
+      "bottom": 60
+    },
+    "scrollHeight": 36,
+    "clientHeight": 36,
+    "overflowY": "visible",
+    "maxHeight": "none",
+    "innerOverflowPx": 0
+  },
+  "obstruction": {
+    "headline": {
+      "found": true,
+      "point": [
+        162,
+        155
+      ],
+      "inside": true,
+      "hit": "H2",
+      "text": "Deszcz nadciąga"
+    },
+    "place": {
+      "found": true,
+      "point": [
+        76,
+        182
+      ],
+      "inside": true,
+      "hit": "P",
+      "text": "Warszawa"
+    },
+    "zaIle": {
+      "found": true,
+      "point": [
+        102,
+        222
+      ],
+      "inside": true,
+      "hit": "DD",
+      "text": "14 min"
+    }
+  },
+  "sheetTextHead": "Deszcz nadciąga ZARAZ Warszawa Za ile 14 min Szansa 90% Opad nad pinezką · 90 min z ruchu echa 21:00 21:30 22:00 22:30 s",
+  "when": "2026-09-05T19:06:18.313Z",
+  "pin": "Warszawa"
+}

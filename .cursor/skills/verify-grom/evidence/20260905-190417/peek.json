@@ -1,0 +1,66 @@
+{
+  "when": "2026-09-05T19:04:30.832Z",
+  "viewport": {
+    "width": 390,
+    "height": 844
+  },
+  "pin": "Warszawa",
+  "peek": {
+    "peeking": true,
+    "handleVisible": true,
+    "ariaExpanded": "false",
+    "detentClass": "max-h-[128px]",
+    "sheetHeight": 126,
+    "sheetClippedPx": 0,
+    "expandedOverflowPx": null,
+    "viewportHeight": 844,
+    "peekNestedScrollers": 0,
+    "peekNestedButtons": 0,
+    "peekText": "Deszcz nadciąga ZARAZ Warszawa Za ile 16 min Szansa 90% 21:00 21:30 22:00 22:30",
+    "zaIle": {
+      "text": "16 min",
+      "px": 30
+    },
+    "szansa": {
+      "text": "90%",
+      "px": 18
+    },
+    "chip": "ZARAZ",
+    "sheetText": "Deszcz nadciąga ZARAZ Warszawa Za ile 16 min Szansa 90% 21:00 21:30 22:00 22:30"
+  },
+  "half": {
+    "peeking": false,
+    "handleVisible": true,
+    "ariaExpanded": "true",
+    "detentClass": "max-h-[45dvh]",
+    "sheetHeight": 380,
+    "sheetClippedPx": 0,
+    "expandedOverflowPx": 8,
+    "viewportHeight": 844,
+    "peekNestedScrollers": null,
+    "peekNestedButtons": null,
+    "peekText": null,
+    "zaIle": {
+      "text": "16 min",
+      "px": 30
+    },
+    "szansa": {
+      "text": "90%",
+      "px": 18
+    },
+    "chip": "ZARAZ",
+    "sheetText": "Deszcz nadciąga ZARAZ Warszawa Za ile 16 min Szansa 90% 21:00 21:30 22:00 22:30 Idzie od zachodu na wschód · 65 km/h · echo 17 km Spodziewaj się: deszczu i mokrej jezdni To ruch echa, nie pewność. Komórka może też urosnąć na miejscu — tego radar nie zapowie. Radar 21:00 · 4 min · IMGW ✓ · wyładowania ✕",
+    "statusRow": "Radar 21:00 · 4 min · IMGW ✓ · wyładowania ✕"
+  },
+  "ticks": {
+    "present": true,
+    "aria": "Opad od 21:20 do 22:30, najsilniej ok. 21:35",
+    "ticks": [
+      "21:00",
+      "21:30",
+      "22:00",
+      "22:30"
+    ],
+    "hasNowCursor": true
+  }
+}

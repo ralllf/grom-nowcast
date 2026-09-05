@@ -1,0 +1,34 @@
+{
+  "when": "2026-09-05T19:04:30.368Z",
+  "label": "half",
+  "headline": {
+    "found": true,
+    "point": [
+      89,
+      501
+    ],
+    "inside": true,
+    "hit": "H2",
+    "text": "Deszcz nadciąga"
+  },
+  "place": {
+    "found": true,
+    "point": [
+      47,
+      518
+    ],
+    "inside": true,
+    "hit": "P",
+    "text": "Warszawa"
+  },
+  "zaIle": {
+    "found": true,
+    "point": [
+      68,
+      543
+    ],
+    "inside": true,
+    "hit": "DD",
+    "text": "16 min"
+  }
+}
