@@ -80,9 +80,12 @@ function presetChipClass(): string {
 }
 
 describe("faint contrast token (§7 / 10b#8)", () => {
-  it("lifts --color-faint to ~4.5:1 (#7a8593), not #5c6570", () => {
-    assert.match(CSS, /--color-faint:\s*#7a8593\b/);
+  it("keeps --color-faint at ~5.5:1 on the daylight surface (#5d6b77)", () => {
+    // Daylight redesign: faint ink sits on white cards now, not on dark panels.
+    // #5d6b77 on #ffffff ≈ 5.5:1 — same AA intent as #7a8593 on the old dark surface.
+    assert.match(CSS, /--color-faint:\s*#5d6b77\b/);
     assert.doesNotMatch(CSS, /--color-faint:\s*#5c6570\b/);
+    assert.doesNotMatch(CSS, /--color-faint:\s*#7a8593\b/);
   });
 });
 

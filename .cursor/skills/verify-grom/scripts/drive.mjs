@@ -87,6 +87,114 @@ function quoteStatusRow(text) {
 const CLOCK_TICK_RE = /^\d{2}:\d{2}$/;
 const TIMELINE_ARIA_RE = /^(Opad od \d{2}:\d{2} do \d{2}:\d{2}, najsilniej ok\. \d{2}:\d{2}|Brak opadu od \d{2}:\d{2} do \d{2}:\d{2})$/;
 
+/**
+ * The 3-second read must be unobstructed: hit-test the center of the headline,
+ * the place line and the Za ile hero, and require the topmost node at that point
+ * to live inside #grom-threat-sheet. Catches floating chrome (map chips, banner,
+ * slider) drifting over the card's first rows — a bounding-box probe never does.
+ */
+const OBSTRUCTION_JS = `(() => {
+  const sheet = document.querySelector("#grom-threat-sheet");
+  if (!sheet) return null;
+  const visible = (el) => {
+    if (!el) return false;
+    const r = el.getBoundingClientRect();
+    const st = getComputedStyle(el);
+    return r.width > 0 && r.height > 0 && st.visibility !== "hidden" && st.display !== "none";
+  };
+  const h2 = [...sheet.querySelectorAll("h2")].find(visible);
+  const placeRow = h2?.parentElement?.nextElementSibling;
+  const place = placeRow ? [...placeRow.querySelectorAll("p")].find(visible) : null;
+  const zaIleDt = [...sheet.querySelectorAll("dt")].find(
+    (dt) => dt.textContent.trim() === "Za ile" && visible(dt),
+  );
+  const zaIle = zaIleDt ? zaIleDt.parentElement.querySelector("dd") : null;
+  const hit = (el) => {
+    if (!el || !visible(el)) return { found: false };
+    const r = el.getBoundingClientRect();
+    const cx = r.left + r.width / 2;
+    const cy = r.top + r.height / 2;
+    const at = document.elementFromPoint(cx, cy);
+    return {
+      found: true,
+      point: [Math.round(cx), Math.round(cy)],
+      inside: at ? sheet.contains(at) : false,
+      hit: at ? at.tagName : null,
+      text: el.textContent.replace(/\\s+/g, " ").trim().slice(0, 40),
+    };
+  };
+  return { headline: hit(h2), place: hit(place), zaIle: hit(zaIle) };
+})()`;
+
+/**
+ * Rendered-string lock for the strip rows. The extras gate must never collapse a
+ * flex row to block (tailwind-merge drops "flex" for a bare "hidden"): that glued
+ * "90 minz ruchu echa" and "ulewny >10nic w oknie 90 min" on desktop.
+ */
+const STRIP_ROWS_JS = `(() => {
+  const sheet = document.querySelector("#grom-threat-sheet");
+  if (!sheet) return null;
+  const rowFor = (needle) => {
+    const span = [...sheet.querySelectorAll("span")].find((s) =>
+      (s.textContent || "").includes(needle),
+    );
+    const row = span ? span.closest("div") : null;
+    if (!row) return null;
+    const r = row.getBoundingClientRect();
+    const st = getComputedStyle(row);
+    const visible = r.height > 0 && st.display !== "none" && st.visibility !== "hidden";
+    return {
+      visible,
+      display: st.display,
+      text: (row.innerText || "").replace(/\\s+/g, " ").trim(),
+    };
+  };
+  return {
+    labelRow: rowFor("Opad nad pinezką"),
+    legendRow: rowFor("ulewny"),
+    glued: /90 minz ruchu echa|>10nic w oknie/.test(sheet.innerText),
+  };
+})()`;
+
+async function assertUnobstructed(cdp, OUT, label, file = "obstruction.json") {
+  const ob = await evalExpr(cdp, OBSTRUCTION_JS);
+  if (!ob) return;
+  writeFileSync(
+    join(OUT, file),
+    JSON.stringify({ when: new Date().toISOString(), label, ...ob }, null, 2),
+  );
+  for (const [key, res] of Object.entries(ob)) {
+    if (!res.found || !res.inside) {
+      await screenshot(cdp, join(OUT, "00-failed-obstruction.png"));
+      throw new Error(
+        `${label}: ${key} is not the topmost node at its own center — the 3-second read is covered: ${JSON.stringify(res)}`,
+      );
+    }
+  }
+  step(
+    `${label}: headline/place/Za ile hit-test clean (centers resolve inside #grom-threat-sheet)`,
+  );
+}
+
+async function assertStripRows(cdp, OUT, label) {
+  const rows = await evalExpr(cdp, STRIP_ROWS_JS);
+  if (!rows) return;
+  writeFileSync(
+    join(OUT, "strip-rows.json"),
+    JSON.stringify({ when: new Date().toISOString(), ...rows }, null, 2),
+  );
+  if (rows.glued) {
+    await screenshot(cdp, join(OUT, "00-failed-strip-glue.png"));
+    throw new Error(`${label}: strip rows glued: ${JSON.stringify(rows)}`);
+  }
+  for (const [key, row] of Object.entries({ labelRow: rows.labelRow, legendRow: rows.legendRow })) {
+    if (row?.visible && row.display !== "flex") {
+      await screenshot(cdp, join(OUT, "00-failed-strip-glue.png"));
+      throw new Error(`${label}: ${key} renders as ${row.display}, not flex: ${JSON.stringify(row)}`);
+    }
+  }
+}
+
 const TICKS_JS = `(() => {
   const sheet = document.querySelector("#grom-threat-sheet");
   if (!sheet) return null;
@@ -384,6 +492,11 @@ try {
   // and status-row checks belong to the expanded sheet only.
   let state0 = await evalExpr(cdp, SHEET_STATE_JS);
   const collapsed = Boolean(state0?.peeking);
+  if (!collapsed) {
+    // The mobile auto-expand (imminent/now → half) can land between the readiness
+    // poll and the state read; re-read so checks below see the expanded sheet.
+    sheet = (await evalExpr(cdp, `document.querySelector('#grom-threat-sheet')?.innerText || ''`)) || sheet;
+  }
   if (collapsed) {
     step(`sheet is collapsed (${state0.detentClass}); expanded-only checks deferred`);
     if (!state0.zaIle || !state0.szansa) {
@@ -407,6 +520,8 @@ try {
     await screenshot(cdp, join(OUT, "00-failed-status-row.png"));
     throw new Error(`sheet missing status row: ${JSON.stringify(sheet.slice(0, 400))}`);
   }
+  await assertUnobstructed(cdp, OUT, "sheet ready");
+  await assertStripRows(cdp, OUT, "sheet ready");
   const ticks = await evalExpr(cdp, TICKS_JS);
   if (ticks?.present) {
     writeFileSync(join(OUT, "ticks.json"), JSON.stringify({ when: new Date().toISOString(), pin: "Warszawa", ...ticks }, null, 2));
@@ -742,6 +857,7 @@ try {
         throw new Error(`Za ile is not the hero number at ${label}: ${JSON.stringify({ zaIle: s.zaIle, szansa: s.szansa })}`);
       }
       step(`${label}: Za ile ${s.zaIle.text} @${s.zaIle.px}px > Szansa ${s.szansa.text} @${s.szansa.px}px`);
+      await assertUnobstructed(cdp, OUT, label, `obstruction-${label}.json`);
       return s;
     }
 

@@ -1,0 +1,11 @@
+$ npm test
+# tests 435
+# suites 43
+# pass 435
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+
+$ npx tsc --noEmit
+(exit 0, no errors)

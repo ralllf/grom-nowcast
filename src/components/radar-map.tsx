@@ -44,7 +44,7 @@ type Props = {
   radarPath: string | null;
   overlayUrl?: string | null;
   overlayCorners?: OverlayCorners | null;
-  tracks: CellTrack[];
+  tracks: readonly CellTrack[];
   imgwOn?: boolean;
   imgwDegrees?: Record<string, number>;
   strikes: LightningStrike[];
@@ -99,7 +99,7 @@ type Live = {
   radarPath: string | null;
   overlayUrl: string | null;
   overlayCorners: OverlayCorners | null;
-  tracks: CellTrack[];
+  tracks: readonly CellTrack[];
   imgwOn: boolean;
   imgwDegrees: Record<string, number>;
   strikes: LightningStrike[];

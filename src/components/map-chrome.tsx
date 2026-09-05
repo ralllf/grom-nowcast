@@ -22,11 +22,11 @@ export function MapChrome({ onZoomIn, onZoomOut, onLocate, locatePending = false
       data-peek={SHEET_PEEK_PX}
       className={cn(
         "pointer-events-none fixed right-3 z-10 flex flex-col items-end gap-2 sm:right-5",
-        // 128px = SHEET_PEEK_PX. sm+ lifts above the IMGW aside (max-h-72 + pad).
-        "bottom-[calc(128px+env(safe-area-inset-bottom,0px)+0.75rem)] sm:bottom-[21rem]",
+        // 128px = SHEET_PEEK_PX. sm+ lifts above the IMGW lane card (≤2 clamped rows).
+        "bottom-[calc(128px+env(safe-area-inset-bottom,0px)+0.75rem)] sm:bottom-[22rem]",
       )}
     >
-      <div className="pointer-events-auto flex flex-col overflow-hidden rounded-xl bg-surface/90 shadow-[0_0_0_1px_rgba(255,255,255,0.08)] backdrop-blur-md">
+      <div className="pointer-events-auto flex flex-col overflow-hidden rounded-2xl bg-surface/90 shadow-chip backdrop-blur-md">
         <Button
           variant="ghost"
           size="icon"
@@ -36,6 +36,7 @@ export function MapChrome({ onZoomIn, onZoomOut, onLocate, locatePending = false
         >
           <Plus className="size-5" />
         </Button>
+        <span className="mx-auto h-px w-6 bg-border" aria-hidden />
         <Button
           variant="ghost"
           size="icon"
@@ -53,13 +54,13 @@ export function MapChrome({ onZoomIn, onZoomOut, onLocate, locatePending = false
         aria-label="Wybierz lokalizację"
         onClick={onLocate}
         disabled={locatePending}
-        className="pointer-events-auto shadow-[0_0_0_1px_rgba(255,255,255,0.08)]"
+        className="pointer-events-auto"
       >
         <Crosshair className="size-5" />
       </Button>
 
       <div
-        className="flex items-center gap-1.5 rounded-xl bg-surface/90 px-2 py-1.5 shadow-[0_0_0_1px_rgba(255,255,255,0.08)] backdrop-blur-md"
+        className="pointer-events-auto flex items-center gap-1.5 rounded-full bg-surface/90 px-3 py-2 shadow-chip backdrop-blur-md"
         aria-label="Legenda opadu"
       >
         {RAIN_LEVELS.map((level) => (
@@ -80,12 +81,11 @@ export function MapChrome({ onZoomIn, onZoomOut, onLocate, locatePending = false
         />
       </div>
 
-      <div className="flex flex-col items-end gap-1">
-        <div className="flex flex-col items-center rounded-md bg-surface/90 px-1.5 py-1 shadow-[0_0_0_1px_rgba(255,255,255,0.08)] backdrop-blur-md">
-          <span className="font-mono text-xs tabular-nums text-fg">{scale.label}</span>
-          <span className="mt-0.5 h-0.5 bg-fg" style={{ width: Math.max(24, scale.widthPx) }} />
-        </div>
-        <p id="grom-map-credit" className="rounded-md bg-surface/90 px-1.5 py-0.5 text-xs text-muted">
+      <div className="pointer-events-auto flex items-center gap-2 rounded-full bg-surface/90 px-3 py-1.5 shadow-chip backdrop-blur-md">
+        <span className="font-mono text-xs tabular-nums text-fg">{scale.label}</span>
+        <span className="h-0.5 bg-fg" style={{ width: Math.max(24, scale.widthPx) }} />
+        <span className="h-3 w-px bg-border" aria-hidden />
+        <p id="grom-map-credit" className="text-xs text-muted">
           {MAP_CREDIT}
         </p>
       </div>

@@ -72,9 +72,12 @@ describe("peek is the product (§3 above-the-fold)", () => {
     assert.doesNotMatch(peek, /overflow-y-auto|overflow-auto|overflow-scroll/);
     assert.doesNotMatch(peek, /<button/);
     assert.match(SHEET_DETENT_CLASS.peek, /overflow-hidden/);
-    // The one scroller in the sheet is the expanded block, hidden while peeking.
+    // The one scroller in the sheet is the expanded block on a phone, hidden while peeking.
+    // The desktop card is content-sized: no max-h cap, no inner scroller (daylight redesign).
     const scrollers = SHEET.match(/overflow-y-auto/g) ?? [];
-    assert.equal(scrollers.length, 2, "expected overflow-y-auto only on the expanded block (mobile + sm)");
+    assert.equal(scrollers.length, 1, "expected overflow-y-auto only on the phone's expanded block");
+    assert.doesNotMatch(SHEET, /sm:overflow-y-auto/);
+    assert.match(SHEET, /sm:max-h-none/);
     assert.match(SHEET, /!open && "hidden"/);
   });
 
@@ -203,8 +206,8 @@ describe("dropped from the sheet DOM (§3 / 10b#3)", () => {
 
 describe("detent content ladder (§2 fix)", () => {
   it("half keeps the box, one caveat and the status row; the long tail is full", () => {
-    assert.equal(sheetExtrasClass("peek"), "hidden sm:block");
-    assert.equal(sheetExtrasClass("half"), "hidden sm:block");
+    assert.equal(sheetExtrasClass("peek"), "max-sm:hidden");
+    assert.equal(sheetExtrasClass("half"), "max-sm:hidden");
     assert.equal(sheetExtrasClass("full"), "");
     assert.match(SHEET, /sheetExtrasClass\(detent\)/);
     const box = boxBlock();
@@ -231,6 +234,24 @@ describe("detent content ladder (§2 fix)", () => {
     assert.match(SHEET_DETENT_CLASS.half, /max-h-\[45dvh\]/);
     assert.match(SHEET_DETENT_CLASS.full, /max-h-\[85dvh\]/);
     assert.doesNotMatch(SHEET, /max-h-\[70dvh\]/);
+  });
+});
+
+describe("extras gate never clobbers flex rows", () => {
+  it("the gate is max-sm:hidden — a bare hidden wins over flex in tailwind-merge", () => {
+    const gate = sheetExtrasClass("peek");
+    assert.equal(gate, "max-sm:hidden");
+    // cn("flex …", "hidden sm:block") resolves to block: the strip's label row
+    // rendered "90 minz ruchu echa" and the legend "ulewny >10nic w oknie 90 min".
+    assert.doesNotMatch(gate, /(?:^|\s)hidden(?:\s|$)/);
+    assert.doesNotMatch(gate, /sm:block/);
+  });
+
+  it("strip label and legend rows stay flex under the gate", () => {
+    assert.match(SHEET, /flex items-baseline justify-between gap-2 text-xs", extrasClass/);
+    assert.match(SHEET, /flex flex-wrap items-center gap-x-3 gap-y-1[^"]*"\s*,\s*extrasClass/);
+    assert.match(SHEET, /Opad nad pinezką · 90 min/);
+    assert.match(SHEET, /nic w oknie 90 min/);
   });
 });
 
