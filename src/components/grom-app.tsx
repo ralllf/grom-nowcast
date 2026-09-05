@@ -553,9 +553,12 @@ export function GromApp() {
       {tracks.length > 0 || hasImgwTint || overlays.length > 0 ? (
         <div
           className={cn(
-            "pointer-events-none absolute left-3 z-20 flex flex-col items-start gap-2 sm:left-5",
-            // On phones the centered banner sits over the pill; on wider screens they do not touch.
-            activeAlert ? "top-64 sm:top-40" : "top-36 sm:top-40",
+            "pointer-events-none absolute left-3 z-20 flex flex-col items-start gap-2",
+            // Phone: left edge under the slider; the centered banner pushes the stack down.
+            activeAlert ? "top-64" : "top-36",
+            // sm+: the answer card owns the bottom-left and grows tall, so the layer
+            // chips move into the header band — centered between wordmark and buttons.
+            "sm:left-1/2 sm:top-6 sm:-translate-x-1/2 sm:flex-row sm:items-center",
           )}
         >
           {tracks.length > 0 ? (

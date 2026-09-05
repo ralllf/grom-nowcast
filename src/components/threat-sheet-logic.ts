@@ -205,9 +205,13 @@ export const SHEET_NUMBER_PX = { hero: 30, heroWide: 36, sub: 18 } as const;
  * The long tail (pin honesty, credit, O danych, rain legend) waits for `full`.
  * `half` is the answer plus the two-sentence box and one caveat; sm+ is one card
  * and always shows everything, so the gate is a class, not a JS media query.
+ *
+ * The gate is `max-sm:hidden`, never `hidden sm:block`: tailwind-merge resolves
+ * a bare `hidden` against the `flex` on the strip's label/legend rows and the
+ * row collapses to `block` on desktop, gluing the spans ("90 minz ruchu echa").
  */
 export function sheetExtrasClass(detent: SheetDetent): string {
-  return detent === "full" ? "" : "hidden sm:block";
+  return detent === "full" ? "" : "max-sm:hidden";
 }
 
 /** Facts the two-sentence box, the headline or the hero numbers already print. */

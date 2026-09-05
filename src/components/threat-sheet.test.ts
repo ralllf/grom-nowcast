@@ -329,20 +329,26 @@ describe("threat-sheet user copy", () => {
     assert.match(honesty[0], /Próg alertu to czas, nie dystans/);
   });
 
-  it("stacks tor komórki / Pokaż mżawkę above the sheet so they stay clickable at 1280", () => {
+  it("parks tor komórki / Pokaż mżawkę in the sm+ header band, clear of the card", () => {
     const chipStack = APP_SRC.match(
-      /pointer-events-none absolute left-3 z-(\d+) flex flex-col[\s\S]{0,120}sm:left-5/,
+      /pointer-events-none absolute left-3 z-(\d+) flex flex-col[\s\S]{0,400}?sm:left-1\/2 sm:top-6 sm:-translate-x-1\/2 sm:flex-row/,
     );
     const sheetSection = APP_SRC.match(
       /pointer-events-none absolute inset-x-0 bottom-0 z-(\d+)/,
     );
-    assert.ok(chipStack, "expected the left map-chip stack (tor komórki / Pokaż mżawkę)");
+    assert.ok(chipStack, "expected the map-chip stack (tor komórki / Pokaż mżawkę)");
     assert.ok(sheetSection, "expected the bottom threat-sheet section");
     assert.match(APP_SRC, /tor komórki/);
     assert.match(APP_SRC, /Pokaż mżawkę/);
+    // The content-sized card owns the bottom-left and grows tall; a left-edge stack
+    // struck through the headline / place / Za ile rows at 1280. sm+ centers the
+    // chips in the header band instead (drive.mjs hit-tests the card's first rows).
+    assert.match(chipStack[0], /sm:top-6/);
+    assert.match(chipStack[0], /sm:flex-row/);
+    assert.match(chipStack[0], /sm:-translate-x-1\/2/);
     assert.ok(
       Number(chipStack[1]) > Number(sheetSection[1]),
-      `chips z-${chipStack[1]} must stack above sheet z-${sheetSection[1]} — same z-index lets the left column steal clicks at ~1280`,
+      `chips z-${chipStack[1]} must stack above sheet z-${sheetSection[1]}`,
     );
   });
 
